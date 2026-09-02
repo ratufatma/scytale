@@ -78,27 +78,53 @@ $$\text{Epoch Duration} = \frac{2,100,000 \text{ blocks} \times 60 \text{ second
 
 ---
 
-## 5. Mathematical Supply Derivation
+## 5. Mathematical Supply Derivation & Macro Supply Equation
 
-The maximum supply is not an arbitrary constant; it is derived from the geometric series of block rewards:
+The maximum supply is not an arbitrary constant; it is derived from the strict macro supply equation:
 
-$$S_{\text{total}} = G + \sum_{e=0}^{\infty} \left( \text{Blocks Per Epoch} \times R_{0,\text{quanta}} \times 2^{-e} \right)$$
+$$\text{Maximum Supply} = \text{Genesis Allocation} + \text{Issued Mining Rewards} + \text{Unissued Mining Reserve}$$
 
-Assuming pure mining fair-launch ($G = 0$):
-$$S_{\text{max}} = 2,100,000 \times 10\text{ SCY} \times \sum_{e=0}^{\infty} \left(\frac{1}{2}\right)^e = 21,000,000 \times 2 = 42,000,000\text{ SCY}$$
-$$S_{\text{max, quanta}} = 4,200,000,000,000,000\text{ quanta}$$
+In integer **`quanta`**:
 
-```text
-Initial Reward: 1,000,000,000 quanta (10 SCY/block)
-      ↓
-Epoch Length: 2,100,000 blocks  ──> Epoch 0 Mint: 2,100,000,000,000,000 quanta (50% of cap)
-      ↓
-Geometric Decay Sum (×2)        ──> Total Target Cap: 4,200,000,000,000,000 quanta (42,000,000 SCY)
-```
+$$\mathbf{S_{\text{max}}} = G_{\text{quanta}} + M_{\text{issued,quanta}} + M_{\text{unissued,quanta}} = \mathbf{4,200,000,000,000,000\text{ quanta}}$$
+
+### Macro Allocation Quota Proof:
+$$\begin{aligned}
+\text{Founder Allocation (15%)} &= 630,000,000,000,000\text{ quanta} \quad (6,300,000\text{ SCY}) \\
+\text{Treasury Allocation (5%)} &= 210,000,000,000,000\text{ quanta} \quad (2,100,000\text{ SCY}) \\
+\text{Ecosystem Allocation (5%)} &= 210,000,000,000,000\text{ quanta} \quad (2,100,000\text{ SCY}) \\
+\text{Mining Reserve (75%)} &= 3,150,000,000,000,000\text{ quanta} \quad (31,500,000\text{ SCY}) \\
+\hline
+\mathbf{\text{Total Maximum Supply}} &= \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (\mathbf{42,000,000\text{ SCY}})
+\end{aligned}$$
 
 ---
 
-## 6. Pending Consensus Details: Rounding & Reward Termination
+## 6. Known Emission Schedule Discrepancy & Consensus Issue
+
+> [!WARNING]
+> ### CONSENSUS ISSUE — REQUIRES RESOLUTION
+> 
+> A mathematical discrepancy exists between the locked allocation percentages and the baseline halving formula:
+> 
+> 1. **Locked Allocation Rule:**
+>    - Genesis Allocation ($25\%$) = $10,500,000\text{ SCY}$ ($1,050,000,000,000,000\text{ quanta}$)
+>    - Authorized Mining Allocation ($75\%$) = $\mathbf{31,500,000\text{ SCY}}$ ($\mathbf{3,150,000,000,000,000\text{ quanta}}$)
+>    - Maximum Supply Ceiling ($100\%$) = $\mathbf{42,000,000\text{ SCY}}$ ($\mathbf{4,200,000,000,000,000\text{ quanta}}$)
+> 
+> 2. **Baseline Halving Series Calculation:**
+>    $$\text{Theoretical Mined Sum} = 10\text{ SCY} \times 2,100,000\text{ blocks} \times \sum_{k=0}^{\infty} \left(\frac{1}{2}\right)^k = 21,000,000 \times 2 = \mathbf{42,000,000\text{ SCY}}$$
+> 
+> 3. **The Conflict:**
+>    - Adding the Genesis Allocation ($10.5\text{M}$ SCY) to the unadjusted infinite halving sum ($42\text{M}$ SCY) produces **$52,500,000\text{ SCY}$**, violating the immutable $42,000,000\text{ SCY}$ ceiling by $10,500,000\text{ SCY}$.
+> 
+> 4. **Technical Resolution Options for Consensus Decision:**
+>    - **Option A (Subsidy Hard Cap):** Keep $R_0 = 10\text{ SCY}$ and $2,100,000\text{ blocks}$ halving; terminate/zero out mining rewards once cumulative mined supply reaches exactly $3,150,000,000,000,000\text{ quanta}$ ($31.5\text{M}$ SCY).
+>    - **Option B (Reward Recalibration):** Recalibrate initial reward to $R_0 = 7.5\text{ SCY}$ ($750,000,000\text{ quanta}$) with $2,100,000\text{ blocks}$ halving ($7.5 \times 2.1\text{M} \times 2 = 31.5\text{M}$ SCY).
+>    - **Option C (Halving Interval Recalibration):** Keep $R_0 = 10\text{ SCY}$ and adjust halving interval to $1,575,000\text{ blocks}$ ($10 \times 1.575\text{M} \times 2 = 31.5\text{M}$ SCY).
+---
+
+## 7. Pending Consensus Details: Rounding & Reward Termination
 
 The target cap `42,000,000 SCY` represents the continuous geometric ceiling. The final consensus implementation must explicitly formalize the following **pending consensus details**:
 
@@ -108,7 +134,7 @@ The target cap `42,000,000 SCY` represents the continuous geometric ceiling. The
 
 ---
 
-## 7. Emission Duration vs. Maximum Supply
+## 8. Emission Duration vs. Maximum Supply
 
 A critical conceptual distinction:
 
@@ -120,7 +146,7 @@ $$\text{Emission Duration} \ne \text{Maximum Supply}$$
 
 ---
 
-## 8. Consensus Coinbase Constraints
+## 9. Consensus Coinbase Constraints
 
 Every candidate block must satisfy the consensus upper bound:
 
@@ -142,7 +168,7 @@ $$\text{Coinbase Output Value (quanta)} \le R_{\text{quanta}}(h) + \sum_{i=1}^{N
 
 ---
 
-## 9. Transaction Fees
+## 10. Transaction Fees
 
 Transaction fees represent the difference between consumed input values and newly created output values:
 
@@ -153,7 +179,7 @@ $$\text{Fee} = \sum \text{Input Values} - \sum \text{Output Values} \quad (\text
 
 ---
 
-## 10. Protocol Supply Invariants
+## 11. Protocol Supply Invariants
 
 The Scytale ledger and consensus rules enforce the following immutable invariants:
 
@@ -165,7 +191,7 @@ The Scytale ledger and consensus rules enforce the following immutable invariant
 
 ---
 
-## 11. Market Principles & Protocol Boundary
+## 12. Market Principles & Protocol Boundary
 
 - **Issuance vs. Valuation:**
   - The protocol strictly enforces issuance volume, emission pace, and consensus validity.
@@ -178,7 +204,7 @@ The Scytale ledger and consensus rules enforce the following immutable invariant
 
 ---
 
-## 12. Cross-Specification References
+## 13. Cross-Specification References
 
 - **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
 - **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: Transparent genesis allocation framework.

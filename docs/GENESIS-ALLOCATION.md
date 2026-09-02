@@ -88,6 +88,10 @@ $$6,300,000\text{ SCY} + 2,100,000\text{ SCY} + 2,100,000\text{ SCY} + 31,500,00
 ### Integer Quanta Accounting:
 $$630,000,000,000,000 + 210,000,000,000,000 + 210,000,000,000,000 + 3,150,000,000,000,000 = 4,200,000,000,000,000\text{ quanta}$$
 
+> [!WARNING]
+> ### CONSENSUS ISSUE — REQUIRES RESOLUTION
+> While the static allocation quotas sum to exactly $4,200,000,000,000,000\text{ quanta}$ ($42\text{M}$ SCY), the standard unadjusted infinite geometric halving series ($10\text{ SCY} \times 2,100,000\text{ blocks} \times 2 = 42\text{M}$ SCY) produces $42\text{M}$ SCY of mining emission alone. Adding the $10.5\text{M}$ SCY ($25\%$) Genesis Allocation yields $52.5\text{M}$ SCY, breaching the $42\text{M}$ cap. Protocol consensus must explicitly resolve this (e.g. via a $31.5\text{M}$ SCY hard mining cap or subsidy recalibration) before finalizing consensus emission code.
+
 ```text
 +-------------------------------------------------------------------------+
 |                    Maximum Supply: 42,000,000 SCY                       |

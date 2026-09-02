@@ -66,20 +66,31 @@ Candidate Block Evaluation
 
 ---
 
-## 4. Monetary Invariants & Supply Constraints
+## 4. Monetary Invariants & Consensus Supply Rules
 
-Consensus enforces strict macro-economic limits across the entire lifecycle of the native coin, **Scytale Coin** (`SCY`):
+Consensus enforces 5 immutable macro-economic rules across the entire lifecycle of **Scytale Coin** (`SCY`):
 
-1. **Maximum Supply Ceiling:** Total circulating value can never exceed the immutable cap:
-   $$\text{Total Issued Supply} \le 42,000,000\text{ SCY} \quad (4,200,000,000,000,000\text{ quanta})$$
-2. **Denomination Standard:** All internal consensus accounting operates strictly in unsigned 64-bit integer quanta (`u64`):
-   $$1\text{ SCY} = 100,000,000\text{ quanta}$$
-3. **Genesis Allocation Limit:** Block 0 issuance is strictly locked to **25%** ($10,500,000\text{ SCY}$):
-   - Founder Allocation: `15%` ($6,300,000\text{ SCY}$ / $630\text{T quanta}$) — one-time issuance, zero future mint authority.
-   - Development / Treasury: `5%` ($2,100,000\text{ SCY}$ / $210\text{T quanta}$).
-   - Ecosystem / Community: `5%` ($2,100,000\text{ SCY}$ / $210\text{T quanta}$).
-4. **Mining Allocation Limit:** Proof-of-Work subsidies are locked to a maximum of **75%** ($31,500,000\text{ SCY}$ / $3,150\text{T quanta}$).
-5. **Emission Schedule:** Base block subsidy begins at $10\text{ SCY}$ and reduces by $50\%$ every $2,100,000\text{ blocks}$.
+1. **Global Supply Ceiling Invariant:** Total cumulative circulating value on the ledger can never exceed the immutable hard cap across the entire history of the chain:
+   $$\text{Total Issued Supply}(H) \le \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (42,000,000\text{ SCY})$$
+2. **Standard Transaction Solvency & Conservation:** For every valid non-coinbase transaction, total input quanta must equal total output quanta plus implicit fee:
+   $$\sum \text{Input Values} = \sum \text{Output Values} + \text{Fee} \quad (\text{with } \text{Fee} \ge 0)$$
+3. **Coinbase Transaction Ceiling:** The total output value of a block's coinbase transaction cannot exceed the protocol block subsidy at that height plus the total fees from all transactions in that block:
+   $$\text{Coinbase Output Sum} \le R_{\text{quanta}}(\text{height}) + \sum_{i=1}^{N} \text{Fee}_i(\text{quanta})$$
+4. **Fee Conservation Law:** Transaction fees represent a pure reallocation of existing confirmed balances; fees never mint new quanta or inflate total circulating supply.
+5. **Strict Integer Quanta Arithmetic:** All consensus state transitions, fee calculations, block subsidies, and balance validations must strictly execute in **unsigned 64-bit integers (`u64 quanta`)** ($1\text{ SCY} = 100,000,000\text{ quanta}$). Floating-point arithmetic is strictly prohibited in consensus.
+
+### Macro Supply Partitioning:
+$$\text{Maximum Supply} = \text{Genesis Allocation (25%)} + \text{Mining Emission Reserve (75%)}$$
+$$\begin{aligned}
+\text{Genesis Block 0 Issuance} &= \mathbf{1,050,000,000,000,000\text{ quanta}} \quad (10,500,000\text{ SCY}) \\
+\text{Authorized Mining Reserve} &= \mathbf{3,150,000,000,000,000\text{ quanta}} \quad (31,500,000\text{ SCY}) \\
+\hline
+\mathbf{\text{Total Hard Cap}} &= \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (\mathbf{42,000,000\text{ SCY}})
+\end{aligned}$$
+
+> [!WARNING]
+> **Emission Discrepancy Note:** The theoretical infinite halving sum of $10\text{ SCY} \times 2.1\text{M} \times 2 = 42\text{M}$ SCY exceeds the $31.5\text{M}$ SCY mining reserve when combined with Genesis ($10.5\text{M}$). This is flagged as `[CONSENSUS ISSUE — REQUIRES RESOLUTION]` and must be capped at $31.5\text{M}$ SCY or recalibrated before mining emission verification logic is finalized.
+
 - Cross-References: [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md), [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md), and [`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md).
 
 ---

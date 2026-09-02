@@ -11,7 +11,7 @@ Task ID     : 01
 Task Name   : Monetary Policy
 Phase       : Economy
 Level       : LIGHT
-Status      : PLANNED
+Status      : VERIFIED
 Dependency  : None
 ```
 
@@ -196,16 +196,16 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), future 
 
 Task 01 is considered **COMPLETE** when all of the following criteria are satisfied:
 
-- [ ] Monetary denomination locked ($1\text{ SCY} = 100,000,000\text{ quanta}$).
-- [ ] Maximum supply ceiling locked ($42,000,000\text{ SCY}$).
-- [ ] Genesis allocations reconcile to exactly $10,500,000\text{ SCY}$ ($25\%$).
-- [ ] Mining allocation reconciles to exactly $31,500,000\text{ SCY}$ ($75\%$).
-- [ ] Emission halving discrepancy is documented as `CONSENSUS ISSUE — REQUIRES RESOLUTION`.
-- [ ] Consensus monetary invariants are codified and unambiguous.
-- [ ] Pure integer accounting (`u64` quanta) is mandated across all monetary rules.
-- [ ] Cross-document consistency is verified with zero contradictions.
-- [ ] Required future unit, invariant, and reality tests are identified.
-- [ ] No unbacked or hidden issuance pathways exist.
+- [x] Monetary denomination locked ($1\text{ SCY} = 100,000,000\text{ quanta}$).
+- [x] Maximum supply ceiling locked ($42,000,000\text{ SCY}$).
+- [x] Genesis allocations reconcile to exactly $10,500,000\text{ SCY}$ ($25\%$).
+- [x] Mining allocation reconciles to exactly $31,500,000\text{ SCY}$ ($75\%$).
+- [x] Emission halving discrepancy is documented as `CONSENSUS ISSUE — REQUIRES RESOLUTION`.
+- [x] Consensus monetary invariants are codified and unambiguous.
+- [x] Pure integer accounting (`u64` quanta) is mandated across all monetary rules.
+- [x] Cross-document consistency is verified with zero contradictions.
+- [x] Required future unit, invariant, and reality tests are identified.
+- [x] No unbacked or hidden issuance pathways exist.
 
 ---
 
@@ -229,7 +229,7 @@ A task must maintain one of the following official lifecycle statuses:
 [ COMPLETE ]    ──> 100% acceptance criteria satisfied and signed off.
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 
