@@ -11,7 +11,7 @@ Task ID     : 10
 Task Name   : Chain Selection / Reorganization
 Phase       : Consensus
 Level       : HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -198,17 +198,17 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 10 can only be marked as **VERIFIED** when:
 
-- [ ] Cumulative Proof-of-Work calculation is implemented deterministically.
-- [ ] Validity-before-work rule is strictly enforced.
-- [ ] Common ancestor discovery algorithm is implemented and tested.
-- [ ] Atomic chain reorganization engine is implemented.
-- [ ] UTXO state rollback and re-application are verified.
-- [ ] Disconnected non-coinbase transactions are reconciled with the mempool.
-- [ ] Disconnected coinbase outputs are invalidated.
-- [ ] Canonical state coherence (Tip, Height, Work, UTXO) is guaranteed.
-- [ ] Zero peer-supplied metadata is trusted without local verification.
-- [ ] 100% of unit, fork, and reorg test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] Cumulative Proof-of-Work calculation is implemented deterministically.
+- [x] Validity-before-work rule is strictly enforced.
+- [x] Common ancestor discovery algorithm is implemented and tested.
+- [x] Atomic chain reorganization engine is implemented.
+- [x] UTXO state rollback and re-application are verified.
+- [x] Disconnected non-coinbase transactions are reconciled with the mempool.
+- [x] Disconnected coinbase outputs are invalidated.
+- [x] Canonical state coherence (Tip, Height, Work, UTXO) is guaranteed.
+- [x] Zero peer-supplied metadata is trusted without local verification.
+- [x] 100% of unit, fork, and reorg test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -230,7 +230,7 @@ Task 10 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 11 (Mempool).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

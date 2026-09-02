@@ -1,4 +1,5 @@
 use crate::target::Target;
+use crate::work::CumulativeWork;
 use scytale_primitives::Hash256;
 use thiserror::Error;
 
@@ -24,12 +25,39 @@ pub enum DifficultyError {
     ArithmeticOverflow,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum ChainError {
+    #[error("invalid block in branch: hash {hash:?}, reason: {reason}")]
+    InvalidBranchBlock { hash: Hash256, reason: String },
+    #[error("common ancestor not found between tip A {tip_a:?} and tip B {tip_b:?}")]
+    CommonAncestorNotFound { tip_a: Hash256, tip_b: Hash256 },
+    #[error(
+        "insufficient cumulative work: candidate work {candidate:?} <= active tip work {active:?}"
+    )]
+    InsufficientWork {
+        candidate: CumulativeWork,
+        active: CumulativeWork,
+    },
+    #[error("reorganization execution failed at block {hash:?}: {error}")]
+    ReorgFailed { hash: Hash256, error: String },
+    #[error("corrupted block linkage: parent hash {parent:?} not found")]
+    CorruptedLinkage { parent: Hash256 },
+    #[error("arithmetic overflow calculating cumulative work")]
+    WorkOverflow,
+    #[error("block structural validation failed: {0}")]
+    BlockError(#[from] scytale_core::BlockError),
+    #[error("utxo error: {0}")]
+    UtxoError(#[from] scytale_core::UtxoError),
+}
+
 #[derive(Debug, Error)]
 pub enum ConsensusError {
     #[error("Proof of work error: {0}")]
     Pow(#[from] PowError),
     #[error("Difficulty error: {0}")]
     Difficulty(#[from] DifficultyError),
+    #[error("Chain error: {0}")]
+    Chain(#[from] ChainError),
     #[error("Invalid target/difficulty")]
     InvalidTarget,
     #[error("Block hash does not meet target")]

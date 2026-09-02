@@ -1,18 +1,22 @@
 //! Scytale Consensus: Proof-of-Work, emission curve, and validation rules.
 
+pub mod chain;
 pub mod difficulty;
 pub mod error;
 pub mod pow;
 pub mod target;
+pub mod work;
 
+pub use chain::{BlockNode, ChainTree, ReorgResult};
 pub use difficulty::{
     calculate_next_target, scale_target_by_ratio, validate_block_target, DifficultyConfig,
     CLAMPING_FACTOR, DEFAULT_DIFFICULTY_EPOCH_BLOCKS, TARGET_BLOCK_INTERVAL_SECS,
 };
-pub use error::{ConsensusError, DifficultyError, PowError};
+pub use error::{ChainError, ConsensusError, DifficultyError, PowError};
 pub use pow::{compute_pow_hash, mine_test_header, verify_pow};
 pub use scytale_core::{Quanta, QUANTA_PER_SCY};
 pub use target::Target;
+pub use work::{block_work, CumulativeWork};
 
 pub const INITIAL_REWARD: Quanta = 10 * QUANTA_PER_SCY; // 10 SCY (1,000,000,000 quanta)
 pub const HALVING_INTERVAL: u64 = 2_100_000;
