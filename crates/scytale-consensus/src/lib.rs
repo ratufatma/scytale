@@ -1,17 +1,13 @@
 //! Scytale Consensus: Proof-of-Work, emission curve, and validation rules.
 
-use scytale_core::{Hash, Quanta, QUANTA_PER_SCY};
-use thiserror::Error;
+pub mod error;
+pub mod pow;
+pub mod target;
 
-#[derive(Debug, Error)]
-pub enum ConsensusError {
-    #[error("Invalid target/difficulty")]
-    InvalidTarget,
-    #[error("Block hash does not meet target")]
-    BlockPoWInvalid,
-    #[error("Invalid block reward")]
-    InvalidReward,
-}
+pub use error::{ConsensusError, PowError};
+pub use pow::{compute_pow_hash, mine_test_header, verify_pow};
+pub use scytale_core::{Quanta, QUANTA_PER_SCY};
+pub use target::Target;
 
 pub const INITIAL_REWARD: Quanta = 10 * QUANTA_PER_SCY; // 10 SCY (1,000,000,000 quanta)
 pub const HALVING_INTERVAL: u64 = 2_100_000;
@@ -24,11 +20,6 @@ pub fn calculate_block_reward(height: u64) -> Quanta {
     } else {
         INITIAL_REWARD >> halvings
     }
-}
-
-/// Verifies that a given hash meets the target difficulty.
-pub fn verify_pow(hash: &Hash, target: &[u8; 32]) -> bool {
-    hash.as_bytes() <= target
 }
 
 #[cfg(test)]

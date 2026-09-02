@@ -11,7 +11,7 @@ Task ID     : 08
 Task Name   : Proof-of-Work
 Phase       : Consensus
 Level       : HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -197,15 +197,15 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 08 can only be marked as **VERIFIED** when:
 
-- [ ] BLAKE3 is integrated for canonical header hashing.
-- [ ] 32-byte numerical target comparison is implemented deterministically.
-- [ ] `BlockHeader.nonce` variation is supported and tested.
-- [ ] Stateless `verify_pow(header, target)` API is exposed.
-- [ ] Exact target boundary conditions ($==, > Target, < Target$) are mathematically proven.
-- [ ] Invalid and insufficient PoW headers are rejected immediately.
-- [ ] Zero storage, P2P network, or mining worker dependencies exist in the verifier.
-- [ ] 100% of unit, boundary, and negative tests pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] BLAKE3 is integrated for canonical header hashing.
+- [x] 32-byte numerical target comparison is implemented deterministically.
+- [x] `BlockHeader.nonce` variation is supported and tested.
+- [x] Stateless `verify_pow(header, target)` API is exposed.
+- [x] Exact target boundary conditions ($==, > Target, < Target$) are mathematically proven.
+- [x] Invalid and insufficient PoW headers are rejected immediately.
+- [x] Zero storage, P2P network, or mining worker dependencies exist in the verifier.
+- [x] 100% of unit, boundary, and negative tests pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -227,7 +227,7 @@ Task 08 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 09 (Difficulty).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

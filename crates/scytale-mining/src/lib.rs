@@ -1,6 +1,6 @@
 //! Scytale Mining: Block candidate builder and Proof-of-Work hashing worker.
 
-use scytale_consensus::verify_pow;
+use scytale_consensus::{verify_pow, Target};
 use scytale_core::{BlockHeader, Hash, Transaction};
 use thiserror::Error;
 
@@ -44,18 +44,10 @@ impl Miner {
         target: &[u8; 32],
         max_iterations: u64,
     ) -> Option<Hash> {
+        let target_obj = Target::from_be_bytes(*target);
         for _ in 0..max_iterations {
-            let mut header_bytes = Vec::with_capacity(80);
-            header_bytes.extend_from_slice(&header.version.to_le_bytes());
-            header_bytes.extend_from_slice(header.previous_block_hash.as_bytes());
-            header_bytes.extend_from_slice(header.transaction_commitment.as_bytes());
-            header_bytes.extend_from_slice(&header.timestamp.to_le_bytes());
-            header_bytes.extend_from_slice(&header.difficulty_target.to_le_bytes());
-            header_bytes.extend_from_slice(&header.nonce.to_le_bytes());
-
-            let hash = Hash::hash(&header_bytes);
-            if verify_pow(&hash, target) {
-                return Some(hash);
+            if verify_pow(header, &target_obj).is_ok() {
+                return Some(header.hash());
             }
             header.nonce = header.nonce.wrapping_add(1);
         }
