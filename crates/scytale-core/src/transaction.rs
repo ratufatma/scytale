@@ -28,14 +28,6 @@ impl TxIn {
             authorization: Vec::new(),
         }
     }
-
-    pub fn to_canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(36 + 4 + self.authorization.len());
-        bytes.extend_from_slice(&self.previous_output.to_canonical_bytes());
-        bytes.extend_from_slice(&(self.authorization.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(&self.authorization);
-        bytes
-    }
 }
 
 /// Transaction: Represents an atomic state transition in Scytale.
@@ -67,25 +59,11 @@ impl Transaction {
             || (self.inputs.len() == 1 && self.inputs[0].previous_output.is_null())
     }
 
-    /// Serializes the transaction to canonical deterministic binary representation.
-    pub fn to_canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.version.to_le_bytes());
-        bytes.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
-        for input in &self.inputs {
-            bytes.extend_from_slice(&input.to_canonical_bytes());
-        }
-        bytes.extend_from_slice(&(self.outputs.len() as u32).to_le_bytes());
-        for output in &self.outputs {
-            bytes.extend_from_slice(&output.to_canonical_bytes());
-        }
-        bytes.extend_from_slice(&self.lock_time.to_le_bytes());
-        bytes
-    }
-
     /// Computes the unique 32-byte BLAKE3 transaction identifier (TxID).
     pub fn txid(&self) -> Hash256 {
-        Hash256::hash(&self.to_canonical_bytes())
+        let bytes = crate::codec::CanonicalSerialize::to_canonical_bytes(self)
+            .expect("canonical transaction serialization must not fail");
+        Hash256::hash(&bytes)
     }
 
     /// Computes the 32-byte BLAKE3 preimage digest for signing/verifying a specific input index.
@@ -114,14 +92,16 @@ impl Transaction {
 
         bytes.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
         for input in &self.inputs {
-            bytes.extend_from_slice(&input.previous_output.to_canonical_bytes());
+            bytes.extend_from_slice(&input.previous_output.to_fixed_bytes());
         }
 
         bytes.extend_from_slice(&(input_index as u32).to_le_bytes());
 
         bytes.extend_from_slice(&(self.outputs.len() as u32).to_le_bytes());
         for output in &self.outputs {
-            bytes.extend_from_slice(&output.to_canonical_bytes());
+            let out_bytes = crate::codec::CanonicalSerialize::to_canonical_bytes(output)
+                .map_err(|e| AuthorizationError::PreimageSerializationFailure(e.to_string()))?;
+            bytes.extend_from_slice(&out_bytes);
         }
 
         bytes.extend_from_slice(&self.lock_time.to_le_bytes());

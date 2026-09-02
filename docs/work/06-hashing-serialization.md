@@ -11,7 +11,7 @@ Task ID     : 06
 Task Name   : Hashing / Serialization
 Phase       : Ledger
 Level       : MEDIUM
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -201,16 +201,16 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 06 can only be marked as **VERIFIED** when:
 
-- [ ] BLAKE3 is integrated as the primary hashing function with 32-byte digest outputs.
-- [ ] Canonical binary serialization is implemented for `Transaction`, `TxIn`, `TxOut`, and `OutPoint`.
-- [ ] Codec produces 100% deterministic byte output across all environments.
-- [ ] `TxID` derivation is bound strictly to canonical transaction bytes.
-- [ ] Round-trip reversibility ($\text{De}(\text{Ser}(x)) == x$) is proven.
-- [ ] Strict rejection of malformed, truncated, and trailing bytes is verified.
-- [ ] OutPoint stability ($\text{TxID} + \text{index}$) is preserved.
-- [ ] No floating-point or non-canonical text representations are used.
-- [ ] 100% of unit, negative, and regression vector tests pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] BLAKE3 is integrated as the primary hashing function with 32-byte digest outputs.
+- [x] Canonical binary serialization is implemented for `Transaction`, `TxIn`, `TxOut`, and `OutPoint`.
+- [x] Codec produces 100% deterministic byte output across all environments.
+- [x] `TxID` derivation is bound strictly to canonical transaction bytes.
+- [x] Round-trip reversibility ($\text{De}(\text{Ser}(x)) == x$) is proven.
+- [x] Strict rejection of malformed, truncated, and trailing bytes is verified.
+- [x] OutPoint stability ($\text{TxID} + \text{index}$) is preserved.
+- [x] No floating-point or non-canonical text representations are used.
+- [x] 100% of unit, negative, and regression vector tests pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -232,7 +232,7 @@ Task 06 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 07 (Block).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

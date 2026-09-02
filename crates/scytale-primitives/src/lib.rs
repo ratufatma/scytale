@@ -95,7 +95,7 @@ impl OutPoint {
         self.txid.is_zero() && self.index == u32::MAX
     }
 
-    pub fn to_canonical_bytes(&self) -> [u8; 36] {
+    pub fn to_fixed_bytes(&self) -> [u8; 36] {
         let mut bytes = [0u8; 36];
         bytes[0..32].copy_from_slice(self.txid.as_bytes());
         bytes[32..36].copy_from_slice(&self.index.to_le_bytes());
@@ -116,14 +116,6 @@ impl TxOut {
             value,
             locking_condition,
         }
-    }
-
-    pub fn to_canonical_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(12 + self.locking_condition.len());
-        bytes.extend_from_slice(&self.value.to_le_bytes());
-        bytes.extend_from_slice(&(self.locking_condition.len() as u32).to_le_bytes());
-        bytes.extend_from_slice(&self.locking_condition);
-        bytes
     }
 }
 

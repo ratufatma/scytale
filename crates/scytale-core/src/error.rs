@@ -60,6 +60,35 @@ pub enum AuthorizationError {
     },
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum SerializationError {
+    #[error("unexpected end of buffer: needed {needed} bytes, got {available}")]
+    UnexpectedEof { needed: usize, available: usize },
+    #[error("length prefix exceeds maximum allowed: {length} > {max}")]
+    LengthExceedsLimit { length: usize, max: usize },
+    #[error("trailing unparsed bytes detected: {0} remaining bytes")]
+    TrailingBytes(usize),
+    #[error("unsupported transaction version: {0}")]
+    UnsupportedVersion(u32),
+    #[error("invalid integer or boolean encoding")]
+    InvalidEncoding,
+    #[error("io error during canonical serialization: {0}")]
+    Io(String),
+}
+
+impl From<std::io::Error> for SerializationError {
+    fn from(err: std::io::Error) -> Self {
+        if err.kind() == std::io::ErrorKind::UnexpectedEof {
+            SerializationError::UnexpectedEof {
+                needed: 1,
+                available: 0,
+            }
+        } else {
+            SerializationError::Io(err.to_string())
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("Primitive error: {0}")]
@@ -70,6 +99,8 @@ pub enum CoreError {
     Utxo(#[from] UtxoError),
     #[error("Authorization error: {0}")]
     Authorization(#[from] AuthorizationError),
+    #[error("Serialization codec error: {0}")]
+    SerializationCodec(#[from] SerializationError),
     #[error("Serialization error: {0}")]
     Serialization(String),
     #[error("Invalid transaction: {0}")]
