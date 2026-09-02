@@ -10,7 +10,9 @@ pub mod utxo;
 pub use authorization::{verify_transaction_authorization, AuthorizationVerifier};
 pub use block::{Block, BlockHeader};
 pub use codec::{CanonicalDeserialize, CanonicalSerialize, MAX_VECTOR_LENGTH};
-pub use error::{AuthorizationError, CoreError, SerializationError, TransactionError, UtxoError};
+pub use error::{
+    AuthorizationError, BlockError, CoreError, SerializationError, TransactionError, UtxoError,
+};
 pub use scytale_primitives::{
     Hash, Hash256, OutPoint, PrimitiveError, Quanta, TxOut, QUANTA_PER_SCY,
 };

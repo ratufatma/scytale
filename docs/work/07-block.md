@@ -11,7 +11,7 @@ Task ID     : 07
 Task Name   : Block
 Phase       : Ledger / Consensus Foundation
 Level       : MEDIUM → HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -214,16 +214,16 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 07 can only be marked as **VERIFIED** when:
 
-- [ ] `BlockHeader` and `Block` domain structs are implemented in `scytale-core`.
-- [ ] Existing `Transaction`, `TxId`, `Hash`, and `OutPoint` types are cleanly re-used.
-- [ ] Linear parent linkage via `previous_block_hash` is supported.
-- [ ] Exactly one coinbase at index 0 is strictly enforced by structural validation.
-- [ ] Timestamp is represented as an explicit integer (`u64`) without system clock coupling.
-- [ ] `difficulty_target` and `nonce` fields are present and accessible.
-- [ ] Stateless structural validation is implemented and passes all negative test cases.
-- [ ] No PoW mining loops, difficulty formulas, or database storage logic are introduced.
-- [ ] 100% of unit and structural validation tests pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `BlockHeader` and `Block` domain structs are implemented in `scytale-core`.
+- [x] Existing `Transaction`, `TxId`, `Hash`, and `OutPoint` types are cleanly re-used.
+- [x] Linear parent linkage via `previous_block_hash` is supported.
+- [x] Exactly one coinbase at index 0 is strictly enforced by structural validation.
+- [x] Timestamp is represented as an explicit integer (`u64`) without system clock coupling.
+- [x] `difficulty_target` and `nonce` fields are present and accessible.
+- [x] Stateless structural validation is implemented and passes all negative test cases.
+- [x] No PoW mining loops, difficulty formulas, or database storage logic are introduced.
+- [x] 100% of unit and structural validation tests pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -245,7 +245,7 @@ Task 07 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 08 (Proof-of-Work).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

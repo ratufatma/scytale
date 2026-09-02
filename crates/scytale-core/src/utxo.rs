@@ -333,12 +333,7 @@ mod tests {
         let initial_snapshot = set.clone();
 
         // Coinbase tx
-        let coinbase = Transaction::new(
-            TRANSACTION_VERSION_1,
-            vec![],
-            vec![TxOut::new(1_000_000_000, vec![])],
-            0,
-        );
+        let coinbase = Transaction::new_coinbase(0, vec![TxOut::new(1_000_000_000, vec![])]);
 
         // Tx 1: valid
         let tx1 = Transaction::new(
@@ -389,12 +384,7 @@ mod tests {
     #[test]
     fn test_coinbase_application() {
         let mut set = UtxoSet::new();
-        let coinbase = Transaction::new(
-            TRANSACTION_VERSION_1,
-            vec![],
-            vec![TxOut::new(1_000_000_000, vec![1, 2, 3])],
-            0,
-        );
+        let coinbase = Transaction::new_coinbase(0, vec![TxOut::new(1_000_000_000, vec![1, 2, 3])]);
 
         assert!(set.apply_coinbase(&coinbase, 0).is_ok());
         assert_eq!(set.len(), 1);

@@ -53,10 +53,16 @@ impl Transaction {
         Self::new(version, inputs, outputs, 0)
     }
 
-    /// Determines whether the transaction is a coinbase issuance transaction.
+    /// Determines whether the transaction is a coinbase issuance transaction
+    /// (contains exactly 1 input whose previous_output is OutPoint::null()).
     pub fn is_coinbase(&self) -> bool {
-        self.inputs.is_empty()
-            || (self.inputs.len() == 1 && self.inputs[0].previous_output.is_null())
+        self.inputs.len() == 1 && self.inputs[0].previous_output.is_null()
+    }
+
+    /// Helper constructor to create a canonical coinbase transaction.
+    pub fn new_coinbase(height: u64, outputs: Vec<TxOut>) -> Self {
+        let input = TxIn::new(OutPoint::null(), height.to_le_bytes().to_vec());
+        Self::new(TRANSACTION_VERSION_1, vec![input], outputs, 0)
     }
 
     /// Computes the unique 32-byte BLAKE3 transaction identifier (TxID).

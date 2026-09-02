@@ -50,7 +50,7 @@ impl Miner {
             header_bytes.extend_from_slice(header.previous_block_hash.as_bytes());
             header_bytes.extend_from_slice(header.transaction_commitment.as_bytes());
             header_bytes.extend_from_slice(&header.timestamp.to_le_bytes());
-            header_bytes.extend_from_slice(&header.difficulty_target);
+            header_bytes.extend_from_slice(&header.difficulty_target.to_le_bytes());
             header_bytes.extend_from_slice(&header.nonce.to_le_bytes());
 
             let hash = Hash::hash(&header_bytes);
@@ -74,7 +74,7 @@ mod tests {
             previous_block_hash: Hash::ZERO,
             transaction_commitment: Hash::ZERO,
             timestamp: 1700000000,
-            difficulty_target: [0xff; 32],
+            difficulty_target: 0x1f00ffff,
             nonce: 0,
         };
         let easy_target = [0xff; 32];

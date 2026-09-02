@@ -89,6 +89,20 @@ impl From<std::io::Error> for SerializationError {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum BlockError {
+    #[error("block transaction list cannot be empty")]
+    EmptyTransactionVector,
+    #[error("first transaction in block (index 0) must be a coinbase transaction")]
+    MissingCoinbase,
+    #[error("duplicate coinbase transaction found at index {0}")]
+    DuplicateCoinbase(usize),
+    #[error("nested transaction validation failed: {0}")]
+    TransactionError(#[from] TransactionError),
+    #[error("serialization error: {0}")]
+    SerializationError(#[from] SerializationError),
+}
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("Primitive error: {0}")]
@@ -99,6 +113,8 @@ pub enum CoreError {
     Utxo(#[from] UtxoError),
     #[error("Authorization error: {0}")]
     Authorization(#[from] AuthorizationError),
+    #[error("Block error: {0}")]
+    Block(#[from] BlockError),
     #[error("Serialization codec error: {0}")]
     SerializationCodec(#[from] SerializationError),
     #[error("Serialization error: {0}")]

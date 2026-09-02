@@ -263,3 +263,63 @@ impl CanonicalDeserialize for Transaction {
         Ok(Transaction::new(version, inputs, outputs, lock_time))
     }
 }
+
+impl CanonicalSerialize for crate::block::BlockHeader {
+    fn serialize_canonical<W: Write>(&self, writer: &mut W) -> Result<(), SerializationError> {
+        self.version.serialize_canonical(writer)?;
+        self.previous_block_hash.serialize_canonical(writer)?;
+        self.transaction_commitment.serialize_canonical(writer)?;
+        self.timestamp.serialize_canonical(writer)?;
+        self.difficulty_target.serialize_canonical(writer)?;
+        self.nonce.serialize_canonical(writer)?;
+        Ok(())
+    }
+}
+
+impl CanonicalDeserialize for crate::block::BlockHeader {
+    fn deserialize_canonical<R: Read>(reader: &mut R) -> Result<Self, SerializationError> {
+        let version = u32::deserialize_canonical(reader)?;
+        let previous_block_hash = Hash256::deserialize_canonical(reader)?;
+        let transaction_commitment = Hash256::deserialize_canonical(reader)?;
+        let timestamp = u64::deserialize_canonical(reader)?;
+        let difficulty_target = u32::deserialize_canonical(reader)?;
+        let nonce = u64::deserialize_canonical(reader)?;
+        Ok(crate::block::BlockHeader::new(
+            version,
+            previous_block_hash,
+            transaction_commitment,
+            timestamp,
+            difficulty_target,
+            nonce,
+        ))
+    }
+}
+
+impl CanonicalSerialize for crate::block::Block {
+    fn serialize_canonical<W: Write>(&self, writer: &mut W) -> Result<(), SerializationError> {
+        self.header.serialize_canonical(writer)?;
+        (self.transactions.len() as u32).serialize_canonical(writer)?;
+        for tx in &self.transactions {
+            tx.serialize_canonical(writer)?;
+        }
+        Ok(())
+    }
+}
+
+impl CanonicalDeserialize for crate::block::Block {
+    fn deserialize_canonical<R: Read>(reader: &mut R) -> Result<Self, SerializationError> {
+        let header = crate::block::BlockHeader::deserialize_canonical(reader)?;
+        let tx_count = u32::deserialize_canonical(reader)? as usize;
+        if tx_count > MAX_VECTOR_LENGTH {
+            return Err(SerializationError::LengthExceedsLimit {
+                length: tx_count,
+                max: MAX_VECTOR_LENGTH,
+            });
+        }
+        let mut transactions = Vec::with_capacity(tx_count.min(1024));
+        for _ in 0..tx_count {
+            transactions.push(Transaction::deserialize_canonical(reader)?);
+        }
+        Ok(crate::block::Block::new(header, transactions))
+    }
+}
