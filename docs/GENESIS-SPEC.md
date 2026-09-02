@@ -79,10 +79,13 @@ $$\text{Genesis Allocation} \ne \text{Automatic User Balance}$$
 |                    Maximum Supply: 42,000,000 SCY                       |
 |                     (4,200,000,000,000,000 quanta)                      |
 +------------------------------------+------------------------------------+
-|      Total Genesis Allocation      |       Mining Emission Reserve      |
-|    - Explicit, public Block 0      |    - Minted over time via Proof-   |
-|      issuance (Founder, Treasury,  |      of-Work block rewards         |
-|      Ecosystem, Community)         |    - Available to all miners       |
+|   Total Genesis Allocation (25%)   |    Mining Emission Reserve (75%)   |
+|        10,500,000 SCY              |           31,500,000 SCY           |
+| (1,050,000,000,000,000 quanta)     |   (3,150,000,000,000,000 quanta)   |
+|                                    |                                    |
+| - Founder:    15% (6,300,000 SCY)  | - Minted over time via Proof-      |
+| - Treasury:    5% (2,100,000 SCY)  |   of-Work block rewards            |
+| - Ecosystem:   5% (2,100,000 SCY)  | - Available to all miners          |
 +------------------------------------+------------------------------------+
 ```
 
@@ -175,8 +178,9 @@ The following implementation parameters remain designated as **TBD**:
 
 | Parameter | Status | Scope |
 | :--- | :--- | :--- |
-| **Founder Allocation Amount / %** | `TBD` | Exact initial allocation reserved for founders. |
-| **Treasury & Ecosystem Allotment** | `TBD` | Specific quotas for protocol treasury and ecosystem grants. |
+| **Founder Vesting Schedule** | `TBD` | Lockup duration, cliff periods, and linear release rules for founder UTXOs. |
+| **Founder Recipient Addresses** | `TBD` | Public keys / locking conditions for founder allocation outputs. |
+| **Treasury & Ecosystem Control** | `TBD` | Multi-signature schema and release policies for treasury/ecosystem pools. |
 | **Genesis Output Layout & Addresses** | `TBD` | Binary transaction structure and locking conditions for Block 0. |
 | **Genesis Block Parameters** | `TBD` | Exact timestamp, difficulty target, and nonce for Block 0. |
 | **Coinbase Maturity Threshold** | `TBD` | Confirmation depth required before mined coinbase UTXOs become spendable. |

@@ -47,7 +47,8 @@ The core macroeconomic parameters for Scytale are locked as follows:
 | **Target Block Interval ($T_{\text{target}}$)** | **`60 seconds`** | — | Target duration between consecutive blocks. |
 | **Halving Interval** | **`2,100,000 blocks`** | — | Number of blocks in each emission epoch. |
 | **Reward Reduction Schedule** | **`50%`** | — | Subsidy reduces by half every 2,100,000 blocks. |
-| **Genesis Issuance ($G$)** | `TBD` | `TBD` | Initial pre-mined allocation (assumed $0$ for baseline). |
+| **Genesis Allocation ($G$)** | **`10,500,000 SCY`** (`25%`) | `1,050,000,000,000,000 quanta` | One-time genesis allocation (Founder 15%, Treasury 5%, Ecosystem 5%). |
+| **Mining Emission Reserve** | **`31,500,000 SCY`** (`75%`) | `3,150,000,000,000,000 quanta` | Total supply reserved for Proof-of-Work mining distribution. |
 
 ---
 

@@ -1,133 +1,129 @@
 # Scytale Genesis Allocation Specification
 
-This document defines the architectural specification, transparency framework, and supply reconciliation rules for the **Genesis Allocation** in Scytale.
+This document defines the architectural specification, transparency framework, distribution breakdown, and supply reconciliation rules for the **Genesis Allocation** in Scytale.
 
 ---
 
-## 1. Purpose & Core Principles
+## 1. Distribution of Fixed Maximum Supply
 
-The Genesis Allocation framework ensures that the initial distribution of SCY is fully transparent, mathematically reconcilable, and publicly auditable from the genesis block onward:
-
-- **Mathematical Reconciliation:** Every allocated SCY must be explicitly accounted for within the fixed 42,000,000 SCY maximum supply ceiling.
-- **Zero Hidden Allocations:** There are no private, undocumented, or unindexed token pools.
-- **On-Chain Auditability:** All genesis issuances materialize directly as visible outputs on the active ledger.
-- **Integrity Guarantee:** Genesis distribution does not grant ongoing minting privileges; protocol issuance post-genesis is governed strictly by the deterministic Proof-of-Work emission schedule.
-
-> **Core Axiom:** *Every allocated SCY must be explicitly accounted for within the fixed maximum supply.*
-
----
-
-## 2. Macro Supply & Accounting Precision
-
-Scytale enforces a strict hard ceiling across all issuance channels:
+Scytale enforces an immutable supply ceiling of **42,000,000 SCY** ($4,200,000,000,000,000\text{ quanta}$). The total supply is strictly partitioned across four locked categories:
 
 ```text
-Maximum Supply = 42,000,000 SCY
-Smallest Unit  = quanta (1 SCY = 100,000,000 quanta)
-
-Total Max Supply in Quanta = 4,200,000,000,000,000 quanta
+42,000,000 SCY (100%)
+├── Genesis Allocation (25% / 10,500,000 SCY)
+│   ├── Founder Allocation          : 15% ( 6,300,000 SCY)
+│   ├── Development / Treasury      :  5% ( 2,100,000 SCY)
+│   └── Ecosystem / Community       :  5% ( 2,100,000 SCY)
+│
+└── Mining Emission Reserve         : 75% (31,500,000 SCY)
 ```
 
-- All balance allocations, genesis outputs, and reconciliation formulas are computed strictly in **integer quanta** (`u64`).
+### Macro Allocation Table:
+
+| Category | Supply Share (%) | Amount (SCY) | Amount (Integer Quanta) | Distribution Method |
+| :--- | :---: | :---: | :---: | :--- |
+| **Founder Allocation** | `15%` | `6,300,000 SCY` | `630,000,000,000,000 quanta` | One-time Genesis Block Allocation |
+| **Development / Treasury** | `5%` | `2,100,000 SCY` | `210,000,000,000,000 quanta` | One-time Genesis Block Allocation |
+| **Ecosystem / Community** | `5%` | `2,100,000 SCY` | `210,000,000,000,000 quanta` | One-time Genesis Block Allocation |
+| **Mining Emission Reserve** | `75%` | `31,500,000 SCY` | `3,150,000,000,000,000 quanta` | Proof-of-Work Block Subsidies |
+| **Total Maximum Supply** | **`100%`** | **`42,000,000 SCY`** | **`4,200,000,000,000,000 quanta`** | Strict Consensus Ceiling |
 
 ---
 
-## 3. Genesis Allocation vs. Mining Reserve
+## 2. Allocation Philosophy & Design Rationale
 
-The total supply encompasses all potential token creation mechanisms throughout the network's lifetime:
+The distribution model is governed by eight foundational architectural principles:
 
-$$\text{Maximum Supply} = \text{Total Genesis Allocation} + \text{Future Mining Emission}$$
+1. **Founder Contribution Recognition:** The 15% founder allocation provides meaningful, upfront alignment for the core architectural engineering and ongoing research without requiring ongoing protocol extraction.
+2. **Strict One-Time Genesis Event:** The founder allocation is minted exclusively at Block 0. There are zero ongoing founder cuts from mined blocks and zero developer tax fees.
+3. **Restrained Treasury Allocation:** The 5% treasury pool is deliberately constrained to prevent excessive capital concentration under centralized or internal operational control.
+4. **Measured Ecosystem Reserve:** The 5% ecosystem/community allocation provides targeted support for developer tooling, infrastructure grants, and early participation without diluting mining incentives.
+5. **Mining-Centric Distribution:** The vast majority of total supply (**75%**) is reserved exclusively for Proof-of-Work miners who commit computational energy to secure the network.
+6. **Strict Supply Boundary:** Every single quantum across all categories is strictly bounded within the 42,000,000 SCY cap.
+7. **Zero Hidden Allocations:** No off-ledger, unindexed, synthetic, or private pools exist.
+8. **No Future Mint Authority:** No protocol role, founder key, or administrative multisig possesses discretionary minting authority post-genesis.
+
+---
+
+## 3. Category Specifications
+
+### 3.1 Founder Allocation (15% / 6,300,000 SCY)
+- **Occurrence:** One-time issuance executed at Block 0.
+- **Constraints:**
+  - Carries no ongoing percentage of block subsidies or transaction fees.
+  - Grants no special voting, staking, or governance privileges.
+  - Fully bound to genesis ledger outputs with verifiable Value Provenance.
+- **Specification Status:**
+  - `Founder Recipient / Address: TBD`
+  - `Founder Vesting Schedule: TBD`
+
+### 3.2 Development / Treasury (5% / 2,100,000 SCY)
+- **Purpose:** Protocol maintenance, cryptographic audits, core node infrastructure, security bug bounties, and essential operational needs.
+- **Design Intent:** Kept small (5%) to prevent internal centralization of protocol capital.
+- **Specification Status:**
+  - `Treasury Control Model: TBD` (e.g., timelocked multi-signature governance).
+  - `Treasury Release Policy: TBD`
+
+### 3.3 Ecosystem / Community (5% / 2,100,000 SCY)
+- **Purpose:** Open-source developer grants, client SDKs, documentation tooling, integrations, and initial community bootstrapping initiatives.
+- **Design Intent:** Kept limited (5%) to avoid aggressive supply dilution against Proof-of-Work miners.
+- **Specification Status:**
+  - `Community Distribution Mechanism: TBD`
+  - `Ecosystem Release Policy: TBD`
+
+### 3.4 Mining Emission Reserve (75% / 31,500,000 SCY)
+- **Purpose:** Distributed to permissionless network miners via block subsidies over successive halving epochs as specified in [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md), [`docs/POW-SPEC.md`](POW-SPEC.md), and [`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md).
+- **Incentive Alignment:** Proof-of-Work mining forms the primary, sovereign path for currency dispersion.
+
+---
+
+## 4. Mathematical Supply Reconciliation
+
+Scytale mandates exact integer reconciliation across all supply components:
+
+$$\text{Founder} + \text{Treasury} + \text{Ecosystem} + \text{Mining Reserve} = 42,000,000\text{ SCY}$$
+
+$$6,300,000\text{ SCY} + 2,100,000\text{ SCY} + 2,100,000\text{ SCY} + 31,500,000\text{ SCY} = 42,000,000\text{ SCY}$$
+
+### Integer Quanta Accounting:
+$$630,000,000,000,000 + 210,000,000,000,000 + 210,000,000,000,000 + 3,150,000,000,000,000 = 4,200,000,000,000,000\text{ quanta}$$
 
 ```text
 +-------------------------------------------------------------------------+
 |                    Maximum Supply: 42,000,000 SCY                       |
 |                     (4,200,000,000,000,000 quanta)                      |
 +------------------------------------+------------------------------------+
-|      Total Genesis Allocation      |       Mining Emission Reserve      |
-|    - Initial protocol allocation   |    - Proof-of-Work block subsidies |
-|    - Minted at Block 0 (Genesis)   |    - Halving schedule over epochs  |
+|   Total Genesis Allocation (25%)   |    Mining Emission Reserve (75%)   |
+|        10,500,000 SCY              |           31,500,000 SCY           |
+| (1,050,000,000,000,000 quanta)     |   (3,150,000,000,000,000 quanta)   |
+|                                    |                                    |
+| - Founder:    15% (6,300,000 SCY)  | - Minted via Proof-of-Work         |
+| - Treasury:    5% (2,100,000 SCY)  |   block subsidies over halving     |
+| - Ecosystem:   5% (2,100,000 SCY)  |   epochs                           |
 +------------------------------------+------------------------------------+
 ```
 
-### Invariants:
-1. **Supply Deduction:** Any SCY allocated at genesis directly reduces the remaining pool available for Proof-of-Work block subsidies:
-   $$\text{Mining Reserve} = 42,000,000\text{ SCY} - \text{Total Genesis Allocation}$$
-2. **Ceiling Invariant:**
-   $$\text{Total Genesis Allocation} + \sum_{h=1}^{\infty} R(h) \le 42,000,000\text{ SCY}$$
+---
+
+## 5. Genesis Allocation vs. Mining Emission
+
+Scytale strictly separates the nature and provenance of genesis tokens from mined tokens:
+
+$$\text{Genesis Allocation} \ne \text{Mining Emission}$$
+
+$$\text{Genesis Allocation} + \text{Mining Emission} = \text{Maximum Supply Boundary}$$
+
+- **Genesis Tokens:** Minted as direct outputs in the Block 0 transaction to establish initial development and ecosystem foundations.
+- **Mined Tokens:** Minted incrementally in response to verified, unforgeable thermodynamic Proof-of-Work.
 
 ---
 
-## 4. Transparent Allocation Categories
+## 6. Public Accounting & Value Provenance
 
-The genesis distribution framework is organized into four distinct structural categories:
+Genesis allocations are fully auditable on the public ledger:
 
 ```text
-Genesis Allocation
-├── Founder Allocation             : TBD
-├── Development / Treasury         : TBD
-├── Ecosystem Growth               : TBD
-└── Community / Initial Distribution: TBD
-```
-
-| Allocation Category | Strategic Purpose | Allocation Status |
-| :--- | :--- | :--- |
-| **Founder Allocation** | Alignment and compensation for core architecture and development contributors. | `TBD` |
-| **Development / Treasury** | Long-term protocol maintenance, infrastructure, security audits, and operations. | `TBD` |
-| **Ecosystem Growth** | Grants, tooling development, developer ecosystem incentives, and integrations. | `TBD` |
-| **Community Distribution** | Broadening initial ownership, fostering organic participation, and decentralized dispersion. | `TBD` |
-
----
-
-## 5. Category Details & Governance Frameworks
-
-### 5.1 Founder Allocation
-- **Principles:** Must be fully declared prior to network launch, verifiably anchored to genesis UTXOs, and bounded within the 42M SCY cap.
-- **Specification Status:**
-  - `Founder Allocation Amount: TBD`
-  - `Founder Allocation Percentage: TBD`
-  - `Founder Recipient / Address: TBD`
-  - `Founder Vesting Schedule: TBD`
-
-### 5.2 Development / Treasury
-- **Principles:** Dedicated to sustaining core engineering, ongoing code maintenance, and long-term network infrastructure.
-- **Specification Status:**
-  - `Treasury Allocation Amount: TBD`
-  - `Treasury Control Model: TBD` (e.g., multi-signature or protocol-governed timelocks).
-  - `Treasury Release Schedule: TBD`
-
-### 5.3 Ecosystem Growth
-- **Principles:** Supports external developers, SDK builders, open-source contributors, and strategic network integrations.
-- **Specification Status:**
-  - `Ecosystem Allocation Amount: TBD`
-  - `Ecosystem Release Schedule: TBD`
-
-### 5.4 Community / Initial Distribution
-- **Principles:** Aims to reduce token concentration and encourage early network testing and decentralized node operation.
-- **Specification Status:**
-  - `Community Allocation Amount: TBD`
-  - `Community Distribution Mechanism: TBD`
-
----
-
-## 6. Mathematical Supply Reconciliation
-
-Scytale mandates exact integer reconciliation across all supply components:
-
-$$\text{Founder} + \text{Treasury} + \text{Ecosystem} + \text{Community} + \text{Mining Reserve} = 42,000,000\text{ SCY}$$
-
-$$\text{Founder}_{\text{quanta}} + \text{Treasury}_{\text{quanta}} + \text{Ecosystem}_{\text{quanta}} + \text{Community}_{\text{quanta}} + \text{Mining Reserve}_{\text{quanta}} = 4,200,000,000,000,000\text{ quanta}$$
-
-### Audit Invariant:
-- Every quantum created at genesis must map directly to a valid `TxOut` in the genesis block's transaction payload.
-- No off-ledger, unindexed, or synthetic balances are permissible under any circumstances.
-
----
-
-## 7. Value Provenance for Genesis UTXOs
-
-Genesis allocations inherit Scytale's strict **Value Provenance** consensus invariant:
-
-```text
+Genesis Allocation Lineage:
 Genesis Block (Height 0)
           ↓
 Genesis Transaction
@@ -136,81 +132,66 @@ Genesis TxID (Blake3 Digest)
           ↓
 Genesis OutPoints (TxID : Index)
           ↓
-Genesis UTXOs (In Active UTXO Set)
+Genesis UTXOs (Active Set)
           ↓
 Subsequent Valid Transactions (When Spent)
 ```
 
-- Every genesis allocation is fully traceable on-chain.
-- Subsequent movements of genesis funds produce clear, deterministic DAG ancestry paths on the public ledger.
-
----
-
-## 8. Vesting & Release Schedules
-
-To align long-term incentives and mitigate market impact:
-- Large structural allocations (such as Founder and Treasury pools) may incorporate deterministic vesting schedules.
-- **Deterministic Rules:** If vesting is implemented, unlocking criteria must be verifiable and deterministic.
-- **Status:**
-  - `Founder Vesting: TBD`
-  - `Treasury Release: TBD`
-  - `Ecosystem Release: TBD`
-  - `Community Release: TBD`
-
----
-
-## 9. Public Verifiability & Macro Supply State
-
-Any node on the network can deterministically calculate the live macro state of the currency at any block height $h$:
-
-$$\text{Unissued Supply}(h) = 4,200,000,000,000,000\text{ quanta} - \text{Genesis Allocation}_{\text{quanta}} - \sum_{i=1}^{h} R_{\text{quanta}}(i)$$
-
-$$\text{Current Issued Supply}(h) = \text{Genesis Allocation}_{\text{quanta}} + \sum_{i=1}^{h} R_{\text{quanta}}(i)$$
-
 ```text
-+-------------------------------------------------------------------------+
-|                       Maximum Supply (42,000,000 SCY)                   |
-+------------------------------------+------------------------------------+
-|       Current Issued Supply        |          Unissued Supply           |
-|    - Genesis UTXOs                 |    - Reserved for future Proof-    |
-|    - Confirmed mined block rewards |      of-Work block subsidies       |
-+------------------------------------+------------------------------------+
+Mining Emission Lineage:
+Mined Block (Height H)
+          ↓
+Coinbase Transaction
+          ↓
+Coinbase TxID (Blake3 Digest)
+          ↓
+Coinbase OutPoint (TxID : 0)
+          ↓
+Mined UTXO (Active Set)
+          ↓
+Subsequent Valid Transactions (When Spent)
 ```
 
----
-
-## 10. No Arbitrary Minting Guarantee
-
-- Genesis allocation represents an explicit, one-time protocol bootstrap issuance.
-- It does **not** create ongoing minting authorities, administrative backdoors, or discretionary inflation keys.
-- Following block 0, the only valid mechanism for coin generation is the deterministic Proof-of-Work coinbase subsidy, which asymptotically terminates once the 42M SCY cap is reached.
+- Every single quantum held in any wallet has a deterministic provenance path that can be independently audited backward to Block 0 or a valid Proof-of-Work block.
 
 ---
 
-## 11. Open Questions & Pending Parameters
+## 7. Initial User Balance Invariant
 
-The following parameters are designated as **TBD** pending final distribution decisions:
+The presence of a genesis allocation does **not** alter the onboarding principle for new users:
+
+$$\text{New User Initial Balance} = 0\text{ SCY} \quad (0\text{ quanta})$$
+
+- Fresh nodes and Passbook instances begin at `0 SCY`.
+- Users obtain SCY either through valid peer-to-peer transfers or by running a node to mine blocks permissionlessly.
+
+---
+
+## 8. Open Questions & Pending Parameters
+
+The following structural parameters remain designated as **TBD**:
 
 | Parameter | Status | Scope |
 | :--- | :--- | :--- |
-| **Founder Allocation Amount / %** | `TBD` | Quantity and percentage of genesis allocation reserved for founders. |
-| **Founder Recipient & Vesting** | `TBD` | Target public keys and timelock/vesting schedule. |
-| **Treasury Allocation Amount / %** | `TBD` | Quantity and percentage reserved for protocol development treasury. |
-| **Treasury Control & Release** | `TBD` | Governance model and disbursement conditions. |
-| **Ecosystem Allocation Amount / %** | `TBD` | Quantity and percentage dedicated to ecosystem growth. |
-| **Community Allocation Amount / %** | `TBD` | Quantity and percentage allocated for community distribution. |
-| **Community Distribution Method** | `TBD` | Method of initial community dispersion. |
+| **Founder Vesting Schedule** | `TBD` | Lockup duration, cliff periods, and linear release rules for founder UTXOs. |
+| **Founder Recipient Addresses** | `TBD` | Public keys / locking conditions for founder allocation outputs. |
+| **Treasury Control Model** | `TBD` | Multi-signature schema and cryptographic threshold parameters. |
+| **Treasury Release Policy** | `TBD` | Milestone-based disbursement criteria. |
+| **Community Distribution Method** | `TBD` | Mechanics for dispersing community/ecosystem grants. |
+| **Ecosystem Release Policy** | `TBD` | Tranche release schedules for ecosystem development. |
 | **Genesis Transaction Layout** | `TBD` | Exact binary payload and output array format for Block 0. |
+| **Genesis Block Parameters** | `TBD` | Exact timestamp, initial difficulty target, and nonce for Block 0. |
 
 ---
 
-## 12. Cross-Specification References
+## 9. Cross-Specification References
 
 - **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY maximum cap and quanta denomination standards.
+- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY cap, 60-second block target, and quanta accounting.
 - **[`docs/ECONOMIC-MODEL.md`](ECONOMIC-MODEL.md)**: Macroeconomic dynamics, miner incentives, and fee markets.
 - **[`docs/LEDGER-SPEC.md`](LEDGER-SPEC.md)**: Core UTXO ledger architecture and value conservation.
 - **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)**: OutPoint lifecycle and Value Provenance.
 - **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Genesis block specification and block state transitions.
-- **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)**: Canonical transaction format and validity rules.
+- **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work validation rules.
+- **[`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md)**: 60-second target block adjustment.
 - **[`docs/PASSBOOK-CONCEPT.md`](PASSBOOK-CONCEPT.md)**: User-facing asset presentation and journal history.
