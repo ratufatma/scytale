@@ -43,3 +43,12 @@ cargo test --workspace
 ```bash
 cargo run -p scytale-node -- --help
 ```
+
+---
+
+## 📖 Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Ledger Specification](docs/LEDGER-SPEC.md)
+- [Economic Model](docs/ECONOMIC-MODEL.md)
+
