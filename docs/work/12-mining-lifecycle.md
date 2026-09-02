@@ -11,7 +11,7 @@ Task ID     : 12
 Task Name   : Mining Lifecycle
 Phase       : Runtime / Consensus Integration
 Level       : HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -222,16 +222,16 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 12 can only be marked as **VERIFIED** when:
 
-- [ ] Autonomous background mining lifecycle is implemented.
-- [ ] Candidate block templates are constructed from tip, difficulty target, and mempool.
-- [ ] Coinbase subsidy and fee calculations operate strictly in integer `quanta`.
-- [ ] Non-blocking cancellation tokens cleanly abort stale mining workers.
-- [ ] Mining automatically advances to next height upon block acceptance without manual prompts.
-- [ ] Pre-broadcast local consensus validation is enforced.
-- [ ] Zero-balance user bootstrapping is proven and tested.
-- [ ] Mining carries zero authoritative state of its own (decoupled from consensus truth).
-- [ ] 100% of unit, template, cancellation, and controlled-difficulty tests pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] Autonomous background mining lifecycle is implemented.
+- [x] Candidate block templates are constructed from tip, difficulty target, and mempool.
+- [x] Coinbase subsidy and fee calculations operate strictly in integer `quanta`.
+- [x] Non-blocking cancellation tokens cleanly abort stale mining workers.
+- [x] Mining automatically advances to next height upon block acceptance without manual prompts.
+- [x] Pre-broadcast local consensus validation is enforced.
+- [x] Zero-balance user bootstrapping is proven and tested.
+- [x] Mining carries zero authoritative state of its own (decoupled from consensus truth).
+- [x] 100% of unit, template, cancellation, and controlled-difficulty tests pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -253,7 +253,7 @@ Task 12 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 13 (P2P Network).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

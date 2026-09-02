@@ -12,4 +12,6 @@ workspace = true
 [dependencies]
 scytale-core = { path = "../scytale-core" }
 scytale-consensus = { path = "../scytale-consensus" }
+scytale-mempool = { path = "../scytale-mempool" }
 thiserror = { workspace = true }
+serde = { workspace = true }

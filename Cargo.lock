@@ -249,6 +249,8 @@ version = "0.1.0"
 dependencies = [
  "scytale-consensus",
  "scytale-core",
+ "scytale-mempool",
+ "serde",
  "thiserror",
 ]
 
