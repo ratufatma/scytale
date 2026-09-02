@@ -59,8 +59,10 @@ cargo run -p scytale-node -- --help
 - [Hashing and Serialization Specification](docs/HASHING-AND-SERIALIZATION-SPEC.md)
 - [Economic Model](docs/ECONOMIC-MODEL.md)
 - [Monetary Policy](docs/MONETARY-POLICY.md)
+- [Genesis Specification](docs/GENESIS-SPEC.md)
 - [Genesis Allocation Specification](docs/GENESIS-ALLOCATION.md)
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 
 

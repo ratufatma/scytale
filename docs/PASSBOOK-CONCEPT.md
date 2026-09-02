@@ -81,6 +81,8 @@ Filter by Verifiable Ownership
 ### Denomination & Precision Rules:
 - **Internal Accounting:** All balance summations and ledger computations are executed strictly in **integer quanta** ($1\text{ SCY} = 100,000,000\text{ quanta}$).
 - **Display Representation:** The user interface may render amounts in human-readable decimal format (e.g., `12.45000000 SCY`), but internal state is stored exclusively as `1,245,000,000 quanta`.
+- **Zero Initial Balance:** Every fresh Passbook begins with a balance of **`0 SCY` (0 quanta)**. Passbook creation never generates synthetic funds, airdrops, or unbacked credits.
+- **Zero-Balance Bootstrapping:** Users with 0 SCY can participate fully in the network and acquire their initial balance either by receiving valid transfers or by mining blocks via their node without prior token requirements.
 - **Zero Synthetic Balances:** Passbook never displays credit or funds that cannot be substantiated by active, verifiable UTXOs on the ledger.
 
 ---
@@ -266,6 +268,8 @@ The following implementation domains remain designated as **TBD** pending subseq
 ## 15. Cross-Specification References
 
 This product concept integrates directly with the technical specifications defined across the Scytale documentation suite:
+- **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
+- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: Transparent genesis allocation framework.
 - **[`docs/LEDGER-SPEC.md`](LEDGER-SPEC.md)**: Top-level UTXO ledger architecture and accounting units.
 - **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)**: Structural layout, inputs, outputs, and fees.
 - **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)**: OutPoint indexing, state transitions, and Value Provenance.

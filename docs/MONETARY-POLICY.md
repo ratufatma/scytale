@@ -171,3 +171,16 @@ The Scytale ledger and consensus rules enforce the following immutable invariant
   - As block subsidies diminish over successive epochs, transaction fees organically transition into the primary economic incentive for network security.
 - **Miner Policy Autonomy:**
   - Miners freely determine local transaction prioritization and mempool acceptance policies without altering consensus rules.
+
+---
+
+## 12. Cross-Specification References
+
+- **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
+- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: Transparent genesis allocation framework.
+- **[`docs/LEDGER-SPEC.md`](LEDGER-SPEC.md)**: UTXO state transitions and Value Provenance.
+- **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Block header structure and coinbase limits.
+- **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work threshold evaluation.
+- **[`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md)**: 60-second difficulty adjustment.
+- **[`docs/ECONOMIC-MODEL.md`](ECONOMIC-MODEL.md)**: Macroeconomic dynamics and fee market.
+- **[`docs/PASSBOOK-CONCEPT.md`](PASSBOOK-CONCEPT.md)**: User-facing asset presentation and journal history.

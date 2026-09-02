@@ -206,6 +206,7 @@ The following parameters are designated as **TBD** pending final distribution de
 
 ## 12. Cross-Specification References
 
+- **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
 - **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY maximum cap and quanta denomination standards.
 - **[`docs/ECONOMIC-MODEL.md`](ECONOMIC-MODEL.md)**: Macroeconomic dynamics, miner incentives, and fee markets.
 - **[`docs/LEDGER-SPEC.md`](LEDGER-SPEC.md)**: Core UTXO ledger architecture and value conservation.
