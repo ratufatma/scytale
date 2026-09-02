@@ -51,4 +51,5 @@ cargo run -p scytale-node -- --help
 - [Architecture](docs/ARCHITECTURE.md)
 - [Ledger Specification](docs/LEDGER-SPEC.md)
 - [Economic Model](docs/ECONOMIC-MODEL.md)
+- [Monetary Policy](docs/MONETARY-POLICY.md)
 
