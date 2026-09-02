@@ -1,11 +1,12 @@
 //! Scytale Storage: ACID-compliant embedded storage engine using Redb.
 
-use std::path::Path;
 use redb::{
     CommitError, Database, DatabaseError, TableDefinition, TableError, TransactionError,
 };
+use std::path::Path;
 use thiserror::Error;
 
+#[allow(clippy::result_large_err)]
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("Database error: {0}")]
@@ -23,11 +24,14 @@ pub enum StorageError {
 }
 
 pub const META_TABLE: TableDefinition<&str, &str> = TableDefinition::new("meta");
+pub const BLOCKS_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("blocks");
+pub const UTXO_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("utxos");
 
 pub struct StorageEngine {
     db: Database,
 }
 
+#[allow(clippy::result_large_err)]
 impl StorageEngine {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
         let db = Database::create(path)?;
@@ -60,5 +64,7 @@ mod tests {
     #[test]
     fn test_meta_table_definition() {
         assert_eq!(META_TABLE.name(), "meta");
+        assert_eq!(BLOCKS_TABLE.name(), "blocks");
+        assert_eq!(UTXO_TABLE.name(), "utxos");
     }
 }

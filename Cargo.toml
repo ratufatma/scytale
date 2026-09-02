@@ -1,17 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/scytale-core",
-    "crates/scytale-storage",
-    "crates/scytale-consensus",
-    "crates/scytale-mempool",
-    "crates/scytale-network",
-    "apps/scytale-node",
+    "crates/*",
+    "apps/*",
 ]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Scytale Core Contributors"]
+license = "MIT OR Apache-2.0"
+
+[workspace.lints.clippy]
+float_arithmetic = "deny"
+
 [workspace.dependencies]
-redb = "2.4"
 blake3 = "1.5"
+redb = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"

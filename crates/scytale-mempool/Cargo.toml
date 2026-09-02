@@ -1,10 +1,15 @@
 [package]
 name = "scytale-mempool"
-version = "0.1.0"
-edition = "2021"
-description = "Transaction mempool and fee market for Scytale"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "In-memory unconfirmed transaction pool and admission rules for Scytale"
+
+[lints]
+workspace = true
 
 [dependencies]
+scytale-primitives = { path = "../scytale-primitives" }
 scytale-core = { path = "../scytale-core" }
-serde = { workspace = true }
 thiserror = { workspace = true }

@@ -206,13 +206,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "scytale-bridge"
+version = "0.1.0"
+dependencies = [
+ "scytale-core",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "scytale-consensus"
 version = "0.1.0"
 dependencies = [
- "blake3",
  "scytale-core",
- "scytale-storage",
- "serde",
+ "scytale-primitives",
  "thiserror",
 ]
 
@@ -220,7 +227,7 @@ dependencies = [
 name = "scytale-core"
 version = "0.1.0"
 dependencies = [
- "blake3",
+ "scytale-primitives",
  "serde",
  "thiserror",
 ]
@@ -230,16 +237,16 @@ name = "scytale-mempool"
 version = "0.1.0"
 dependencies = [
  "scytale-core",
- "serde",
+ "scytale-primitives",
  "thiserror",
 ]
 
 [[package]]
-name = "scytale-network"
+name = "scytale-mining"
 version = "0.1.0"
 dependencies = [
+ "scytale-consensus",
  "scytale-core",
- "serde",
  "thiserror",
 ]
 
@@ -248,11 +255,22 @@ name = "scytale-node"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "scytale-bridge",
  "scytale-consensus",
  "scytale-core",
  "scytale-mempool",
- "scytale-network",
+ "scytale-mining",
+ "scytale-primitives",
  "scytale-storage",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "scytale-primitives"
+version = "0.1.0"
+dependencies = [
+ "blake3",
  "serde",
  "thiserror",
 ]
@@ -263,6 +281,7 @@ version = "0.1.0"
 dependencies = [
  "redb",
  "scytale-core",
+ "scytale-primitives",
  "serde",
  "thiserror",
 ]

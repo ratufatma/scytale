@@ -1,10 +1,16 @@
 [package]
 name = "scytale-storage"
-version = "0.1.0"
-edition = "2021"
-description = "ACID-compliant storage engine for Scytale powered by Redb"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Embedded ACID storage engine and table schemas using redb for Scytale"
+
+[lints]
+workspace = true
 
 [dependencies]
+scytale-primitives = { path = "../scytale-primitives" }
 scytale-core = { path = "../scytale-core" }
 redb = { workspace = true }
 serde = { workspace = true }

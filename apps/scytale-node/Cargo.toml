@@ -1,15 +1,22 @@
 [package]
 name = "scytale-node"
-version = "0.1.0"
-edition = "2021"
-description = "CLI and node daemon for Scytale blockchain"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CLI and node daemon orchestrator for Scytale blockchain"
+
+[lints]
+workspace = true
 
 [dependencies]
+scytale-primitives = { path = "../../crates/scytale-primitives" }
 scytale-core = { path = "../../crates/scytale-core" }
 scytale-storage = { path = "../../crates/scytale-storage" }
 scytale-consensus = { path = "../../crates/scytale-consensus" }
 scytale-mempool = { path = "../../crates/scytale-mempool" }
-scytale-network = { path = "../../crates/scytale-network" }
+scytale-mining = { path = "../../crates/scytale-mining" }
+scytale-bridge = { path = "../../crates/scytale-bridge" }
 clap = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

@@ -1,15 +1,15 @@
 [package]
-name = "scytale-core"
+name = "scytale-primitives"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Core transaction, block, and UTXO set definitions for Scytale"
+description = "Fundamental primitives, cryptographic wrappers, and common types for Scytale"
 
 [lints]
 workspace = true
 
 [dependencies]
-scytale-primitives = { path = "../scytale-primitives" }
+blake3 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
