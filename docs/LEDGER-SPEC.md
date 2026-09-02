@@ -13,6 +13,7 @@ This document serves as the top-level specification for the Scytale ledger. Spec
 | **Transactions** | **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)** | Structural layout, canonical serialization, TxID, and validity rules. |
 | **UTXO Model** | **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)** | `OutPoint` primary key, lifecycle phases, and storage layout. |
 | **Authorization** | **[`docs/AUTHORIZATION-SPEC.md`](AUTHORIZATION-SPEC.md)** | Locking conditions, cryptographic proofs, and stateless verification. |
+| **Hashing & Serialization** | **[`docs/HASHING-AND-SERIALIZATION-SPEC.md`](HASHING-AND-SERIALIZATION-SPEC.md)** | BLAKE3 digests, canonical byte encoding, TxID derivation, and determinism. |
 
 ---
 
