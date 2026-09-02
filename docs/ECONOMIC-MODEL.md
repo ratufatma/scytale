@@ -28,16 +28,16 @@ $$\text{Miner Revenue} = \text{Block Subsidy (Emission)} + \sum \text{Transactio
 - **Source:** Minted according to deterministic, hardcoded protocol consensus rules.
 - **Issuance Mechanism:** Awarded directly via the coinbase transaction of each valid block.
 - **Subsidy Decay:** Follows a predictable geometric halving schedule parameterized by block height:
-  - Initial block subsidy: 50 coins (with fixed decimal precision).
-  - Halving interval: every 210,000 blocks.
-  - Final cap: Asymptotic supply limit, after which block subsidy ceases ($0$), shifting miner incentives entirely to transaction fees.
+  - Initial block subsidy: 10 SCY ($1,000,000,000\text{ quanta}$).
+  - Halving interval: every 2,100,000 blocks.
+  - Final target cap: 42,000,000 SCY ($4,200,000,000,000,000\text{ quanta}$), after which block subsidy ceases ($0$), shifting miner incentives entirely to transaction fees.
 
 ---
 
 ## 3. Transaction Fee Structure
 
 - **Calculation:** Every valid non-coinbase transaction implicitly awards a fee determined by:
-  $$\text{Fee} = \sum \text{Input Values} - \sum \text{Output Values}$$
+  $$\text{Fee} = \sum \text{Input Values} - \sum \text{Output Values} \quad (\text{in quanta})$$
 - **Beneficiary:** The fee is collected exclusively by the miner who successfully validates and incorporates the transaction into a confirmed block.
 - **Purpose:** Compensates miners for consuming scarce block verification, propagation, and storage resources.
 
