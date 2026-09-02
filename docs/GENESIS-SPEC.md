@@ -1,6 +1,6 @@
 # Scytale Genesis Specification & Zero-Balance Onboarding
 
-This document defines the formal specification for the **Genesis Block (Block 0)**, network bootstrap initialization, zero-balance user onboarding, and the permissionless transition from zero funds to active mining participation.
+This document defines the formal specification for the **Genesis Block (Block 0)**, network bootstrap initialization, zero-balance user onboarding for **Scytale Coin** (`SCY`), and the permissionless transition from zero funds to active mining participation.
 
 ---
 

@@ -17,12 +17,14 @@ The monetary policy framework is designed to:
 
 ## 2. Asset Denomination & Units
 
-Scytale defines a single native asset with two standardized denomination tiers:
+Scytale defines a single native coin, **Scytale Coin** (`SCY`), with two standardized denomination tiers:
 
 ```text
-Asset Symbol   : SCY
-Smallest Unit  : quanta
-Conversion     : 1 SCY = 100,000,000 quanta (10^8 quanta)
+Project / Protocol : Scytale
+Native Coin        : Scytale Coin
+Asset Symbol       : SCY
+Smallest Unit      : quanta
+Conversion         : 1 SCY = 100,000,000 quanta (10^8 quanta)
 ```
 
 | Denomination | Role | Representation |
@@ -31,8 +33,9 @@ Conversion     : 1 SCY = 100,000,000 quanta (10^8 quanta)
 | **`quanta`** | Smallest internal accounting & consensus unit. | Integer value stored in ledger and UTXOs (`u64`). |
 
 ### Accounting Invariant:
-- `SCY` and `quanta` are **not two distinct assets**; they represent two denominations of the exact same asset.
-- **Zero Floating-Point Consensus:** All internal calculations—including transaction amounts, fees, block rewards, coinbase payouts, and supply accounting—must be performed strictly in integer **`quanta`**.
+- **`Scytale Coin`** is the native coin of the Scytale network. `SCY` and `quanta` are **not two distinct assets**; they represent two denominations of the exact same native coin.
+- **Strict Integer Accounting:** All monetary accounting across transactions, UTXOs, fees, coinbase distributions, genesis allocations, and supply conservation is performed strictly in unsigned 64-bit integer **`quanta`** (`u64`).
+- **Zero Floating-Point Consensus:** Floating-point numbers are strictly forbidden in consensus, validation, and balance accounting to eliminate rounding and non-deterministic divergence.
 
 ---
 

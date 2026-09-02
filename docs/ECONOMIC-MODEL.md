@@ -1,6 +1,6 @@
 # Scytale Economic Model
 
-This document outlines the baseline economic mechanisms governing Scytale, detailing miner incentives, token issuance (emission), and the transaction fee market.
+This document outlines the baseline economic mechanisms governing Scytale, detailing miner incentives, native coin issuance (emission) of **Scytale Coin** (`SCY`), and the transaction fee market.
 
 ---
 
@@ -26,7 +26,7 @@ $$\text{Miner Revenue} = \text{Block Subsidy (Emission)} + \sum \text{Transactio
 ## 2. Emission Schedule (Block Subsidy)
 
 - **Source:** Minted according to deterministic, hardcoded protocol consensus rules.
-- **Issuance Mechanism:** Awarded directly via the coinbase transaction of each valid block.
+- **Issuance Mechanism:** Awarded directly via the coinbase transaction of each valid block in **Scytale Coin** (`SCY`).
 - **Subsidy Decay:** Follows a predictable geometric halving schedule parameterized by block height:
   - Initial block subsidy: 10 SCY ($1,000,000,000\text{ quanta}$).
   - Halving interval: every 2,100,000 blocks.
@@ -58,11 +58,11 @@ $$\text{Miner Revenue} = \text{Block Subsidy (Emission)} + \sum \text{Transactio
 
 ---
 
-## 5. Token Valuation & Utility Realities
+## 5. Native Coin Valuation & Utility Realities
 
 - **Protocol Guarantees vs. Market Forces:**
   - The Scytale protocol defines and enforces technical rules: scarcity, verification, emission, and state integrity.
-  - The protocol does not guarantee, peg, or mandate the financial price or purchasing power of the native token.
+  - The protocol does not guarantee, peg, or mandate the financial price or purchasing power of the native coin (**Scytale Coin**).
 - **Utility & Demand Formation:**
-  - Demand for the token arises from its utility as the native medium to settle ledger state transitions (transaction fees) and as an unencumbered digital bearer asset within the UTXO ecosystem.
+  - Demand for Scytale Coin arises from its utility as the native medium to settle ledger state transitions (transaction fees) and as an unencumbered digital bearer asset within the UTXO ecosystem.
   - Market valuation is determined purely by external supply and demand dynamics, liquidity, and participant consensus, rather than any protocol-enforced "intrinsic value".

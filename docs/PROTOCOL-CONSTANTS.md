@@ -4,12 +4,28 @@ This document serves as the **central canonical registry** for all protocol para
 
 ---
 
-## 1. Locked Protocol Constants (`FINAL`)
+## 1. Official Asset Identity
+
+The official nomenclature for the native asset of the Scytale network is defined as follows:
+
+```text
+Project / Protocol : Scytale
+Native Coin        : Scytale Coin
+Ticker / Symbol    : SCY
+Smallest Unit      : quanta
+Conversion         : 1 SCY = 100,000,000 quanta (10^8 quanta)
+```
+
+---
+
+## 2. Locked Protocol Constants (`FINAL`)
 
 The following parameters have been formally locked by protocol design decisions and constitute immutable baseline constants:
 
 | Parameter Identifier | Locked Value | Unit | Status | Canonical Source Specification |
 | :--- | :--- | :--- | :---: | :--- |
+| **`PROJECT_NAME`** | `Scytale` | String | **FINAL** | [`README.md`](../README.md) |
+| **`ASSET_NAME`** | `Scytale Coin` | String | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`ASSET_SYMBOL`** | `SCY` | String | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`SMALLEST_UNIT`** | `quanta` | String | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`QUANTA_PER_SCY`** | `100,000,000` ($10^8$) | Integer Quanta | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
@@ -44,7 +60,7 @@ The following parameters have been formally locked by protocol design decisions 
 
 ---
 
-## 2. Pending Technical Specifications (`TBD`)
+## 3. Pending Technical Specifications (`TBD`)
 
 The following parameters represent architectural components whose conceptual boundaries are specified but whose concrete binary formats or numerical constants are awaiting finalization:
 
@@ -64,7 +80,7 @@ The following parameters represent architectural components whose conceptual bou
 
 ---
 
-## 3. Critical Parameters Requiring Resolution
+## 4. Critical Parameters Requiring Resolution
 
 > [!WARNING]
 > ### Mathematical Reconciliation of Mining Emission Series
@@ -85,7 +101,7 @@ The following parameters represent architectural components whose conceptual bou
 
 ---
 
-## 4. Cross-Specification References
+## 5. Cross-Specification References
 
 - **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: Monetary policy and emission specifications.
 - **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: Macro allocation distribution breakdowns.

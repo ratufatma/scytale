@@ -1,6 +1,6 @@
 # Task 02 — Genesis Allocation
 
-This document is the permanent **Task Execution Runbook** for Task 02: Genesis Allocation. It instructs agents and engineers on how to structure, audit, test, and verify the transparent initial token distribution for Scytale.
+This document is the permanent **Task Execution Runbook** for Task 02: Genesis Allocation. It instructs agents and engineers on how to structure, audit, test, and verify the transparent initial **Scytale Coin** (`SCY`) distribution for Scytale.
 
 ---
 

@@ -1,12 +1,12 @@
 # Scytale Genesis Allocation Specification
 
-This document defines the architectural specification, transparency framework, distribution breakdown, and supply reconciliation rules for the **Genesis Allocation** in Scytale.
+This document defines the architectural specification, transparency framework, distribution breakdown, and supply reconciliation rules for the **Genesis Allocation** of **Scytale Coin** (`SCY`) in Scytale.
 
 ---
 
 ## 1. Distribution of Fixed Maximum Supply
 
-Scytale enforces an immutable supply ceiling of **42,000,000 SCY** ($4,200,000,000,000,000\text{ quanta}$). The total supply is strictly partitioned across four locked categories:
+Scytale enforces an immutable supply ceiling of **42,000,000 SCY** ($4,200,000,000,000,000\text{ quanta}$). The total supply of Scytale Coin is strictly partitioned across four locked categories:
 
 ```text
 42,000,000 SCY (100%)
@@ -107,14 +107,14 @@ $$630,000,000,000,000 + 210,000,000,000,000 + 210,000,000,000,000 + 3,150,000,00
 
 ## 5. Genesis Allocation vs. Mining Emission
 
-Scytale strictly separates the nature and provenance of genesis tokens from mined tokens:
+Scytale strictly separates the nature and provenance of genesis coin allocations from mined coins:
 
 $$\text{Genesis Allocation} \ne \text{Mining Emission}$$
 
 $$\text{Genesis Allocation} + \text{Mining Emission} = \text{Maximum Supply Boundary}$$
 
-- **Genesis Tokens:** Minted as direct outputs in the Block 0 transaction to establish initial development and ecosystem foundations.
-- **Mined Tokens:** Minted incrementally in response to verified, unforgeable thermodynamic Proof-of-Work.
+- **Genesis Allocations:** Minted as direct outputs in the Block 0 transaction to establish initial development and ecosystem foundations.
+- **Mined Coins:** Minted incrementally in response to verified, unforgeable thermodynamic Proof-of-Work.
 
 ---
 

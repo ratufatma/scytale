@@ -81,8 +81,9 @@ Status      : PLANNED
 ## 4. Key Cross-Cutting Consensus Audits
 
 ### 1. Monetary Reconciliation & Emission Discrepancy:
+- **Official Asset Identity:** Native coin is **Scytale Coin** (`SCY`), with smallest unit **quanta** ($1\text{ SCY} = 100,000,000\text{ quanta}$).
 - **Locked Supply Boundary:** $42,000,000\text{ SCY} = 4,200,000,000,000,000\text{ quanta}$.
-- **Locked Allocations:** Founder 15% ($6.3\text{M}$), Treasury 5% ($2.1\text{M}$), Ecosystem 5% ($2.1\text{M}$), Mining 75% ($31.5\text{M}$).
+- **Locked Allocations:** Founder 15% ($6.3\text{M}$ SCY), Treasury 5% ($2.1\text{M}$ SCY), Ecosystem 5% ($2.1\text{M}$ SCY), Mining 75% ($31.5\text{M}$ SCY).
 - **Audit Finding:** The geometric series sum of $10\text{ SCY/block}$ halved every $2,100,000\text{ blocks}$ yields $10 \times 2,100,000 \times 2 = 42,000,000\text{ SCY}$. Adding $10.5\text{M}$ genesis allocations yields $52.5\text{M}$, violating the $42\text{M}$ cap.
 - **Status:** **`CONSENSUS ISSUE — REQUIRES RESOLUTION`** (Flagged across Tasks 01 and 02; implementation must cap total emission at $31.5\text{M}$ or adjust initial block reward).
 

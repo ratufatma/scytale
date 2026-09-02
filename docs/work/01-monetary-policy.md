@@ -44,7 +44,9 @@ Task 01 establishes the deterministic macro-economic rules for the Scytale engin
 The following parameters are formally locked and must **NOT** be altered by this task:
 
 ```text
-Asset Symbol             : SCY
+Project / Protocol       : Scytale
+Native Coin Name         : Scytale Coin
+Ticker / Symbol          : SCY
 Smallest Accounting Unit : quanta
 Denomination Rate        : 1 SCY = 100,000,000 quanta (10^8 quanta)
 

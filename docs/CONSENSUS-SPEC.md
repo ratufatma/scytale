@@ -68,7 +68,7 @@ Candidate Block Evaluation
 
 ## 4. Monetary Invariants & Supply Constraints
 
-Consensus enforces strict macro-economic limits across the entire blockchain lifecycle:
+Consensus enforces strict macro-economic limits across the entire lifecycle of the native coin, **Scytale Coin** (`SCY`):
 
 1. **Maximum Supply Ceiling:** Total circulating value can never exceed the immutable cap:
    $$\text{Total Issued Supply} \le 42,000,000\text{ SCY} \quad (4,200,000,000,000,000\text{ quanta})$$

@@ -66,15 +66,19 @@ Status      : PLANNED
 
 ---
 
-## 3. Zero-Balance Initial State & Units
+## 3. Official Asset Identity & Zero-Balance State
 
 ```text
+Project / Protocol     : Scytale
+Native Coin Name       : Scytale Coin
+Ticker / Symbol        : SCY
+Smallest Unit          : quanta
+Conversion             : 1 SCY = 100,000,000 quanta (10^8 quanta)
 New User Initial State : 0 SCY (0 quanta)
-Monetary Precision     : 1 SCY = 100,000,000 quanta
 Internal Accounting    : Strict Integer Arithmetic (Zero floating-point)
 ```
 
-- **Bootstrap Flow:** Creating a new Passbook instance starts with exactly **0 SCY**. Only when the node receives funds or mines a canonical block does the derived balance become $> 0$.
+- **Bootstrap Flow:** Creating a new Passbook instance starts with exactly **0 SCY**. Only when the node receives funds in **Scytale Coin** or mines a canonical block does the derived balance become $> 0$.
 
 ---
 

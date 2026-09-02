@@ -80,9 +80,9 @@ Filter by Verifiable Ownership
 
 ### Denomination & Precision Rules:
 - **Internal Accounting:** All balance summations and ledger computations are executed strictly in **integer quanta** ($1\text{ SCY} = 100,000,000\text{ quanta}$).
-- **Display Representation:** The user interface may render amounts in human-readable decimal format (e.g., `12.45000000 SCY`), but internal state is stored exclusively as `1,245,000,000 quanta`.
+- **Display Representation:** The user interface renders amounts in **Scytale Coin** (`SCY`) and `quanta` (e.g., `12.45000000 SCY` or `1,245,000,000 quanta`), but internal state is stored exclusively as `1,245,000,000 quanta`.
 - **Zero Initial Balance:** Every fresh Passbook begins with a balance of **`0 SCY` (0 quanta)**. Passbook creation never generates synthetic funds, airdrops, or unbacked credits.
-- **Zero-Balance Bootstrapping:** Users with 0 SCY can participate fully in the network and acquire their initial balance either by receiving valid transfers or by mining blocks via their node without prior token requirements.
+- **Zero-Balance Bootstrapping:** Users with 0 SCY can participate fully in the network and acquire their initial balance either by receiving valid transfers of Scytale Coin or by mining blocks via their node without prior balance requirements.
 - **Zero Synthetic Balances:** Passbook never displays credit or funds that cannot be substantiated by active, verifiable UTXOs on the ledger.
 
 ---

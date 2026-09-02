@@ -19,15 +19,17 @@ Value Provenance is a foundational consensus invariant in Scytale designed to en
 
 ## 2. Denomination & Accounting Foundation
 
-Scytale defines a single native asset with two standardized denomination tiers:
+Scytale defines a single native coin, **Scytale Coin** (`SCY`), with two standardized denomination tiers:
 
 ```text
-Asset Symbol   : SCY
-Smallest Unit  : quanta
-Conversion     : 1 SCY = 100,000,000 quanta (10^8 quanta)
+Project / Protocol : Scytale
+Native Coin        : Scytale Coin
+Asset Symbol       : SCY
+Smallest Unit      : quanta
+Conversion         : 1 SCY = 100,000,000 quanta (10^8 quanta)
 ```
 
-- **Denomination Equivalence:** `SCY` (presentation tier) and `quanta` (accounting tier) represent the exact same asset.
+- **Denomination Equivalence:** `SCY` (presentation tier) and `quanta` (accounting tier) represent the exact same native coin (**Scytale Coin**).
 - **Zero Floating-Point Precision:** All provenance tracking, balance calculations, fees, and transfers operate strictly in **unsigned 64-bit integer quanta** (`u64`).
 
 ---
@@ -180,7 +182,7 @@ Mined Proof-of-Work Block (Height H)
 
 ## 10. Genesis Allocation Provenance
 
-Tokens distributed at network launch originate strictly from Block 0 transaction outputs:
+Genesis allocations distributed at network launch originate strictly from Block 0 transaction outputs:
 
 ```text
 Genesis Block (Height 0)
@@ -272,7 +274,7 @@ When a UTXO is split across multiple outputs of smaller values, provenance is no
 
 Scytale explicitly rejects per-quantum serialization (such as assigning serial numbers to individual quanta):
 - **Lightweight State:** The UTXO set only stores `(OutPoint -> TxOut { value, locking_condition })`.
-- **High Performance:** Nodes avoid tracking billions of individual token tokens.
+- **High Performance:** Nodes avoid tracking billions of individual quanta records.
 - **Deterministic Derivation:** Historical provenance is computed on-demand by traversing confirmed transaction records.
 
 ---

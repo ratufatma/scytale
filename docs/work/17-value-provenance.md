@@ -74,10 +74,18 @@ Spendable UTXO (e.g. 500,000 quanta)
 
 ## 3. Core Principles & Architectural Invariants
 
-1. **Object-Level Lineage (No Record-Per-Quanta):** Provenance tracks value flow through ledger objects (`UTXO`, `Transaction`, `BlockHeader`). Scytale **never** creates individual database rows per quanta ($1\text{M quanta} = 1\text{ UTXO record}$, not $1\text{M records}$).
-2. **Deterministic Backward Traversal:** Given identical historical blocks in storage, traversing backward from any `OutPoint` always yields the exact same ancestral DAG.
-3. **No Arbitrary Value Creation:** Every valid UTXO strictly originates from either Genesis Block 0 or a valid Coinbase transaction satisfying the monetary emission schedule.
-4. **Zero Duplicate Storage:** Provenance traverses existing transaction/block records in `scytale-storage`; it does not build a secondary duplicate graph database.
+- **Official Asset Identity:**
+  ```text
+  Project / Protocol : Scytale
+  Native Coin Name   : Scytale Coin
+  Ticker / Symbol    : SCY
+  Smallest Unit      : quanta
+  Conversion         : 1 SCY = 100,000,000 quanta (10^8 quanta)
+  ```
+- **Object-Level Lineage (No Record-Per-Quanta):** Provenance tracks value flow through ledger objects (`UTXO`, `Transaction`, `BlockHeader`). Scytale **never** creates individual database rows per quanta ($1\text{M quanta} = 1\text{ UTXO record}$, not $1\text{M records}$).
+- **Deterministic Backward Traversal:** Given identical historical blocks in storage, traversing backward from any `OutPoint` always yields the exact same ancestral DAG.
+- **No Arbitrary Value Creation:** Every valid UTXO strictly originates from either Genesis Block 0 or a valid Coinbase transaction satisfying the monetary emission schedule.
+- **Zero Duplicate Storage:** Provenance traverses existing transaction/block records in `scytale-storage`; it does not build a secondary duplicate graph database.
 
 ---
 
