@@ -23,12 +23,30 @@ pub enum TransactionError {
     SerializationFailure(String),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum UtxoError {
+    #[error("referenced UTXO does not exist: {0:?}")]
+    MissingUtxo(OutPoint),
+    #[error("output already spent: {0:?}")]
+    AlreadySpent(OutPoint),
+    #[error("input value deficit: total_in={total_in}, total_out={total_out}")]
+    ValueDeficit { total_in: u64, total_out: u64 },
+    #[error("arithmetic overflow occurred during balance calculation")]
+    ArithmeticOverflow,
+    #[error("transaction error: {0}")]
+    TxError(#[from] TransactionError),
+    #[error("coinbase transaction in invalid location")]
+    InvalidCoinbasePlacement,
+}
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("Primitive error: {0}")]
     Primitive(#[from] PrimitiveError),
     #[error("Transaction error: {0}")]
     Transaction(#[from] TransactionError),
+    #[error("UTXO error: {0}")]
+    Utxo(#[from] UtxoError),
     #[error("Serialization error: {0}")]
     Serialization(String),
     #[error("Invalid transaction: {0}")]

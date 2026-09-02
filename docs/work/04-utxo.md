@@ -11,7 +11,7 @@ Task ID     : 04
 Task Name   : UTXO
 Phase       : Ledger
 Level       : MEDIUM
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -263,17 +263,17 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 04 can only be marked as **VERIFIED** when:
 
-- [ ] `UtxoEntry` and in-memory `UtxoSet` domain structures are implemented in `scytale-core`.
-- [ ] `OutPoint` primary key identity, equality, and hashing are verified.
-- [ ] UTXO creation from transaction outputs functions deterministically.
-- [ ] Single-spend enforcement and double-spend rejection are mathematically verified.
-- [ ] Value conservation ($\sum \text{In} \ge \sum \text{Out}$) is enforced across transitions.
-- [ ] All monetary calculations operate strictly in integer `quanta` (`u64`).
-- [ ] Atomic state transition semantics are established (zero partial state on failure).
-- [ ] Genesis and Coinbase outputs are fully supported.
-- [ ] Storage abstraction boundary is preserved (no `redb` dependencies in `scytale-core`).
-- [ ] 100% of unit and integration test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `UtxoEntry` and in-memory `UtxoSet` domain structures are implemented in `scytale-core`.
+- [x] `OutPoint` primary key identity, equality, and hashing are verified.
+- [x] UTXO creation from transaction outputs functions deterministically.
+- [x] Single-spend enforcement and double-spend rejection are mathematically verified.
+- [x] Value conservation ($\sum \text{In} \ge \sum \text{Out}$) is enforced across transitions.
+- [x] All monetary calculations operate strictly in integer `quanta` (`u64`).
+- [x] Atomic state transition semantics are established (zero partial state on failure).
+- [x] Genesis and Coinbase outputs are fully supported.
+- [x] Storage abstraction boundary is preserved (no `redb` dependencies in `scytale-core`).
+- [x] 100% of unit and integration test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -295,7 +295,7 @@ Task 04 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 05 (Authorization).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

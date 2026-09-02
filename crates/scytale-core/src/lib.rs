@@ -6,7 +6,7 @@ pub mod transaction;
 pub mod utxo;
 
 pub use block::{Block, BlockHeader};
-pub use error::{CoreError, TransactionError};
+pub use error::{CoreError, TransactionError, UtxoError};
 pub use scytale_primitives::{
     Hash, Hash256, OutPoint, PrimitiveError, Quanta, TxOut, QUANTA_PER_SCY,
 };
