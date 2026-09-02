@@ -1,0 +1,11 @@
+[package]
+name = "scytale-storage"
+version = "0.1.0"
+edition = "2021"
+description = "ACID-compliant storage engine for Scytale powered by Redb"
+
+[dependencies]
+scytale-core = { path = "../scytale-core" }
+redb = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

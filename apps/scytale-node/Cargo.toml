@@ -1,0 +1,15 @@
+[package]
+name = "scytale-node"
+version = "0.1.0"
+edition = "2021"
+description = "CLI and node daemon for Scytale blockchain"
+
+[dependencies]
+scytale-core = { path = "../../crates/scytale-core" }
+scytale-storage = { path = "../../crates/scytale-storage" }
+scytale-consensus = { path = "../../crates/scytale-consensus" }
+scytale-mempool = { path = "../../crates/scytale-mempool" }
+scytale-network = { path = "../../crates/scytale-network" }
+clap = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

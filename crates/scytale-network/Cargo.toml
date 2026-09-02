@@ -1,0 +1,10 @@
+[package]
+name = "scytale-network"
+version = "0.1.0"
+edition = "2021"
+description = "Peer-to-peer networking layer for Scytale (Stub)"
+
+[dependencies]
+scytale-core = { path = "../scytale-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }

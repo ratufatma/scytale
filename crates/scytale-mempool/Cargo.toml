@@ -1,0 +1,10 @@
+[package]
+name = "scytale-mempool"
+version = "0.1.0"
+edition = "2021"
+description = "Transaction mempool and fee market for Scytale"
+
+[dependencies]
+scytale-core = { path = "../scytale-core" }
+serde = { workspace = true }
+thiserror = { workspace = true }

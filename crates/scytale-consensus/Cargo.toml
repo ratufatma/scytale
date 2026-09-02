@@ -1,0 +1,12 @@
+[package]
+name = "scytale-consensus"
+version = "0.1.0"
+edition = "2021"
+description = "Consensus rules, Proof-of-Work, emission schedule, and block validation for Scytale"
+
+[dependencies]
+scytale-core = { path = "../scytale-core" }
+scytale-storage = { path = "../scytale-storage" }
+blake3 = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

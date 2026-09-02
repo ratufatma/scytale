@@ -1,0 +1,10 @@
+[package]
+name = "scytale-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core primitives, types, and cryptographic utilities for Scytale"
+
+[dependencies]
+blake3 = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
