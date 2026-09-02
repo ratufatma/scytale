@@ -1,8 +1,6 @@
 //! Scytale Storage: ACID-compliant embedded storage engine using Redb.
 
-use redb::{
-    CommitError, Database, DatabaseError, TableDefinition, TableError, TransactionError,
-};
+use redb::{CommitError, Database, DatabaseError, TableDefinition, TableError, TransactionError};
 use std::path::Path;
 use thiserror::Error;
 

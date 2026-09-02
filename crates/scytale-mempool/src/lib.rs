@@ -60,6 +60,9 @@ mod tests {
         let h1 = Hash::hash(b"tx_1");
         assert!(pool.insert(h1, tx.clone()).is_ok());
         assert_eq!(pool.len(), 1);
-        assert!(matches!(pool.insert(h1, tx), Err(MempoolError::DuplicateTx(_))));
+        assert!(matches!(
+            pool.insert(h1, tx),
+            Err(MempoolError::DuplicateTx(_))
+        ));
     }
 }

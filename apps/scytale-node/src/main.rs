@@ -3,7 +3,12 @@ use scytale_consensus::INITIAL_REWARD;
 use scytale_core::QUANTA_PER_SCY;
 
 #[derive(Parser, Debug)]
-#[command(name = "scytale-node", author, version, about = "Scytale Blockchain Engine CLI & Node Daemon")]
+#[command(
+    name = "scytale-node",
+    author,
+    version,
+    about = "Scytale Blockchain Engine CLI & Node Daemon"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -44,7 +49,10 @@ fn main() {
             );
         }
         Some(Commands::Status) => {
-            println!("Scytale Node Status: Operational (data dir: {})", cli.data_dir);
+            println!(
+                "Scytale Node Status: Operational (data dir: {})",
+                cli.data_dir
+            );
         }
         None => {
             println!("No subcommand specified. Run with `--help` for available commands.");

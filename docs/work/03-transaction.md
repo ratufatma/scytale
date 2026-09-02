@@ -11,7 +11,7 @@ Task ID     : 03
 Task Name   : Transaction
 Phase       : Ledger
 Level       : MEDIUM
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -218,15 +218,15 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 03 can only be marked as **VERIFIED** when:
 
-- [ ] `Transaction`, `TxIn`, `TxOut`, and `OutPoint` primitives are implemented in `scytale-core`.
-- [ ] Monetary amounts are strictly typed as unsigned integer `quanta` (`u64`).
-- [ ] Zero floating-point calculations exist in monetary math.
-- [ ] Deterministic fee calculation and value conservation helpers are implemented.
-- [ ] Stateless transaction-local validation is implemented and passes all negative tests.
-- [ ] Stateless vs. stateful validation boundaries are cleanly preserved.
-- [ ] `TxID` derivation matches the BLAKE3 canonical specification.
-- [ ] All unit and invariant test suites pass with 100% success.
-- [ ] Code passes all workspace quality gates (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `Transaction`, `TxIn`, `TxOut`, and `OutPoint` primitives are implemented in `scytale-core`.
+- [x] Monetary amounts are strictly typed as unsigned integer `quanta` (`u64`).
+- [x] Zero floating-point calculations exist in monetary math.
+- [x] Deterministic fee calculation and value conservation helpers are implemented.
+- [x] Stateless transaction-local validation is implemented and passes all negative tests.
+- [x] Stateless vs. stateful validation boundaries are cleanly preserved.
+- [x] `TxID` derivation matches the BLAKE3 canonical specification.
+- [x] All unit and invariant test suites pass with 100% success.
+- [x] Code passes all workspace quality gates (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -248,7 +248,7 @@ Task 03 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for consumption by Task 04 (UTXO).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 
