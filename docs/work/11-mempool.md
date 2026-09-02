@@ -11,7 +11,7 @@ Task ID     : 11
 Task Name   : Mempool
 Phase       : Runtime / Transaction Processing
 Level       : MEDIUM → HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -198,17 +198,17 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 11 can only be marked as **VERIFIED** when:
 
-- [ ] `Mempool` data structure and entry models are implemented in `scytale-mempool`.
-- [ ] `TxID` is enforced as unique primary key for pending entries.
-- [ ] Full admission pipeline (stateless $\rightarrow$ UTXO $\rightarrow$ auth $\rightarrow$ conflict) is implemented.
-- [ ] In-flight double-spend conflict detection is verified.
-- [ ] Parent-child dependency resolution is supported.
-- [ ] Confirmed block inclusion cleanly removes transactions from the pool.
-- [ ] Conflicting pending transactions are evicted upon block confirmation.
-- [ ] Mempool state remains strictly decoupled from canonical ledger state.
-- [ ] Zero arbitrary minting or fee inflation is permitted.
-- [ ] 100% of unit, conflict, dependency, and block arrival test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `Mempool` data structure and entry models are implemented in `scytale-mempool`.
+- [x] `TxID` is enforced as unique primary key for pending entries.
+- [x] Full admission pipeline (stateless $\rightarrow$ UTXO $\rightarrow$ auth $\rightarrow$ conflict) is implemented.
+- [x] In-flight double-spend conflict detection is verified.
+- [x] Parent-child dependency resolution is supported.
+- [x] Confirmed block inclusion cleanly removes transactions from the pool.
+- [x] Conflicting pending transactions are evicted upon block confirmation.
+- [x] Mempool state remains strictly decoupled from canonical ledger state.
+- [x] Zero arbitrary minting or fee inflation is permitted.
+- [x] 100% of unit, conflict, dependency, and block arrival test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -230,7 +230,7 @@ Task 11 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 12 (Mining Lifecycle).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

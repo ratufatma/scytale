@@ -12,4 +12,5 @@ workspace = true
 [dependencies]
 scytale-primitives = { path = "../scytale-primitives" }
 scytale-core = { path = "../scytale-core" }
+serde = { workspace = true }
 thiserror = { workspace = true }
