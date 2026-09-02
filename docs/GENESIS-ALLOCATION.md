@@ -45,9 +45,13 @@ The distribution model is governed by eight foundational architectural principle
 
 ---
 
-## 3. Category Specifications
+## 3. Category Specifications & Genesis OutPoint Mapping
+
+Block 0 materializes the entire Genesis Allocation in a single canonical **Genesis Bootstrap Transaction** with exactly three outputs:
 
 ### 3.1 Founder Allocation (15% / 6,300,000 SCY)
+- **Genesis OutPoint:** `OutPoint(GenesisTxID, 0)`
+- **Quota:** `630,000,000,000,000 quanta` ($6,300,000\text{ SCY}$)
 - **Occurrence:** One-time issuance executed at Block 0.
 - **Constraints:**
   - Carries no ongoing percentage of block subsidies or transaction fees.
@@ -58,6 +62,8 @@ The distribution model is governed by eight foundational architectural principle
   - `Founder Vesting Schedule: TBD`
 
 ### 3.2 Development / Treasury (5% / 2,100,000 SCY)
+- **Genesis OutPoint:** `OutPoint(GenesisTxID, 1)`
+- **Quota:** `210,000,000,000,000 quanta` ($2,100,000\text{ SCY}$)
 - **Purpose:** Protocol maintenance, cryptographic audits, core node infrastructure, security bug bounties, and essential operational needs.
 - **Design Intent:** Kept small (5%) to prevent internal centralization of protocol capital.
 - **Specification Status:**
@@ -65,6 +71,8 @@ The distribution model is governed by eight foundational architectural principle
   - `Treasury Release Policy: TBD`
 
 ### 3.3 Ecosystem / Community (5% / 2,100,000 SCY)
+- **Genesis OutPoint:** `OutPoint(GenesisTxID, 2)`
+- **Quota:** `210,000,000,000,000 quanta` ($2,100,000\text{ SCY}$)
 - **Purpose:** Open-source developer grants, client SDKs, documentation tooling, integrations, and initial community bootstrapping initiatives.
 - **Design Intent:** Kept limited (5%) to avoid aggressive supply dilution against Proof-of-Work miners.
 - **Specification Status:**
@@ -72,6 +80,7 @@ The distribution model is governed by eight foundational architectural principle
   - `Ecosystem Release Policy: TBD`
 
 ### 3.4 Mining Emission Reserve (75% / 31,500,000 SCY)
+- **Quota:** `3,150,000,000,000,000 quanta` ($31,500,000\text{ SCY}$)
 - **Purpose:** Distributed to permissionless network miners via block subsidies over successive halving epochs as specified in [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md), [`docs/POW-SPEC.md`](POW-SPEC.md), and [`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md).
 - **Incentive Alignment:** Proof-of-Work mining forms the primary, sovereign path for currency dispersion.
 

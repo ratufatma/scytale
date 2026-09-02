@@ -89,10 +89,39 @@ $$\text{Genesis Allocation} \ne \text{Automatic User Balance}$$
 +------------------------------------+------------------------------------+
 ```
 
+### 4.1 Canonical Block 0 & Genesis Bootstrap Transaction Structure
+
+Block 0 is the hardcoded anchor of the Scytale blockchain. It contains exactly one canonical transaction—the **Genesis Bootstrap Transaction**—which provisions the three authorized genesis allocations into the initial UTXO set:
+
+```text
++-------------------------------------------------------------------------+
+|                         Block 0 Header (Height: 0)                      |
+|  - Previous Block Hash: 0x0000000000000000000000000000000000000000...   |
+|  - Transaction Commitment: BLAKE3 Root of Genesis Tx                    |
+|  - Nonce & Proof-of-Work Target: Hardcoded Genesis Constant             |
++-------------------------------------------------------------------------+
+                                     │
+                                     ▼
++-------------------------------------------------------------------------+
+|                  Genesis Bootstrap Transaction (TxID_0)                 |
+|  - Inputs: [ ] (Empty; protocol-defined bootstrap minting)              |
+|  - Outputs: Exactly 3 Outputs (Total = 1,050,000,000,000,000 quanta)   |
++-------------------------------------------------------------------------+
+       │                             │                             │
+       ▼                             ▼                             ▼
++--------------------+      +--------------------+      +--------------------+
+| OutPoint(TxID_0, 0)|      | OutPoint(TxID_0, 1)|      | OutPoint(TxID_0, 2)|
+|  Founder 15%       |      |  Treasury 5%       |      |  Ecosystem 5%      |
+|  630T quanta       |      |  210T quanta       |      |  210T quanta       |
+|  (6,300,000 SCY)   |      |  (2,100,000 SCY)   |      |  (2,100,000 SCY)   |
++--------------------+      +--------------------+      +--------------------+
+```
+
 ### Invariants:
 1. **Public Accounting:** All genesis allocations are declared on-chain at Block 0 and bounded within the fixed 42,000,000 SCY cap.
-2. **No User Airdrops by Default:** Genesis allocations dedicated to founders, treasury, or ecosystem growth do not grant automatic starting balances to arbitrary new nodes.
-3. **Path to Initial Funds:** Users acquire their initial SCY either by:
+2. **Exact Output Count:** Block 0 contains strictly **three transaction outputs** corresponding to the three authorized allocation categories.
+3. **No User Airdrops by Default:** Genesis allocations dedicated to founders, treasury, or ecosystem growth do not grant automatic starting balances to arbitrary new nodes.
+4. **Path to Initial Funds:** Users acquire their initial SCY either by:
    - Receiving an on-chain transfer from an existing holder.
    - Successfully mining a valid Proof-of-Work block.
 
@@ -129,7 +158,7 @@ In Scytale, mining is designed as an autonomous, continuous engine lifecycle rat
 All funds acquired by users—whether through genesis distribution or mining—possess an unbroken, verifiable **Value Provenance** chain:
 
 ```text
-Mined Coin Provenance:
+Mined Coin Provenance (Height H >= 1):
 Valid Proof-of-Work Block
           ↓
 Coinbase Transaction
@@ -144,16 +173,19 @@ Coinbase Transaction
 ```
 
 ```text
-Genesis Allocation Provenance:
+Genesis Allocation Provenance (Height 0):
       Genesis Block (Height 0)
                  ↓
-      Genesis Transaction
+      Genesis Bootstrap Transaction
                  ↓
             Genesis TxID
                  ↓
-       Genesis OutPoints
+       Genesis OutPoints (TxID : Index)
+                 ├── Index 0: Founder Allocation       (630,000,000,000,000 quanta)
+                 ├── Index 1: Treasury Allocation      (210,000,000,000,000 quanta)
+                 └── Index 2: Ecosystem Allocation     (210,000,000,000,000 quanta)
                  ↓
-          Genesis UTXOs
+          Genesis UTXOs (Committed to Initial redb UTXO Set)
 ```
 
 - Value never enters a user's balance without a corresponding state transition event recorded on the canonical ledger.

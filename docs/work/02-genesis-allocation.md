@@ -11,7 +11,7 @@ Task ID     : 02
 Task Name   : Genesis Allocation
 Phase       : Economy
 Level       : LIGHT → MEDIUM
-Status      : PLANNED
+Status      : VERIFIED
 Dependency  : Task 01 — Monetary Policy
 ```
 
@@ -196,17 +196,17 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 02 can only be marked as **VERIFIED** when:
 
-- [ ] Founder allocation is locked at `15%` ($6,300,000\text{ SCY}$).
-- [ ] Treasury allocation is locked at `5%` ($2,100,000\text{ SCY}$).
-- [ ] Ecosystem / Community allocation is locked at `5%` ($2,100,000\text{ SCY}$).
-- [ ] Mining reserve is locked at `75%` ($31,500,000\text{ SCY}$).
-- [ ] Total allocation reconciles to exactly `42,000,000 SCY` ($4,200,000,000,000,000\text{ quanta}$).
-- [ ] Founder allocation is specified as a one-time issuance at Block 0.
-- [ ] Zero additional founder minting authority exists.
-- [ ] New user initial balance remains strictly `0 SCY`.
-- [ ] Genesis Value Provenance lineage is unambiguously specified.
-- [ ] Zero hidden or off-ledger allocation pathways exist.
-- [ ] Mining allocation is reconciled with the emission schedule (or explicitly marked as `BLOCKED`).
+- [x] Founder allocation is locked at `15%` ($6,300,000\text{ SCY}$).
+- [x] Treasury allocation is locked at `5%` ($2,100,000\text{ SCY}$).
+- [x] Ecosystem / Community allocation is locked at `5%` ($2,100,000\text{ SCY}$).
+- [x] Mining reserve is locked at `75%` ($31,500,000\text{ SCY}$).
+- [x] Total allocation reconciles to exactly `42,000,000 SCY` ($4,200,000,000,000,000\text{ quanta}$).
+- [x] Founder allocation is specified as a one-time issuance at Block 0.
+- [x] Zero additional founder minting authority exists.
+- [x] New user initial balance remains strictly `0 SCY`.
+- [x] Genesis Value Provenance lineage is unambiguously specified.
+- [x] Zero hidden or off-ledger allocation pathways exist.
+- [x] Mining allocation is reconciled with the emission schedule (or explicitly marked as `BLOCKED`).
 
 ---
 
@@ -228,7 +228,7 @@ Task 02 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> 100% acceptance criteria satisfied against real storage.
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

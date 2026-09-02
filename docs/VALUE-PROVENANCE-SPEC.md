@@ -180,25 +180,28 @@ Mined Proof-of-Work Block (Height H)
 
 ---
 
-## 10. Genesis Allocation Provenance
+## 10. Genesis Allocation Provenance & OutPoint Mapping
 
 Genesis allocations distributed at network launch originate strictly from Block 0 transaction outputs:
 
 ```text
 Genesis Block (Height 0)
            ↓
-Genesis Bootstrap Transaction
+Genesis Bootstrap Transaction (TxID_0)
            ↓
-      Genesis TxID
-           ↓
-Genesis OutPoints (TxID : Index)
+Genesis OutPoints (TxID_0 : Index)
            │
-           ├── Founder Allocation OutPoint          (15% /  6,300,000 SCY)
-           ├── Development / Treasury OutPoint      ( 5% /  2,100,000 SCY)
-           └── Ecosystem / Community OutPoint       ( 5% /  2,100,000 SCY)
+           ├── OutPoint(TxID_0, 0): Founder Allocation     (15% / 630,000,000,000,000 quanta)
+           ├── OutPoint(TxID_0, 1): Development/Treasury   ( 5% / 210,000,000,000,000 quanta)
+           └── OutPoint(TxID_0, 2): Ecosystem/Community    ( 5% / 210,000,000,000,000 quanta)
+           ↓
+    Committed to Initial redb UTXO Set at Height 0 (Total = 1,050,000,000,000,000 quanta)
 ```
 
-- **Equal Provenance Grounding:** Founder, Treasury, and Ecosystem allocations possess identical on-chain auditability to mined coins. There are zero privileged, off-ledger, or hidden issuance paths.
+- **Lineage Grounding Verification:** Validating nodes verify that every spendable UTXO across the entire network has an unbroken ancestry path leading back to either:
+  1. A Genesis Bootstrap Output (`OutPoint(GenesisTxID, 0..2)` at Height 0), or
+  2. A valid Proof-of-Work Coinbase Output (`OutPoint(CoinbaseTxID, 0)` at Height $H \ge 1$).
+- **Zero Synthetic Value:** Any transaction referencing an OutPoint whose lineage does not terminate in these protocol-authorized roots is immediately rejected by consensus as unbacked value creation.
 
 ---
 
@@ -207,9 +210,10 @@ Genesis OutPoints (TxID : Index)
 The locked founder parameters are bound to the public ledger:
 
 - **Share:** `15%` ($6,300,000\text{ SCY} = 630,000,000,000,000\text{ quanta}$).
-- **Nature:** One-time issuance executed at Block 0.
-- **Audit Rule:** Any movement of founder funds creates standard spending transactions on the ledger, preserving full public visibility.
-- **No Ongoing Mint:** Founder keys possess zero future issuance rights.
+- **Genesis OutPoint:** `OutPoint(GenesisTxID, 0)`.
+- **Nature:** One-time issuance executed exclusively at Block 0.
+- **Audit Rule:** Any movement of founder funds creates standard spending transactions on the ledger, preserving full public visibility and Value Provenance.
+- **No Ongoing Mint:** Founder keys possess zero future issuance rights or ongoing block reward percentage.
 
 ---
 
@@ -220,6 +224,9 @@ At any point in chain history, total ledger value reconciles with mathematical e
 $$\text{Maximum Supply} = \text{Genesis Allocation} + \text{Issued Mining Rewards} + \text{Unissued Reserve}$$
 
 $$4,200,000,000,000,000\text{ quanta} = 1,050,000,000,000,000\text{ quanta} + \sum_{i=1}^{H} R(i) + \text{Unissued Reserve}(H)$$
+
+> [!WARNING]
+> **Consensus Mining Emission Flag:** Total mining issuance is capped at $3,150,000,000,000,000\text{ quanta}$ ($31.5\text{M}$ SCY). The unadjusted theoretical infinite halving series ($42\text{M}$ SCY) + Genesis ($10.5\text{M}$ SCY) = $52.5\text{M}$ SCY is flagged as `[CONSENSUS ISSUE — REQUIRES RESOLUTION]` and must be resolved by hard cap or parameter adjustment prior to finalizing mining emission logic.
 
 ---
 
