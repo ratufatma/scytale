@@ -1,10 +1,15 @@
 //! Scytale Consensus: Proof-of-Work, emission curve, and validation rules.
 
+pub mod difficulty;
 pub mod error;
 pub mod pow;
 pub mod target;
 
-pub use error::{ConsensusError, PowError};
+pub use difficulty::{
+    calculate_next_target, scale_target_by_ratio, validate_block_target, DifficultyConfig,
+    CLAMPING_FACTOR, DEFAULT_DIFFICULTY_EPOCH_BLOCKS, TARGET_BLOCK_INTERVAL_SECS,
+};
+pub use error::{ConsensusError, DifficultyError, PowError};
 pub use pow::{compute_pow_hash, mine_test_header, verify_pow};
 pub use scytale_core::{Quanta, QUANTA_PER_SCY};
 pub use target::Target;
