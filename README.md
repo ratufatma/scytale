@@ -52,6 +52,7 @@ cargo run -p scytale-node -- --help
 - [Ledger Specification](docs/LEDGER-SPEC.md)
 - [Block Specification](docs/BLOCK-SPEC.md)
 - [Proof-of-Work Specification](docs/POW-SPEC.md)
+- [Difficulty Adjustment Specification](docs/DIFFICULTY-SPEC.md)
 - [Transaction Specification](docs/TRANSACTION-SPEC.md)
 - [UTXO Specification](docs/UTXO-SPEC.md)
 - [Authorization Specification](docs/AUTHORIZATION-SPEC.md)
@@ -59,6 +60,7 @@ cargo run -p scytale-node -- --help
 - [Economic Model](docs/ECONOMIC-MODEL.md)
 - [Monetary Policy](docs/MONETARY-POLICY.md)
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 
 
