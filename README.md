@@ -49,6 +49,7 @@ cargo run -p scytale-node -- --help
 ## 📖 Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Node Lifecycle Specification](docs/NODE-LIFECYCLE-SPEC.md)
 - [Ledger Specification](docs/LEDGER-SPEC.md)
 - [Storage Architecture Specification](docs/STORAGE-SPEC.md)
 - [Mempool Specification](docs/MEMPOOL-SPEC.md)
@@ -68,6 +69,7 @@ cargo run -p scytale-node -- --help
 - [Genesis Specification](docs/GENESIS-SPEC.md)
 - [Genesis Allocation Specification](docs/GENESIS-ALLOCATION.md)
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 
 
