@@ -50,6 +50,7 @@ cargo run -p scytale-node -- --help
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Ledger Specification](docs/LEDGER-SPEC.md)
+- [Storage Architecture Specification](docs/STORAGE-SPEC.md)
 - [Block Specification](docs/BLOCK-SPEC.md)
 - [Proof-of-Work Specification](docs/POW-SPEC.md)
 - [Difficulty Adjustment Specification](docs/DIFFICULTY-SPEC.md)
@@ -63,6 +64,7 @@ cargo run -p scytale-node -- --help
 - [Genesis Specification](docs/GENESIS-SPEC.md)
 - [Genesis Allocation Specification](docs/GENESIS-ALLOCATION.md)
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 
 
