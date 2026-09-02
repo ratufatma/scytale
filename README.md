@@ -50,11 +50,15 @@ cargo run -p scytale-node -- --help
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Ledger Specification](docs/LEDGER-SPEC.md)
+- [Block Specification](docs/BLOCK-SPEC.md)
+- [Proof-of-Work Specification](docs/POW-SPEC.md)
 - [Transaction Specification](docs/TRANSACTION-SPEC.md)
 - [UTXO Specification](docs/UTXO-SPEC.md)
 - [Authorization Specification](docs/AUTHORIZATION-SPEC.md)
 - [Hashing and Serialization Specification](docs/HASHING-AND-SERIALIZATION-SPEC.md)
 - [Economic Model](docs/ECONOMIC-MODEL.md)
 - [Monetary Policy](docs/MONETARY-POLICY.md)
+- [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 

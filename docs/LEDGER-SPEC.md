@@ -10,6 +10,8 @@ This document serves as the top-level specification for the Scytale ledger. Spec
 
 | Domain | Specification Document | Key Focus Areas |
 | :--- | :--- | :--- |
+| **Blocks** | **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)** | Block header schema, PoW verification, coinbase position, and state transitions. |
+| **Proof-of-Work** | **[`docs/POW-SPEC.md`](POW-SPEC.md)** | BLAKE3 target evaluation, difficulty, and 60-second block cadence. |
 | **Transactions** | **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)** | Structural layout, canonical serialization, TxID, and validity rules. |
 | **UTXO Model** | **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)** | `OutPoint` primary key, lifecycle phases, and storage layout. |
 | **Authorization** | **[`docs/AUTHORIZATION-SPEC.md`](AUTHORIZATION-SPEC.md)** | Locking conditions, cryptographic proofs, and stateless verification. |
