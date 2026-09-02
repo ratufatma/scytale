@@ -323,3 +323,32 @@ impl CanonicalDeserialize for crate::block::Block {
         Ok(crate::block::Block::new(header, transactions))
     }
 }
+
+// ---------------------------------------------------------------------------
+// UtxoEntry: canonical persistence codec
+// ---------------------------------------------------------------------------
+
+impl CanonicalSerialize for crate::utxo::UtxoEntry {
+    fn serialize_canonical<W: Write>(&self, writer: &mut W) -> Result<(), SerializationError> {
+        // TxOut: value (u64) + locking_condition (Vec<u8>)
+        self.output.serialize_canonical(writer)?;
+        // block_height: u64 LE
+        self.block_height.serialize_canonical(writer)?;
+        // is_coinbase: bool (1 byte)
+        self.is_coinbase.serialize_canonical(writer)?;
+        Ok(())
+    }
+}
+
+impl CanonicalDeserialize for crate::utxo::UtxoEntry {
+    fn deserialize_canonical<R: Read>(reader: &mut R) -> Result<Self, SerializationError> {
+        let output = scytale_primitives::TxOut::deserialize_canonical(reader)?;
+        let block_height = u64::deserialize_canonical(reader)?;
+        let is_coinbase = bool::deserialize_canonical(reader)?;
+        Ok(crate::utxo::UtxoEntry {
+            output,
+            block_height,
+            is_coinbase,
+        })
+    }
+}

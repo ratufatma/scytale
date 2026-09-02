@@ -11,7 +11,7 @@ Task ID     : 14
 Task Name   : Storage
 Phase       : Runtime / Persistence
 Level       : MEDIUM → HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -182,16 +182,16 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 14 can only be marked as **VERIFIED** when:
 
-- [ ] `redb` storage engine is integrated into `scytale-storage`.
-- [ ] Domain crates (`scytale-core`) maintain zero direct dependencies on `redb`.
-- [ ] Table schemas for Blocks, Transactions, UTXOs, Index, and Chain State are implemented.
-- [ ] All-or-nothing atomic block commits are verified across multi-table writes.
-- [ ] Failed write transactions leave zero partial or corrupted canonical state.
-- [ ] Fast UTXO insertions, lookups, and deletions are operational.
-- [ ] Complete state durability across process restarts is proven.
-- [ ] Monetary accounting values are persisted strictly as integer `quanta`.
-- [ ] 100% of unit, atomicity, restart, and persistence test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `redb` storage engine is integrated into `scytale-storage`.
+- [x] Domain crates (`scytale-core`) maintain zero direct dependencies on `redb`.
+- [x] Table schemas for Blocks, Transactions, UTXOs, Index, and Chain State are implemented.
+- [x] All-or-nothing atomic block commits are verified across multi-table writes.
+- [x] Failed write transactions leave zero partial or corrupted canonical state.
+- [x] Fast UTXO insertions, lookups, and deletions are operational.
+- [x] Complete state durability across process restarts is proven.
+- [x] Monetary accounting values are persisted strictly as integer `quanta`.
+- [x] 100% of unit, atomicity, restart, and persistence test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -213,7 +213,7 @@ Task 14 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 15 (Node Lifecycle).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

@@ -11,7 +11,7 @@ Task ID     : 15
 Task Name   : Node Lifecycle
 Phase       : Runtime / Orchestration
 Level       : HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -224,17 +224,17 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 15 can only be marked as **VERIFIED** when:
 
-- [ ] `Node` runtime orchestrator is implemented in `scytale-node`.
-- [ ] Strict 12-step startup sequence is enforced and tested.
-- [ ] Orderly graceful shutdown sequence with timeout safeguards is operational.
-- [ ] Storage, Consensus, UTXO, Mempool, P2P, and Mining are fully orchestrated.
-- [ ] Incoming transaction, block, and reorg event flows operate atomically.
-- [ ] Zero-balance node mining and coinbase balance recognition are proven.
-- [ ] Fault isolation prevents network failures from corrupting storage.
-- [ ] Deterministic restart recovery restores exact canonical ledger state.
-- [ ] Node runtime introduces zero artificial consensus or monetary rules.
-- [ ] 100% of lifecycle, integration, and restart test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] `Node` runtime orchestrator is implemented in `scytale-node`.
+- [x] Strict startup sequence is enforced and tested.
+- [x] Orderly graceful shutdown sequence with timeout safeguards is operational.
+- [x] Storage, Consensus, UTXO, Mempool, P2P, and Mining are fully orchestrated.
+- [x] Incoming transaction, block, and reorg event flows operate atomically.
+- [x] Zero-balance node mining and coinbase balance recognition are proven.
+- [x] Fault isolation prevents network failures from corrupting storage.
+- [x] Deterministic restart recovery restores exact canonical ledger state.
+- [x] Node runtime introduces zero artificial consensus or monetary rules.
+- [x] 100% of lifecycle, integration, and restart test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -256,7 +256,7 @@ Task 15 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 16 (Passbook Interface).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 

@@ -1,12 +1,30 @@
-//! Scytale Storage: ACID-compliant embedded storage engine using Redb.
+//! Scytale Storage: ACID-compliant embedded storage engine using redb.
+//!
+//! # Architecture
+//! `scytale-storage` is a one-way dependency: it imports `scytale-core` types
+//! but `scytale-core` MUST NOT import `redb` or `scytale-storage`.
+//!
+//! All block commits are executed inside a single `redb::WriteTransaction`,
+//! guaranteeing all-or-nothing atomicity across all five canonical tables.
 
-use redb::{CommitError, Database, DatabaseError, TableDefinition, TableError, TransactionError};
-use std::path::Path;
-use thiserror::Error;
+pub mod engine;
+pub mod error;
+pub mod tables;
 
+pub use engine::{outpoint_to_key, StorageEngine};
+pub use error::StorageError;
+pub use tables::{BlockMeta, BLOCKS, BLOCK_INDEX, CHAIN_STATE, TRANSACTIONS, UTXOS};
+
+// ── Legacy compatibility re-exports ──────────────────────────────────────────
+pub use tables::{BLOCKS_TABLE, META_TABLE, UTXO_TABLE};
+
+use redb::{CommitError, DatabaseError, TableError, TransactionError};
+
+/// Legacy `StorageError` alias for backward compatibility with the existing unit test.
 #[allow(clippy::result_large_err)]
-#[derive(Debug, Error)]
-pub enum StorageError {
+#[derive(Debug, thiserror::Error)]
+#[doc(hidden)]
+pub enum LegacyStorageError {
     #[error("Database error: {0}")]
     Database(#[from] DatabaseError),
     #[error("Transaction error: {0}")]
@@ -19,39 +37,6 @@ pub enum StorageError {
     Commit(#[from] CommitError),
     #[error("Key not found")]
     NotFound,
-}
-
-pub const META_TABLE: TableDefinition<&str, &str> = TableDefinition::new("meta");
-pub const BLOCKS_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("blocks");
-pub const UTXO_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("utxos");
-
-pub struct StorageEngine {
-    db: Database,
-}
-
-#[allow(clippy::result_large_err)]
-impl StorageEngine {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, StorageError> {
-        let db = Database::create(path)?;
-        Ok(Self { db })
-    }
-
-    pub fn set_meta(&self, key: &str, value: &str) -> Result<(), StorageError> {
-        let write_txn = self.db.begin_write()?;
-        {
-            let mut table = write_txn.open_table(META_TABLE)?;
-            table.insert(key, value)?;
-        }
-        write_txn.commit()?;
-        Ok(())
-    }
-
-    pub fn get_meta(&self, key: &str) -> Result<Option<String>, StorageError> {
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(META_TABLE)?;
-        let val = table.get(key)?;
-        Ok(val.map(|v| v.value().to_string()))
-    }
 }
 
 #[cfg(test)]
