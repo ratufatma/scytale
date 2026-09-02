@@ -55,6 +55,7 @@ cargo run -p scytale-node -- --help
 - [Difficulty Adjustment Specification](docs/DIFFICULTY-SPEC.md)
 - [Transaction Specification](docs/TRANSACTION-SPEC.md)
 - [UTXO Specification](docs/UTXO-SPEC.md)
+- [Value Provenance Specification](docs/VALUE-PROVENANCE-SPEC.md)
 - [Authorization Specification](docs/AUTHORIZATION-SPEC.md)
 - [Hashing and Serialization Specification](docs/HASHING-AND-SERIALIZATION-SPEC.md)
 - [Economic Model](docs/ECONOMIC-MODEL.md)
@@ -62,6 +63,7 @@ cargo run -p scytale-node -- --help
 - [Genesis Specification](docs/GENESIS-SPEC.md)
 - [Genesis Allocation Specification](docs/GENESIS-ALLOCATION.md)
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
+
 
 
 
