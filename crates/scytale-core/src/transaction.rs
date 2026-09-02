@@ -1,4 +1,4 @@
-use crate::error::TransactionError;
+use crate::error::{AuthorizationError, TransactionError};
 use scytale_primitives::{Hash256, OutPoint, TxOut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -86,6 +86,47 @@ impl Transaction {
     /// Computes the unique 32-byte BLAKE3 transaction identifier (TxID).
     pub fn txid(&self) -> Hash256 {
         Hash256::hash(&self.to_canonical_bytes())
+    }
+
+    /// Computes the 32-byte BLAKE3 preimage digest for signing/verifying a specific input index.
+    ///
+    /// The canonical preimage binds:
+    /// 1. Transaction version (`u32` little-endian)
+    /// 2. Total inputs count (`u32` little-endian)
+    /// 3. All previous output references (each `OutPoint` canonical 36 bytes)
+    /// 4. Current input index being authorized (`u32` little-endian)
+    /// 5. Total outputs count (`u32` little-endian)
+    /// 6. All transaction outputs (canonical bytes: value + locking_condition)
+    /// 7. Lock time (`u64` little-endian)
+    pub fn signature_preimage_digest(
+        &self,
+        input_index: usize,
+    ) -> Result<Hash256, AuthorizationError> {
+        if input_index >= self.inputs.len() {
+            return Err(AuthorizationError::InvalidInputIndex {
+                index: input_index,
+                total_inputs: self.inputs.len(),
+            });
+        }
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&self.version.to_le_bytes());
+
+        bytes.extend_from_slice(&(self.inputs.len() as u32).to_le_bytes());
+        for input in &self.inputs {
+            bytes.extend_from_slice(&input.previous_output.to_canonical_bytes());
+        }
+
+        bytes.extend_from_slice(&(input_index as u32).to_le_bytes());
+
+        bytes.extend_from_slice(&(self.outputs.len() as u32).to_le_bytes());
+        for output in &self.outputs {
+            bytes.extend_from_slice(&output.to_canonical_bytes());
+        }
+
+        bytes.extend_from_slice(&self.lock_time.to_le_bytes());
+
+        Ok(Hash256::hash(&bytes))
     }
 
     /// Computes the sum of all transaction outputs in quanta, checking for integer overflow.

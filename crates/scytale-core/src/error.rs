@@ -39,6 +39,27 @@ pub enum UtxoError {
     InvalidCoinbasePlacement,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Error)]
+pub enum AuthorizationError {
+    #[error("authorization proof is empty")]
+    EmptyAuthorization,
+    #[error("authorization proof is malformed: {0}")]
+    MalformedProof(String),
+    #[error("signature verification failed")]
+    SignatureMismatch,
+    #[error("locking condition does not match provided proof or key")]
+    KeyConditionMismatch,
+    #[error("invalid input index {index} for transaction with {total_inputs} inputs")]
+    InvalidInputIndex { index: usize, total_inputs: usize },
+    #[error("failed to serialize transaction preimage: {0}")]
+    PreimageSerializationFailure(String),
+    #[error("input count ({input_count}) does not match resolved utxo count ({utxo_count})")]
+    MismatchedUtxoCount {
+        input_count: usize,
+        utxo_count: usize,
+    },
+}
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("Primitive error: {0}")]
@@ -47,6 +68,8 @@ pub enum CoreError {
     Transaction(#[from] TransactionError),
     #[error("UTXO error: {0}")]
     Utxo(#[from] UtxoError),
+    #[error("Authorization error: {0}")]
+    Authorization(#[from] AuthorizationError),
     #[error("Serialization error: {0}")]
     Serialization(String),
     #[error("Invalid transaction: {0}")]

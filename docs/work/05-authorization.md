@@ -11,7 +11,7 @@ Task ID     : 05
 Task Name   : Authorization
 Phase       : Ledger
 Level       : MEDIUM → HEAVY
-Status      : PLANNED
+Status      : VERIFIED
 ```
 
 ### Primary Dependencies:
@@ -221,14 +221,14 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 05 can only be marked as **VERIFIED** when:
 
-- [ ] Authorization verifier interfaces are implemented in `scytale-core`.
-- [ ] `TxOut.locking_condition` and `TxIn.authorization` evaluate deterministically.
-- [ ] Context-bound signing digest generation is implemented and tested.
-- [ ] Multi-input authorization verification is supported without cross-input leakage.
-- [ ] Anti-replay protection across differing transactions is verified.
-- [ ] Pure stateless verification is maintained (no `redb` or network coupling).
-- [ ] All negative and tamper-resistance tests pass with 100% success.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] Authorization verifier interfaces are implemented in `scytale-core`.
+- [x] `TxOut.locking_condition` and `TxIn.authorization` evaluate deterministically.
+- [x] Context-bound signing digest generation is implemented and tested.
+- [x] Multi-input authorization verification is supported without cross-input leakage.
+- [x] Anti-replay protection across differing transactions is verified.
+- [x] Pure stateless verification is maintained (no `redb` or network coupling).
+- [x] All negative and tamper-resistance tests pass with 100% success.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -250,7 +250,7 @@ Task 05 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 06 (Hashing & Serialization).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`VERIFIED`**
 
 ---
 
