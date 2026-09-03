@@ -1,12 +1,14 @@
 //! Scytale CLI: Operator command line tooling for node inspection, control, and wallet identity.
 
 mod client;
+pub mod contract;
 pub mod formatter;
 pub mod identity;
 pub mod wallet;
 
 use clap::{Args, Parser, Subcommand};
 use client::{send_node_request, CliClientError};
+use contract::{ContractArgs, handle_contract};
 use ed25519_dalek::Signer;
 use identity::IdentityStore;
 use scytale_bridge::{NodeRequest, NodeResponse};
@@ -149,7 +151,11 @@ pub enum Commands {
 
     /// Request graceful shutdown of the node daemon
     Stop,
+
+    /// Developer tooling for eUTXO WebAssembly smart contracts (inspect, build, deploy, call)
+    Contract(ContractArgs),
 }
+
 
 #[derive(Args, Debug, PartialEq, Eq)]
 pub struct WalletArgs {
@@ -791,6 +797,10 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                     )))
                 }
             }
+        }
+
+        Commands::Contract(args) => {
+            handle_contract(args)?;
         }
     }
     Ok(())

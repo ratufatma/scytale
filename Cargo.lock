@@ -867,9 +867,11 @@ dependencies = [
 name = "scytale-cli"
 version = "0.3.0"
 dependencies = [
+ "bincode",
  "blake3",
  "clap",
  "ed25519-dalek",
+ "hex",
  "rand",
  "scytale-bridge",
  "scytale-consensus",
@@ -877,7 +879,9 @@ dependencies = [
  "scytale-node",
  "scytale-primitives",
  "scytale-script",
+ "scytale-sdk",
  "scytale-storage",
+ "scytale-vm",
  "serde",
  "serde_json",
  "tempfile",
