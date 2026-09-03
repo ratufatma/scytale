@@ -37,7 +37,7 @@ enum Commands {
         p2p_bind: Option<String>,
 
         /// Peer address(es) to dial for P2P network sync (can be repeated)
-        #[arg(long = "peer", action = clap::ArgAction::Append)]
+        #[arg(long = "peer", visible_alias = "seed-nodes", action = clap::ArgAction::Append)]
         peers: Vec<String>,
 
         /// Custom path to the scytale-p2p binary
@@ -69,7 +69,7 @@ enum Commands {
         fast_sync: bool,
 
         /// DNS seed domain(s) to query for peer discovery (can be repeated)
-        #[arg(long = "dns-seed", action = clap::ArgAction::Append)]
+        #[arg(long = "dns-seed", visible_alias = "seed", action = clap::ArgAction::Append)]
         dns_seeds: Vec<String>,
 
         /// Disable DNS seed resolution for P2P network discovery

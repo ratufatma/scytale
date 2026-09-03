@@ -77,7 +77,7 @@ func main() {
 	flag.Parse()
 
 	if len(dnsSeedsFlag) == 0 {
-		dnsSeedsFlag = []string{"seed.scytale.org"}
+		dnsSeedsFlag = []string{"seed.myratu.com"}
 	}
 
 	if *bridgeSocket == "" {

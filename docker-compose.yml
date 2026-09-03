@@ -6,6 +6,9 @@ services:
       dockerfile: Dockerfile
     container_name: scytale-node1
     hostname: node1
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
       scytale-net:
         ipv4_address: 172.28.0.10
@@ -25,6 +28,10 @@ services:
       - "0.0.0.0:8332"
       - "--target"
       - "0x217fffff"
+      - "--dns-seed"
+      - "seed.myratu.com"
+      - "--peer"
+      - "seed.myratu.com:9001"
       - "--mine"
       - "--miner-payout"
       - "010203"
@@ -33,6 +40,9 @@ services:
     image: scytale:latest
     container_name: scytale-node2
     hostname: node2
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
       scytale-net:
         ipv4_address: 172.28.0.20
@@ -61,6 +71,9 @@ services:
     image: scytale:latest
     container_name: scytale-node3
     hostname: node3
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     networks:
       scytale-net:
         ipv4_address: 172.28.0.30
