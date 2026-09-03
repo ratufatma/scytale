@@ -1,16 +1,35 @@
 # Rust build artifacts
-target/
+/target/
 **/*.rs.bk
-Cargo.lock
+Cargo.lock.tmp
 
 # Go build artifacts
+network/cmd/scytale-p2p/scytale-p2p
+network/cmd/scytale-seeder/scytale-seeder
 network/scytale-p2p
+network/scytale-seeder
+network/bin/
+*.test
+*.prof
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Local data directories
-.scytale/
+# Runtime databases, data directories & sockets
+*.redb
+*.redb.tmp
 *.db
+*.sock
+peers.json
+seeder_nodes.json
+data/
+/run/scytale/
+.scytale/
+
+# IDE, OS, and log files
+.idea/
+.vscode/
+*.log
+.DS_Store
