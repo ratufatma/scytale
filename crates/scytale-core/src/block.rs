@@ -10,6 +10,7 @@ pub struct BlockHeader {
     pub version: u32,
     pub previous_block_hash: Hash256,
     pub transaction_commitment: Hash256,
+    pub utxo_root: Hash256,
     pub timestamp: u64,
     pub difficulty_target: u32, // Compact target bits
     pub nonce: u64,
@@ -20,6 +21,7 @@ impl BlockHeader {
         version: u32,
         previous_block_hash: Hash256,
         transaction_commitment: Hash256,
+        utxo_root: Hash256,
         timestamp: u64,
         difficulty_target: u32,
         nonce: u64,
@@ -28,6 +30,7 @@ impl BlockHeader {
             version,
             previous_block_hash,
             transaction_commitment,
+            utxo_root,
             timestamp,
             difficulty_target,
             nonce,

@@ -177,12 +177,21 @@ fn test_reject_invalid_observed_time() {
 fn test_validate_block_target() {
     let expected_target = Target::from_compact(0x1d00ffff);
 
-    let valid_header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let valid_header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     assert!(validate_block_target(&valid_header, &expected_target).is_ok());
 
     let invalid_header = BlockHeader::new(
         1,
+        Hash256::ZERO,
         Hash256::ZERO,
         Hash256::ZERO,
         1700000000,

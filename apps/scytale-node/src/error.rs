@@ -54,4 +54,8 @@ pub enum NodeError {
     InconsistentState(String),
     #[error("P2P bridge startup failed: {0}")]
     P2PStartupFailed(String),
+    #[error("script execution error: {0}")]
+    InvalidScript(String),
+    #[error("script evaluation failed: top stack item is false or stack empty")]
+    ScriptEvaluationFailed,
 }

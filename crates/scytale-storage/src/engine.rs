@@ -5,7 +5,17 @@ use scytale_core::{
     Block, CanonicalDeserialize, CanonicalSerialize, Hash256, OutPoint, Transaction, UtxoEntry,
     UtxoSet,
 };
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+
+/// Authenticated snapshot of the active unspent UTXO set at a specific block height.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UtxoSnapshotDto {
+    pub height: u64,
+    pub block_hash: Hash256,
+    pub utxo_root: Hash256,
+    pub entries: Vec<(OutPoint, UtxoEntry)>,
+}
 
 // Helper: encode OutPoint as fixed 36-byte key (TxID[32] || index_LE[4])
 pub fn outpoint_to_key(outpoint: &OutPoint) -> [u8; 36] {
@@ -169,6 +179,99 @@ impl StorageEngine {
         Ok(utxo_set)
     }
 
+    /// Computes the canonical active UTXO Merkle root directly from the stored UTXOS table.
+    /// Since redb iterates keys in lexicographical B-Tree order, this visits entries
+    /// in canonical OutPoint order (txid ASC, index ASC).
+    pub fn compute_utxo_root(&self) -> Result<Hash256, StorageError> {
+        let read_tx = self.db.begin_read()?;
+        let table = read_tx.open_table(tables::UTXOS)?;
+        let mut leaves = Vec::new();
+        for result in table.iter()? {
+            let (key_guard, value_guard) = result?;
+            let key: &[u8; 36] = key_guard.value();
+            let outpoint = key_to_outpoint(key);
+            let entry = UtxoEntry::from_canonical_bytes(value_guard.value())
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            leaves.push(scytale_core::compute_utxo_leaf(&outpoint, &entry.output));
+        }
+        Ok(scytale_core::compute_utxo_merkle_root(leaves))
+    }
+
+    /// Exports an authenticated snapshot of the active unspent UTXO set.
+    pub fn export_utxo_snapshot(&self) -> Result<UtxoSnapshotDto, StorageError> {
+        let (block_hash, height) = self.get_canonical_tip()?.unwrap_or((Hash256::ZERO, 0));
+        let read_tx = self.db.begin_read()?;
+        let table = read_tx.open_table(tables::UTXOS)?;
+        let mut entries = Vec::new();
+        let mut leaves = Vec::new();
+        for result in table.iter()? {
+            let (key_guard, value_guard) = result?;
+            let key: &[u8; 36] = key_guard.value();
+            let outpoint = key_to_outpoint(key);
+            let entry = UtxoEntry::from_canonical_bytes(value_guard.value())
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            leaves.push(scytale_core::compute_utxo_leaf(&outpoint, &entry.output));
+            entries.push((outpoint, entry));
+        }
+        let utxo_root = scytale_core::compute_utxo_merkle_root(leaves);
+        Ok(UtxoSnapshotDto {
+            height,
+            block_hash,
+            utxo_root,
+            entries,
+        })
+    }
+
+    /// Atomically applies an authenticated UTXO snapshot to the UTXOS table.
+    /// Verifies the snapshot's calculated Merkle root matches `snapshot.utxo_root`.
+    pub fn apply_utxo_snapshot(&self, snapshot: &UtxoSnapshotDto) -> Result<(), StorageError> {
+        // 1. Verify Merkle root of snapshot entries
+        let mut sorted_entries = snapshot.entries.clone();
+        sorted_entries.sort_by(|(a_op, _), (b_op, _)| {
+            a_op.txid
+                .cmp(&b_op.txid)
+                .then_with(|| a_op.index.cmp(&b_op.index))
+        });
+        let leaves: Vec<Hash256> = sorted_entries
+            .iter()
+            .map(|(op, entry)| scytale_core::compute_utxo_leaf(op, &entry.output))
+            .collect();
+        let calculated_root = scytale_core::compute_utxo_merkle_root(leaves);
+        if calculated_root != snapshot.utxo_root {
+            return Err(StorageError::InconsistentState(format!(
+                "UTXO snapshot root mismatch: expected {}, calculated {}",
+                snapshot.utxo_root, calculated_root
+            )));
+        }
+
+        // 2. Atomically clear old UTXOS and populate with snapshot
+        let write_tx = self.db.begin_write()?;
+        {
+            let mut utxo_tbl = write_tx.open_table(tables::UTXOS)?;
+            let existing_keys: Vec<[u8; 36]> = {
+                let mut keys = Vec::new();
+                for result in utxo_tbl.iter()? {
+                    let (k, _) = result?;
+                    keys.push(*k.value());
+                }
+                keys
+            };
+            for k in existing_keys {
+                utxo_tbl.remove(&k)?;
+            }
+
+            for (outpoint, entry) in &sorted_entries {
+                let key = outpoint_to_key(outpoint);
+                let entry_bytes = entry
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                utxo_tbl.insert(&key, entry_bytes.as_slice())?;
+            }
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Atomic Block Commit Pipeline
     // ─────────────────────────────────────────────────────────────────────
@@ -216,8 +319,12 @@ impl StorageEngine {
                     }
                 }
 
-                // Create new UTXOs for all outputs
+                // Create new UTXOs for all non-OP_RETURN outputs
                 for (idx, output) in tx.outputs.iter().enumerate() {
+                    // Consensus rule: OP_RETURN outputs (0x6a) are data carriers and omitted from UTXOS table
+                    if output.locking_condition.first() == Some(&0x6a) {
+                        continue;
+                    }
                     let new_op = OutPoint::new(txid, idx as u32);
                     let key = outpoint_to_key(&new_op);
                     let entry = UtxoEntry::new(output.clone(), height, tx.is_coinbase());
@@ -316,6 +423,9 @@ impl StorageEngine {
                         }
                     }
                     for (idx, output) in tx.outputs.iter().enumerate() {
+                        if output.locking_condition.first() == Some(&0x6a) {
+                            continue;
+                        }
                         let op = OutPoint::new(txid, idx as u32);
                         let entry = UtxoEntry::new(output.clone(), *height, tx.is_coinbase());
                         let entry_bytes = entry

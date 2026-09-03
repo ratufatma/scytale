@@ -11,7 +11,7 @@ pub mod engine;
 pub mod error;
 pub mod tables;
 
-pub use engine::{outpoint_to_key, StorageEngine};
+pub use engine::{outpoint_to_key, StorageEngine, UtxoSnapshotDto};
 pub use error::StorageError;
 pub use tables::{BlockMeta, BLOCKS, BLOCK_INDEX, CHAIN_STATE, TRANSACTIONS, UTXOS};
 

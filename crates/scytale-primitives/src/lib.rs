@@ -3,11 +3,11 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-/// Smallest atomic unit of Scytale Coin: 1 SCY = 100,000,000 quanta.
+/// The smallest atomic monetary unit in Scytale.
 pub type Quanta = u64;
 
-/// Number of quanta per 1 SCY.
-pub const QUANTA_PER_SCY: Quanta = 100_000_000;
+/// Number of quanta per 1 SCY (10^8).
+pub const QUANTA_PER_SCY: u64 = 100_000_000;
 
 #[derive(Debug, Error)]
 pub enum PrimitiveError {
@@ -68,6 +68,57 @@ impl AsRef<[u8]> for Hash {
     fn as_ref(&self) -> &[u8] {
         &self.0
     }
+}
+
+impl std::fmt::Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for byte in &self.0 {
+            write!(f, "{:02x}", byte)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::str::FromStr for Hash {
+    type Err = PrimitiveError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let clean = s.strip_prefix("0x").unwrap_or(s);
+        if clean.len() != 64 {
+            return Err(PrimitiveError::InvalidHashLength(clean.len() / 2));
+        }
+        let mut bytes = [0u8; 32];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&clean[i * 2..i * 2 + 2], 16)
+                .map_err(|_| PrimitiveError::Serialization("invalid hex character".into()))?;
+        }
+        Ok(Self(bytes))
+    }
+}
+
+/// Formats a byte slice into a lowercase hexadecimal string.
+pub fn to_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        use std::fmt::Write;
+        let _ = write!(s, "{:02x}", b);
+    }
+    s
+}
+
+/// Parses a hexadecimal string (with optional `0x` prefix) into bytes.
+pub fn from_hex(s: &str) -> Result<Vec<u8>, PrimitiveError> {
+    let clean = s.strip_prefix("0x").unwrap_or(s);
+    if !clean.len().is_multiple_of(2) {
+        return Err(PrimitiveError::Serialization("odd hex length".into()));
+    }
+    let mut bytes = Vec::with_capacity(clean.len() / 2);
+    for i in (0..clean.len()).step_by(2) {
+        let b = u8::from_str_radix(&clean[i..i + 2], 16)
+            .map_err(|_| PrimitiveError::Serialization("invalid hex character".into()))?;
+        bytes.push(b);
+    }
+    Ok(bytes)
 }
 
 /// OutPoint: Uniquely identifies a specific transaction output on the ledger.
@@ -152,5 +203,29 @@ mod tests {
         let scy_coins: u64 = 5;
         let total_quanta: Quanta = scy_coins * QUANTA_PER_SCY;
         assert_eq!(total_quanta, 500_000_000);
+    }
+
+    #[test]
+    fn test_hash_hex_conversion() {
+        let hash = Hash::hash(b"test hex conversion");
+        let hex_str = hash.to_string();
+        assert_eq!(hex_str.len(), 64);
+        let parsed: Hash = hex_str.parse().unwrap();
+        assert_eq!(hash, parsed);
+
+        let prefixed = format!("0x{}", hex_str);
+        let parsed_prefixed: Hash = prefixed.parse().unwrap();
+        assert_eq!(hash, parsed_prefixed);
+    }
+
+    #[test]
+    fn test_bytes_hex_helpers() {
+        let bytes = vec![0xde, 0xad, 0xbe, 0xef];
+        let hex = to_hex(&bytes);
+        assert_eq!(hex, "deadbeef");
+        assert_eq!(from_hex("deadbeef").unwrap(), bytes);
+        assert_eq!(from_hex("0xdeadbeef").unwrap(), bytes);
+        assert!(from_hex("deadbee").is_err());
+        assert!(from_hex("deadzz").is_err());
     }
 }

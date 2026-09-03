@@ -7,11 +7,12 @@ use scytale_core::{
 fn test_block_header_serialization_roundtrip() {
     let prev_hash = Hash256::hash(b"previous_block");
     let tx_root = Hash256::hash(b"tx_commitment_root");
+    let utxo_root = Hash256::hash(b"utxo_root");
 
-    let header = BlockHeader::new(1, prev_hash, tx_root, 1700000000, 0x1d00ffff, 42);
+    let header = BlockHeader::new(1, prev_hash, tx_root, utxo_root, 1700000000, 0x1d00ffff, 42);
 
     let bytes = header.to_canonical_bytes().unwrap();
-    assert_eq!(bytes.len(), 4 + 32 + 32 + 8 + 4 + 8); // Exactly 88 bytes
+    assert_eq!(bytes.len(), 4 + 32 + 32 + 32 + 8 + 4 + 8); // Exactly 120 bytes
 
     let decoded = BlockHeader::from_canonical_bytes(&bytes).unwrap();
     assert_eq!(decoded, header);
@@ -24,6 +25,7 @@ fn test_block_serialization_roundtrip() {
         1,
         Hash256::ZERO,
         Hash256::hash(b"txs"),
+        Hash256::hash(b"utxos"),
         1700000000,
         0x1d00ffff,
         12345,
@@ -50,7 +52,15 @@ fn test_block_serialization_roundtrip() {
 
 #[test]
 fn test_valid_minimal_block_coinbase_only() {
-    let header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     let coinbase = Transaction::new_coinbase(0, vec![TxOut::new(1_000_000_000, vec![1, 2, 3])]);
     let block = Block::new(header, vec![coinbase]);
@@ -64,6 +74,7 @@ fn test_valid_block_with_regular_transactions() {
         1,
         Hash256::hash(b"prev"),
         Hash256::hash(b"root"),
+        Hash256::hash(b"utxo_root"),
         1700000001,
         0x1d00ffff,
         999,
@@ -97,7 +108,15 @@ fn test_valid_block_with_regular_transactions() {
 
 #[test]
 fn test_reject_empty_transactions() {
-    let header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     let block = Block::new(header, vec![]);
     assert_eq!(
@@ -108,7 +127,15 @@ fn test_reject_empty_transactions() {
 
 #[test]
 fn test_reject_missing_coinbase_at_index_0() {
-    let header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     // Regular transaction at index 0
     let regular_tx = Transaction::new(
@@ -124,7 +151,15 @@ fn test_reject_missing_coinbase_at_index_0() {
 
 #[test]
 fn test_reject_duplicate_coinbase() {
-    let header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     let coinbase_1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![])]);
     let coinbase_2 = Transaction::new_coinbase(1, vec![TxOut::new(500_000_000, vec![])]);
@@ -138,7 +173,15 @@ fn test_reject_duplicate_coinbase() {
 
 #[test]
 fn test_reject_nested_invalid_transaction() {
-    let header = BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000000, 0x1d00ffff, 0);
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1700000000,
+        0x1d00ffff,
+        0,
+    );
 
     let coinbase = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![])]);
 

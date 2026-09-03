@@ -101,6 +101,11 @@ pub enum BlockError {
     TransactionError(#[from] TransactionError),
     #[error("serialization error: {0}")]
     SerializationError(#[from] SerializationError),
+    #[error("UTXO root commitment mismatch: expected {expected}, got {actual}")]
+    InvalidUtxoRoot {
+        expected: scytale_primitives::Hash256,
+        actual: scytale_primitives::Hash256,
+    },
 }
 
 #[derive(Debug, Error)]

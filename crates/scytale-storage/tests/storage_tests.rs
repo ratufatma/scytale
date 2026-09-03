@@ -44,6 +44,7 @@ fn make_block(prev_hash: Hash256, timestamp: u64, nonce: u64, txs: Vec<Transacti
             1,
             prev_hash,
             fixed_hash(0xAB),
+            Hash256::ZERO,
             timestamp,
             DIFFICULTY_TARGET,
             nonce,
@@ -448,4 +449,90 @@ fn test_atomic_reorg_state_transition() {
         utxo_count, 4,
         "UTXO set must exactly match branch-B canonical state"
     );
+}
+
+#[test]
+fn test_op_return_omitted_from_utxo_table() {
+    let dir = TempDir::new().unwrap();
+    let db_path = dir.path().join("test.redb");
+    let engine = StorageEngine::open(&db_path).unwrap();
+
+    let genesis_txid = Hash256::hash(b"prev_cb");
+    let input = TxIn::new(OutPoint::new(genesis_txid, 0), vec![0x01]);
+    let standard_out = TxOut::new(50_000_000, vec![0x01, 0x02, 0x03]);
+    let op_return_out = TxOut::new(0, vec![0x6a, 0x04, 0xde, 0xad, 0xbe, 0xef]);
+
+    let tx = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![input],
+        vec![standard_out, op_return_out],
+        0,
+    );
+    let txid = tx.txid();
+
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        1000,
+        0x207fffff,
+        0,
+    );
+    let block = Block::new(header, vec![tx]);
+
+    engine.commit_block(&block, 1, [10, 0, 0, 0]).unwrap();
+
+    // Verify transaction is stored in TRANSACTIONS table
+    assert!(engine.get_transaction(&txid).unwrap().is_some());
+
+    // Standard output (index 0) is in UTXOS table
+    let std_utxo = engine.get_utxo(&OutPoint::new(txid, 0)).unwrap();
+    assert!(std_utxo.is_some());
+
+    // OP_RETURN output (index 1) is NOT in UTXOS table
+    let op_return_utxo = engine.get_utxo(&OutPoint::new(txid, 1)).unwrap();
+    assert!(
+        op_return_utxo.is_none(),
+        "OP_RETURN output must never be inserted into UTXOS table"
+    );
+}
+
+#[test]
+fn test_utxo_root_and_snapshot_roundtrip() {
+    let engine = StorageEngine::in_memory().unwrap();
+
+    // Initially empty
+    assert_eq!(engine.compute_utxo_root().unwrap(), Hash256::ZERO);
+
+    // Commit 2 blocks
+    let b0 = make_block(
+        Hash256::ZERO,
+        1_000_000,
+        1,
+        vec![make_coinbase_tx(0, 1_000_000_000)],
+    );
+    engine.commit_block(&b0, 0, [1, 0, 0, 0]).unwrap();
+
+    let root0 = engine.compute_utxo_root().unwrap();
+    assert_ne!(root0, Hash256::ZERO);
+
+    // Export snapshot
+    let snapshot = engine.export_utxo_snapshot().unwrap();
+    assert_eq!(snapshot.height, 0);
+    assert_eq!(snapshot.block_hash, b0.header.hash());
+    assert_eq!(snapshot.utxo_root, root0);
+    assert_eq!(snapshot.entries.len(), 1);
+
+    // Apply snapshot to fresh engine
+    let fresh_engine = StorageEngine::in_memory().unwrap();
+    assert_eq!(fresh_engine.compute_utxo_root().unwrap(), Hash256::ZERO);
+    fresh_engine.apply_utxo_snapshot(&snapshot).unwrap();
+    assert_eq!(fresh_engine.compute_utxo_root().unwrap(), root0);
+
+    // Test rejection of corrupted root
+    let mut corrupted = snapshot.clone();
+    corrupted.utxo_root = Hash256::hash(b"tampered_root");
+    let corrupt_err = fresh_engine.apply_utxo_snapshot(&corrupted);
+    assert!(corrupt_err.is_err());
 }

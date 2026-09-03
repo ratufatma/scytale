@@ -94,9 +94,10 @@ func TestSendGetBlocksSendsLocator(t *testing.T) {
 // TestBlockSyncBatchCatchup verifies that HandleInvBlocks requests up to MaxBatchSize
 // blocks from the announced hashes.
 func TestBlockSyncBatchCatchup(t *testing.T) {
-	// Build 60 block hashes (exceeds MaxBatchSize=50)
+	// Build block hashes exceeding MaxBatchSize
+	totalHashes := sync_pkg.MaxBatchSize + 10
 	var hashes [][32]byte
-	for i := 0; i < 60; i++ {
+	for i := 0; i < totalHashes; i++ {
 		hashes = append(hashes, makeHash(i))
 	}
 
@@ -145,27 +146,46 @@ func TestHandleGetBlocksRespondsWithInvBlocks(t *testing.T) {
 		knownHashes = append(knownHashes, makeHash(i))
 	}
 
-	sender := &captureSender{}
-	peerLocator := [][32]byte{makeHash(0)}
-
-	if err := sync_pkg.HandleGetBlocks(sender, knownHashes, peerLocator); err != nil {
+	// 1. Without locator: sends all known hashes
+	sender1 := &captureSender{}
+	if err := sync_pkg.HandleGetBlocks(sender1, knownHashes, nil); err != nil {
 		t.Fatalf("HandleGetBlocks error: %v", err)
 	}
-
-	payloads := sender.received(wire.CmdInvBlocks)
-	if len(payloads) != 1 {
-		t.Fatalf("expected 1 invblocks, got %d", len(payloads))
+	payloads1 := sender1.received(wire.CmdInvBlocks)
+	if len(payloads1) != 1 {
+		t.Fatalf("expected 1 invblocks, got %d", len(payloads1))
 	}
-
-	hashes, err := gossip_pkg.DecodeHashList(payloads[0])
+	hashes1, err := gossip_pkg.DecodeHashList(payloads1[0])
 	if err != nil {
 		t.Fatalf("DecodeHashList error: %v", err)
 	}
-	if len(hashes) != len(knownHashes) {
-		t.Errorf("hash count: got %d, want %d", len(hashes), len(knownHashes))
+	if len(hashes1) != len(knownHashes) {
+		t.Errorf("hash count: got %d, want %d", len(hashes1), len(knownHashes))
 	}
-	for i, h := range knownHashes {
-		if !bytes.Equal(hashes[i][:], h[:]) {
+
+	// 2. With locator matching index 0: sends knownHashes[1:]
+	sender2 := &captureSender{}
+	peerLocator := [][32]byte{makeHash(0)}
+
+	if err := sync_pkg.HandleGetBlocks(sender2, knownHashes, peerLocator); err != nil {
+		t.Fatalf("HandleGetBlocks error: %v", err)
+	}
+
+	payloads2 := sender2.received(wire.CmdInvBlocks)
+	if len(payloads2) != 1 {
+		t.Fatalf("expected 1 invblocks, got %d", len(payloads2))
+	}
+
+	hashes2, err := gossip_pkg.DecodeHashList(payloads2[0])
+	if err != nil {
+		t.Fatalf("DecodeHashList error: %v", err)
+	}
+	expectedDelta := knownHashes[1:]
+	if len(hashes2) != len(expectedDelta) {
+		t.Errorf("hash count: got %d, want %d", len(hashes2), len(expectedDelta))
+	}
+	for i, h := range expectedDelta {
+		if !bytes.Equal(hashes2[i][:], h[:]) {
 			t.Errorf("hash[%d] mismatch", i)
 		}
 	}

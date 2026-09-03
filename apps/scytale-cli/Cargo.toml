@@ -1,0 +1,30 @@
+[package]
+name = "scytale-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line interface and operator tooling for Scytale blockchain"
+
+[lints]
+workspace = true
+
+[dependencies]
+scytale-primitives = { path = "../../crates/scytale-primitives" }
+scytale-core = { path = "../../crates/scytale-core" }
+scytale-script = { path = "../../crates/scytale-script" }
+scytale-bridge = { path = "../../crates/scytale-bridge" }
+blake3 = { workspace = true }
+ed25519-dalek = { version = "2.1", default-features = false, features = ["rand_core"] }
+rand = "0.8"
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.10"
+scytale-node = { path = "../scytale-node" }
+scytale-consensus = { path = "../../crates/scytale-consensus" }
+scytale-storage = { path = "../../crates/scytale-storage" }

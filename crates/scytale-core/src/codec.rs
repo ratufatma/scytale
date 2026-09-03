@@ -269,6 +269,7 @@ impl CanonicalSerialize for crate::block::BlockHeader {
         self.version.serialize_canonical(writer)?;
         self.previous_block_hash.serialize_canonical(writer)?;
         self.transaction_commitment.serialize_canonical(writer)?;
+        self.utxo_root.serialize_canonical(writer)?;
         self.timestamp.serialize_canonical(writer)?;
         self.difficulty_target.serialize_canonical(writer)?;
         self.nonce.serialize_canonical(writer)?;
@@ -281,6 +282,7 @@ impl CanonicalDeserialize for crate::block::BlockHeader {
         let version = u32::deserialize_canonical(reader)?;
         let previous_block_hash = Hash256::deserialize_canonical(reader)?;
         let transaction_commitment = Hash256::deserialize_canonical(reader)?;
+        let utxo_root = Hash256::deserialize_canonical(reader)?;
         let timestamp = u64::deserialize_canonical(reader)?;
         let difficulty_target = u32::deserialize_canonical(reader)?;
         let nonce = u64::deserialize_canonical(reader)?;
@@ -288,6 +290,7 @@ impl CanonicalDeserialize for crate::block::BlockHeader {
             version,
             previous_block_hash,
             transaction_commitment,
+            utxo_root,
             timestamp,
             difficulty_target,
             nonce,

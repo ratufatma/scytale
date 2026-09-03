@@ -26,10 +26,14 @@ const EASY_COMPACT_TARGET: u32 = 0x2100ffff;
 /// Build a genesis block with an easy target for testing.
 fn make_genesis_block() -> Block {
     let coinbase = Transaction::new_coinbase(0, vec![TxOut::new(1_000_000_000, vec![])]);
+    let genesis_outpoint = OutPoint::new(coinbase.txid(), 0);
+    let genesis_utxo_root =
+        scytale_core::compute_utxo_leaf(&genesis_outpoint, &coinbase.outputs[0]);
     let header = BlockHeader::new(
         1,
         Hash256::ZERO,
         coinbase.txid(),
+        genesis_utxo_root,
         1_700_000_000,
         EASY_COMPACT_TARGET,
         0,

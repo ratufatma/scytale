@@ -105,17 +105,21 @@ type Peer struct {
 	magic     uint32
 
 	RemoteVersion VersionMsg
+	isOutbound    bool
+
+	lastSnapshotServed time.Time
 }
 
 // New creates a Peer wrapping an established TCP connection.
 func New(conn net.Conn, networkID, magic uint32) *Peer {
 	return &Peer{
-		conn:      conn,
-		id:        conn.RemoteAddr().String(),
-		address:   conn.RemoteAddr().String(),
-		state:     StateConnected,
-		networkID: networkID,
-		magic:     magic,
+		conn:       conn,
+		id:         conn.RemoteAddr().String(),
+		address:    conn.RemoteAddr().String(),
+		state:      StateConnected,
+		networkID:  networkID,
+		magic:      magic,
+		isOutbound: false,
 	}
 }
 
@@ -124,6 +128,20 @@ func (p *Peer) ID() string { return p.id }
 
 // Address returns the peer's remote address string.
 func (p *Peer) Address() string { return p.address }
+
+// IsOutbound returns true if this node initiated the connection.
+func (p *Peer) IsOutbound() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.isOutbound
+}
+
+// SetOutbound flags the connection as initiator-dialed (outbound).
+func (p *Peer) SetOutbound(outbound bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.isOutbound = outbound
+}
 
 // State returns the current lifecycle state of the peer.
 func (p *Peer) State() State {
@@ -249,4 +267,41 @@ func (p *Peer) PerformHandshake(localVersion VersionMsg, isInitiator bool) error
 
 	p.setState(StateReady)
 	return nil
+}
+
+// CanServeSnapshot checks if the peer is allowed to serve a snapshot based on rate limiting (minInterval).
+// For initial chunk (chunkIndex == 0), it enforces the minimum interval rate limit.
+// Successive chunks (chunkIndex > 0) of an active snapshot transfer are permitted immediately.
+func (p *Peer) CanServeSnapshot(minInterval time.Duration, chunkIndex uint32) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if chunkIndex == 0 {
+		if !p.lastSnapshotServed.IsZero() && time.Since(p.lastSnapshotServed) < minInterval {
+			return false
+		}
+		p.lastSnapshotServed = time.Now()
+	}
+	return true
+}
+
+// SendGetSnapshot serializes and transmits a MsgGetSnapshot wire message.
+func (p *Peer) SendGetSnapshot(blockHash [32]byte, chunkIndex uint32) error {
+	msg := wire.MsgGetSnapshot{
+		BlockHash:  blockHash,
+		ChunkIndex: chunkIndex,
+	}
+	return p.Send(wire.CmdGetSnapshot, msg.Serialize())
+}
+
+// SendSnapshot serializes and transmits a MsgSnapshot wire message.
+func (p *Peer) SendSnapshot(msg *wire.MsgSnapshot) error {
+	if msg == nil {
+		return errors.New("peer: nil MsgSnapshot")
+	}
+	payload, err := msg.Serialize()
+	if err != nil {
+		return err
+	}
+	return p.Send(wire.CmdSnapshot, payload)
 }

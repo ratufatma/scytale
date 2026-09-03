@@ -7,6 +7,7 @@ fn test_pow_hash_reproducibility() {
         1,
         Hash256::hash(b"prev_block"),
         Hash256::hash(b"tx_commitment"),
+        Hash256::ZERO,
         1700000000,
         0x1d00ffff,
         42,
@@ -24,6 +25,7 @@ fn test_nonce_mutation_changes_hash() {
         1,
         Hash256::hash(b"prev"),
         Hash256::hash(b"txs"),
+        Hash256::ZERO,
         1700000000,
         0x1d00ffff,
         0,
@@ -59,8 +61,8 @@ fn test_target_boundary_off_by_one_below() {
     ];
     let target = Target::from_be_bytes(raw_target);
 
-    // Target - 1 (decrement last byte)
-    raw_target[31] -= 1;
+    // One unit below target (lexicographically smaller, numerically lower work target met)
+    raw_target[31] = raw_target[31].wrapping_sub(1);
     let hash_below = Hash256::new(raw_target);
     assert!(target.is_met_by(&hash_below));
 }
@@ -74,8 +76,8 @@ fn test_target_boundary_off_by_one_above() {
     ];
     let target = Target::from_be_bytes(raw_target);
 
-    // Target + 1 (increment last byte)
-    raw_target[31] += 1;
+    // One unit above target (numerically higher hash -> fails target)
+    raw_target[31] = raw_target[31].wrapping_add(1);
     let hash_above = Hash256::new(raw_target);
     assert!(!target.is_met_by(&hash_above));
 }
@@ -93,6 +95,7 @@ fn test_reject_insufficient_pow() {
         1,
         Hash256::hash(b"arbitrary_prev"),
         Hash256::hash(b"arbitrary_tx"),
+        Hash256::ZERO,
         1700000000,
         0x1d00ffff,
         9999,
@@ -115,6 +118,7 @@ fn test_mine_and_verify_with_easy_target() {
         1,
         Hash256::ZERO,
         Hash256::hash(b"commitment"),
+        Hash256::ZERO,
         1700000000,
         0x1d00ffff,
         0,

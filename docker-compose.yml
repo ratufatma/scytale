@@ -1,0 +1,125 @@
+services:
+  node-1:
+    image: scytale:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scytale-node1
+    hostname: node1
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.10
+    ports:
+      - "9001:9001"
+      - "8332:8332"
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--p2p-bind"
+      - "0.0.0.0:9001"
+      - "--http-bind"
+      - "0.0.0.0:8332"
+      - "--target"
+      - "0x217fffff"
+      - "--mine"
+      - "--miner-payout"
+      - "010203"
+
+  node-2:
+    image: scytale:latest
+    container_name: scytale-node2
+    hostname: node2
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.20
+    ports:
+      - "9002:9002"
+      - "8333:8333"
+    depends_on:
+      - node-1
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--p2p-bind"
+      - "0.0.0.0:9002"
+      - "--http-bind"
+      - "0.0.0.0:8333"
+      - "--peer"
+      - "172.28.0.10:9001"
+      - "--target"
+      - "0x217fffff"
+
+  node-3:
+    image: scytale:latest
+    container_name: scytale-node3
+    hostname: node3
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.30
+    ports:
+      - "9003:9003"
+      - "8334:8334"
+    depends_on:
+      - node-1
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--p2p-bind"
+      - "0.0.0.0:9003"
+      - "--http-bind"
+      - "0.0.0.0:8334"
+      - "--peer"
+      - "172.28.0.10:9001"
+      - "--target"
+      - "0x217fffff"
+
+  node-4:
+    image: scytale:latest
+    container_name: scytale-node4
+    hostname: node4
+    profiles:
+      - fastsync
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.40
+    ports:
+      - "9004:9004"
+      - "8335:8335"
+    depends_on:
+      - node-2
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--p2p-bind"
+      - "0.0.0.0:9004"
+      - "--http-bind"
+      - "0.0.0.0:8335"
+      - "--peer"
+      - "172.28.0.20:9002"
+      - "--target"
+      - "0x217fffff"
+      - "--fast-sync"
+
+networks:
+  scytale-net:
+    name: scytale-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

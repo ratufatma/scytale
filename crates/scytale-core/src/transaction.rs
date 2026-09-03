@@ -72,6 +72,37 @@ impl Transaction {
         Hash256::hash(&bytes)
     }
 
+    /// Computes the 32-byte BLAKE3 sighash digest for an input being spent.
+    ///
+    /// Binds:
+    /// - SCYTALE_SIGHASH_V1 domain tag
+    /// - All inputs (txid + index)
+    /// - All outputs (value + locking_condition)
+    /// - Current input index (u32 LE)
+    /// - Referenced prev_locking_script
+    pub fn compute_sighash(&self, input_index: usize, prev_locking_script: &[u8]) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"SCYTALE_SIGHASH_V1");
+        for input in &self.inputs {
+            hasher.update(input.previous_output.txid.as_bytes());
+            hasher.update(&input.previous_output.index.to_le_bytes());
+        }
+        for output in &self.outputs {
+            hasher.update(&output.value.to_le_bytes());
+            hasher.update(&output.locking_condition);
+        }
+        hasher.update(&(input_index as u32).to_le_bytes());
+        hasher.update(prev_locking_script);
+        *hasher.finalize().as_bytes()
+    }
+
+    /// Computes the exact canonical binary serialized size in bytes.
+    pub fn serialized_size(&self) -> usize {
+        crate::codec::CanonicalSerialize::to_canonical_bytes(self)
+            .map(|b| b.len())
+            .unwrap_or(0)
+    }
+
     /// Computes the 32-byte BLAKE3 preimage digest for signing/verifying a specific input index.
     ///
     /// The canonical preimage binds:
@@ -139,7 +170,8 @@ impl Transaction {
         }
 
         for output in &self.outputs {
-            if output.value == 0 {
+            // Standard outputs must have value > 0; OP_RETURN (0x6a) outputs may have 0 value
+            if output.value == 0 && output.locking_condition.first() != Some(&0x6a) {
                 return Err(TransactionError::ZeroOutputValue);
             }
         }
@@ -331,5 +363,46 @@ mod tests {
         let tx = Transaction::new(TRANSACTION_VERSION_1, vec![in1, in2], vec![out1, out2], 0);
         assert!(tx.validate_stateless().is_ok());
         assert_eq!(tx.total_output_quanta().unwrap(), 300_000_000);
+    }
+
+    #[test]
+    fn test_compute_sighash_determinism_and_binding() {
+        let op1 = OutPoint::new(Hash256::hash(b"prev_1"), 0);
+        let in1 = TxIn::new(op1, vec![]);
+        let out1 = TxOut::new(100_000_000, vec![0x01, 0x02, 0x03]);
+        let tx = Transaction::new(TRANSACTION_VERSION_1, vec![in1], vec![out1], 0);
+
+        let prev_lock = vec![0x01, 0x02, 0x03];
+        let sighash1 = tx.compute_sighash(0, &prev_lock);
+        let sighash2 = tx.compute_sighash(0, &prev_lock);
+        assert_eq!(sighash1, sighash2, "sighash must be deterministic");
+
+        // Changing input_index produces different sighash
+        let sighash_idx1 = tx.compute_sighash(1, &prev_lock);
+        assert_ne!(sighash1, sighash_idx1);
+
+        // Changing prev_locking_script produces different sighash
+        let sighash_diff_lock = tx.compute_sighash(0, &[0x01, 0x02, 0x04]);
+        assert_ne!(sighash1, sighash_diff_lock);
+    }
+
+    #[test]
+    fn test_op_return_zero_value_allowed() {
+        let op = OutPoint::new(Hash256::hash(b"prev"), 0);
+        let in1 = TxIn::new(op, vec![]);
+        // OP_RETURN with 0 value is allowed
+        let op_return_out = TxOut::new(0, vec![0x6a, 0x04, 0xde, 0xad, 0xbe, 0xef]);
+        let tx = Transaction::new(TRANSACTION_VERSION_1, vec![in1], vec![op_return_out], 0);
+        assert!(tx.validate_stateless().is_ok());
+
+        // Non-OP_RETURN output with 0 value is rejected
+        let op2 = OutPoint::new(Hash256::hash(b"prev2"), 0);
+        let in2 = TxIn::new(op2, vec![]);
+        let bad_out = TxOut::new(0, vec![0x01, 0x02]);
+        let bad_tx = Transaction::new(TRANSACTION_VERSION_1, vec![in2], vec![bad_out], 0);
+        assert_eq!(
+            bad_tx.validate_stateless(),
+            Err(TransactionError::ZeroOutputValue)
+        );
     }
 }

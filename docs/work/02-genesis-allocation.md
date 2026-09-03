@@ -11,7 +11,7 @@ Task ID     : 02
 Task Name   : Genesis Allocation
 Phase       : Economy
 Level       : LIGHT → MEDIUM
-Status      : VERIFIED
+Status      : COMPLETED / PRODUCTION-READY
 Dependency  : Task 01 — Monetary Policy
 ```
 
@@ -228,7 +228,7 @@ Task 02 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> 100% acceptance criteria satisfied against real storage.
 ```
 
-- **Current Status:** **`VERIFIED`**
+- **Current Status:** **`COMPLETED / PRODUCTION-READY`**
 
 ---
 

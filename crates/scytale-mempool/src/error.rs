@@ -25,6 +25,10 @@ pub enum MempoolError {
     CoinbaseNotAllowed,
     #[error("arithmetic overflow occurred during fee calculation")]
     ArithmeticOverflow,
+    #[error("fee rate {fee_rate} milli-quanta/byte is below minimum relay fee {min_relay_fee} milli-quanta/byte")]
+    FeeTooLow { fee_rate: u64, min_relay_fee: u64 },
+    #[error("mempool is full: capacity exceeded and transaction fee rate ({fee_rate}) is not higher than lowest entry ({lowest_fee_rate})")]
+    MempoolFull { fee_rate: u64, lowest_fee_rate: u64 },
 }
 
 impl From<TransactionError> for MempoolError {

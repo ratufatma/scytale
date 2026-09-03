@@ -1,0 +1,13 @@
+target/debug/
+target/incremental/
+target/.fingerprint/
+target/build/
+target/deps/
+target/examples/
+target/doc/
+target/tmp/
+.git/
+.cargo/
+*.log
+*.sock
+scytale.db/

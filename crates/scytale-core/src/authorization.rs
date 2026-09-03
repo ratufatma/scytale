@@ -43,6 +43,43 @@ pub fn verify_transaction_authorization<V: AuthorizationVerifier>(
     Ok(())
 }
 
+/// Canonical consensus script verifier executing ScytaleScript via `ScriptEngine`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ConsensusScriptVerifier {
+    pub current_block_height: u64,
+}
+
+impl ConsensusScriptVerifier {
+    pub const fn new(current_block_height: u64) -> Self {
+        Self {
+            current_block_height,
+        }
+    }
+}
+
+impl AuthorizationVerifier for ConsensusScriptVerifier {
+    fn verify(
+        &self,
+        preimage_digest: &Hash256,
+        locking_condition: &[u8],
+        authorization_proof: &[u8],
+    ) -> Result<(), AuthorizationError> {
+        let ctx = scytale_script::ScriptContext::new(
+            preimage_digest.as_bytes(),
+            self.current_block_height,
+        );
+        let engine = scytale_script::ScriptEngine::default();
+        let valid = engine
+            .execute(authorization_proof, locking_condition, &ctx)
+            .map_err(|e| AuthorizationError::MalformedProof(e.to_string()))?;
+        if valid {
+            Ok(())
+        } else {
+            Err(AuthorizationError::SignatureMismatch)
+        }
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

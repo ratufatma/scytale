@@ -3,26 +3,52 @@ use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoSet, TRANSACTION_VERSION_1,
 };
 
-fn create_genesis() -> (Block, UtxoSet) {
+#[allow(clippy::too_many_arguments)]
+fn make_test_block(
+    version: u32,
+    prev_hash: Hash256,
+    timestamp: u64,
+    target: u32,
+    nonce: u64,
+    txs: Vec<Transaction>,
+    parent_utxos: &UtxoSet,
+    height: u64,
+) -> Block {
+    let mut staging = parent_utxos.clone();
+    let _ = staging.apply_block_transactions(&txs[0], &txs[1..], height);
+    let utxo_root = staging.compute_utxo_root();
     let header = BlockHeader::new(
-        1,
+        version,
+        prev_hash,
         Hash256::ZERO,
-        Hash256::ZERO,
-        1700000000,
-        0x1f00ffff, // Easy target
-        0,
+        utxo_root,
+        timestamp,
+        target,
+        nonce,
     );
+    Block::new(header, txs)
+}
+
+fn create_genesis() -> (Block, UtxoSet) {
     let coinbase = Transaction::new_coinbase(
         0,
         vec![TxOut::new(10_000_000_000, vec![1, 2, 3])], // 100 SCY
     );
-    let block = Block::new(header, vec![coinbase]);
-
     let mut utxo_set = UtxoSet::new();
     utxo_set
-        .apply_block_transactions(&block.transactions[0], &[], 0)
+        .apply_block_transactions(&coinbase, &[], 0)
         .unwrap();
-
+    let utxo_root = utxo_set.compute_utxo_root();
+    let header = BlockHeader::new(
+        1,
+        Hash256::ZERO,
+        Hash256::ZERO,
+        utxo_root,
+        1700000000,
+        0x1f00ffff, // Easy target
+        0,
+    );
+    let block = Block::new(header, vec![coinbase]);
     (block, utxo_set)
 }
 
@@ -47,9 +73,17 @@ fn test_linear_extension() {
     let mut tree = ChainTree::new(genesis);
 
     // Block 1
-    let header1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
     let coinbase1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![])]);
-    let block1 = Block::new(header1, vec![coinbase1]);
+    let block1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
+        vec![coinbase1],
+        &utxo_set,
+        1,
+    );
     let block1_hash = block1.header.hash();
 
     let result = tree.process_block(block1, &mut utxo_set).unwrap();
@@ -70,16 +104,35 @@ fn test_fork_choice_heavier_branch_wins() {
     let genesis_hash = genesis.header.hash();
     let mut tree = ChainTree::new(genesis);
 
+    let utxo_genesis = utxo_set.clone();
+
     // Branch A: 2 blocks with easy target (0x1f00ffff)
-    let header_a1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
     let cb_a1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![1])]);
-    let block_a1 = Block::new(header_a1, vec![cb_a1]);
+    let block_a1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
+        vec![cb_a1],
+        &utxo_genesis,
+        1,
+    );
     let hash_a1 = block_a1.header.hash();
     tree.process_block(block_a1, &mut utxo_set).unwrap();
 
-    let header_a2 = BlockHeader::new(1, hash_a1, Hash256::ZERO, 1700000120, 0x1f00ffff, 2);
+    let utxo_a1 = utxo_set.clone();
     let cb_a2 = Transaction::new_coinbase(2, vec![TxOut::new(1_000_000_000, vec![2])]);
-    let block_a2 = Block::new(header_a2, vec![cb_a2]);
+    let block_a2 = make_test_block(
+        1,
+        hash_a1,
+        1700000120,
+        0x1f00ffff,
+        2,
+        vec![cb_a2],
+        &utxo_a1,
+        2,
+    );
     let hash_a2 = block_a2.header.hash();
     tree.process_block(block_a2, &mut utxo_set).unwrap();
 
@@ -87,9 +140,17 @@ fn test_fork_choice_heavier_branch_wins() {
     assert_eq!(tree.canonical_height(), 2);
 
     // Branch B: 1 block directly off Genesis with very difficult target (0x1000ffff -> much higher work)
-    let header_b1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1000ffff, 100);
     let cb_b1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![3])]);
-    let block_b1 = Block::new(header_b1, vec![cb_b1]);
+    let block_b1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1000ffff,
+        100,
+        vec![cb_b1],
+        &utxo_genesis,
+        1,
+    );
     let hash_b1 = block_b1.header.hash();
 
     // Work of B1 exceeds 2 blocks of A
@@ -116,17 +177,26 @@ fn test_reject_invalid_branch_even_with_high_work() {
     let genesis_hash = genesis.header.hash();
     let mut tree = ChainTree::new(genesis);
 
+    let utxo_genesis = utxo_set.clone();
+
     // Branch A: valid linear block
-    let header_a = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
     let cb_a = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![1])]);
-    let block_a = Block::new(header_a, vec![cb_a]);
+    let block_a = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
+        vec![cb_a],
+        &utxo_genesis,
+        1,
+    );
     let hash_a = block_a.header.hash();
     tree.process_block(block_a, &mut utxo_set).unwrap();
 
     let initial_utxo_snapshot = utxo_set.clone();
 
     // Branch B: huge work (0x1000ffff) but contains double-spending invalid transaction
-    let header_b = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1000ffff, 99);
     let cb_b = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![2])]);
 
     // Phantom input that doesn't exist
@@ -138,7 +208,16 @@ fn test_reject_invalid_branch_even_with_high_work() {
         0,
     );
 
-    let block_b = Block::new(header_b, vec![cb_b, invalid_tx]);
+    let block_b = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1000ffff,
+        99,
+        vec![cb_b, invalid_tx],
+        &utxo_genesis,
+        1,
+    );
 
     // Processing invalid branch must fail
     let res = tree.process_block(block_b, &mut utxo_set);
@@ -155,28 +234,46 @@ fn test_common_ancestor_discovery() {
     let genesis_hash = genesis.header.hash();
     let mut tree = ChainTree::new(genesis);
 
+    let utxo_genesis = utxo_set.clone();
+
     // Branch A: 2 blocks
-    let h_a1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
-    let b_a1 = Block::new(
-        h_a1,
+    let b_a1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
         vec![Transaction::new_coinbase(1, vec![TxOut::new(100, vec![])])],
+        &utxo_genesis,
+        1,
     );
     let hash_a1 = b_a1.header.hash();
     tree.process_block(b_a1, &mut utxo_set).unwrap();
 
-    let h_a2 = BlockHeader::new(1, hash_a1, Hash256::ZERO, 1700000120, 0x1f00ffff, 2);
-    let b_a2 = Block::new(
-        h_a2,
+    let utxo_a1 = utxo_set.clone();
+    let b_a2 = make_test_block(
+        1,
+        hash_a1,
+        1700000120,
+        0x1f00ffff,
+        2,
         vec![Transaction::new_coinbase(2, vec![TxOut::new(100, vec![])])],
+        &utxo_a1,
+        2,
     );
     let hash_a2 = b_a2.header.hash();
     tree.process_block(b_a2, &mut utxo_set).unwrap();
 
     // Branch B: off A1
-    let h_b2 = BlockHeader::new(1, hash_a1, Hash256::ZERO, 1700000120, 0x1f00ffff, 3);
-    let b_b2 = Block::new(
-        h_b2,
+    let b_b2 = make_test_block(
+        1,
+        hash_a1,
+        1700000120,
+        0x1f00ffff,
+        3,
         vec![Transaction::new_coinbase(2, vec![TxOut::new(100, vec![])])],
+        &utxo_a1,
+        2,
     );
     let hash_b2 = b_b2.header.hash();
     tree.process_block(b_b2, &mut utxo_set).unwrap();
@@ -192,8 +289,9 @@ fn test_atomic_reorg_utxo_state() {
     let genesis_cb_op = OutPoint::new(genesis.transactions[0].txid(), 0);
     let mut tree = ChainTree::new(genesis);
 
+    let utxo_genesis = utxo_set.clone();
+
     // Branch A: spends genesis coinbase
-    let h_a1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
     let cb_a1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![1])]);
     let spend_tx = Transaction::new(
         TRANSACTION_VERSION_1,
@@ -202,7 +300,16 @@ fn test_atomic_reorg_utxo_state() {
         0,
     );
     let spend_tx_outpoint = OutPoint::new(spend_tx.txid(), 0);
-    let b_a1 = Block::new(h_a1, vec![cb_a1, spend_tx]);
+    let b_a1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
+        vec![cb_a1, spend_tx],
+        &utxo_genesis,
+        1,
+    );
     tree.process_block(b_a1, &mut utxo_set).unwrap();
 
     // In Branch A, genesis coinbase is spent, and spend_tx_outpoint is present
@@ -210,10 +317,18 @@ fn test_atomic_reorg_utxo_state() {
     assert!(utxo_set.contains(&spend_tx_outpoint));
 
     // Branch B: does not spend genesis coinbase, but has higher cumulative work
-    let h_b1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1000ffff, 20);
     let cb_b1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![2])]);
     let cb_b1_op = OutPoint::new(cb_b1.txid(), 0);
-    let b_b1 = Block::new(h_b1, vec![cb_b1]);
+    let b_b1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1000ffff,
+        20,
+        vec![cb_b1],
+        &utxo_genesis,
+        1,
+    );
     tree.process_block(b_b1, &mut utxo_set).unwrap();
 
     // After reorg to Branch B:
@@ -232,8 +347,9 @@ fn test_mempool_reconciliation_list() {
     let genesis_cb_op = OutPoint::new(genesis.transactions[0].txid(), 0);
     let mut tree = ChainTree::new(genesis);
 
+    let utxo_genesis = utxo_set.clone();
+
     // Branch A: includes a standard non-coinbase tx
-    let h_a1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1f00ffff, 1);
     let cb_a1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![1])]);
     let regular_tx = Transaction::new(
         TRANSACTION_VERSION_1,
@@ -241,13 +357,30 @@ fn test_mempool_reconciliation_list() {
         vec![TxOut::new(9_000_000_000, vec![])],
         0,
     );
-    let b_a1 = Block::new(h_a1, vec![cb_a1, regular_tx.clone()]);
+    let b_a1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1f00ffff,
+        1,
+        vec![cb_a1, regular_tx.clone()],
+        &utxo_genesis,
+        1,
+    );
     tree.process_block(b_a1, &mut utxo_set).unwrap();
 
     // Branch B: higher work (0x1000ffff), only coinbase
-    let h_b1 = BlockHeader::new(1, genesis_hash, Hash256::ZERO, 1700000060, 0x1000ffff, 20);
     let cb_b1 = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![2])]);
-    let b_b1 = Block::new(h_b1, vec![cb_b1]);
+    let b_b1 = make_test_block(
+        1,
+        genesis_hash,
+        1700000060,
+        0x1000ffff,
+        20,
+        vec![cb_b1],
+        &utxo_genesis,
+        1,
+    );
 
     let res = tree.process_block(b_b1, &mut utxo_set).unwrap().unwrap();
 

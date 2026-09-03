@@ -40,8 +40,18 @@ const (
 	CmdBlock     = "block"
 	CmdGetBlocks = "getblocks"
 	CmdInvBlocks = "invblocks"
+	CmdGetAddr   = "getaddr"
+	CmdAddr      = "addr"
+	CmdGetSnapshot = "getsnap"
+	CmdSnapshot    = "snapshot"
 	CmdPing      = "ping"
 	CmdPong      = "pong"
+)
+
+// Snapshot wire framing constraints.
+const (
+	MaxSnapshotChunkEntries = 2000
+	MaxLockingScriptSize    = 10000
 )
 
 // ErrMagicMismatch is returned when the received magic bytes do not match the expected network magic.

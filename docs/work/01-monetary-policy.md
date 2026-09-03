@@ -11,7 +11,7 @@ Task ID     : 01
 Task Name   : Monetary Policy
 Phase       : Economy
 Level       : LIGHT
-Status      : VERIFIED
+Status      : COMPLETED / PRODUCTION-READY
 Dependency  : None
 ```
 
@@ -229,7 +229,7 @@ A task must maintain one of the following official lifecycle statuses:
 [ COMPLETE ]    ──> 100% acceptance criteria satisfied and signed off.
 ```
 
-- **Current Status:** **`VERIFIED`**
+- **Current Status:** **`COMPLETED / PRODUCTION-READY`**
 
 ---
 

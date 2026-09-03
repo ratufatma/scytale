@@ -12,8 +12,7 @@ import (
 )
 
 // MaxBatchSize is the maximum number of blocks requested per IBD batch.
-const MaxBatchSize = 50
-
+const MaxBatchSize = 100
 // BlockSender is a minimal interface for sending wire messages to a peer during IBD.
 type BlockSender interface {
 	Send(cmd string, payload []byte) error
@@ -67,19 +66,36 @@ func (s *Syncer) HandleInvBlocks(sender BlockSender, invBlocksPayload []byte) (i
 
 // HandleGetBlocks processes an incoming `getblocks` request from a syncing peer.
 // It builds an invblocks response listing the hashes the remote peer is missing.
-// knownHashes is the set of block hashes this node currently has; peerLocator
+// knownHashes is the set of canonical block hashes (genesis to tip); peerLocator
 // contains the peer's block locator (tip-to-genesis).
-func HandleGetBlocks(sender BlockSender, knownHashes [][32]byte, _ [][32]byte) error {
-	// Simple implementation: send all our known hashes as invblocks.
-	// A production implementation would find the common ancestor and send only the delta.
+func HandleGetBlocks(sender BlockSender, knownHashes [][32]byte, peerLocator [][32]byte) error {
 	if len(knownHashes) == 0 {
 		return nil
 	}
 
-	// Cap response to MaxBatchSize
-	if len(knownHashes) > MaxBatchSize {
-		knownHashes = knownHashes[:MaxBatchSize]
+	startIndex := 0
+	if len(peerLocator) > 0 {
+		locatorSet := make(map[[32]byte]bool, len(peerLocator))
+		for _, h := range peerLocator {
+			locatorSet[h] = true
+		}
+		// Find the highest common ancestor index in knownHashes
+		for i := len(knownHashes) - 1; i >= 0; i-- {
+			if locatorSet[knownHashes[i]] {
+				startIndex = i + 1
+				break
+			}
+		}
 	}
-	payload := gossip.EncodeHashList(knownHashes)
+
+	if startIndex >= len(knownHashes) {
+		return nil
+	}
+
+	missing := knownHashes[startIndex:]
+	if len(missing) > MaxBatchSize {
+		missing = missing[:MaxBatchSize]
+	}
+	payload := gossip.EncodeHashList(missing)
 	return sender.Send(wire.CmdInvBlocks, payload)
 }

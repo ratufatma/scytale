@@ -264,6 +264,16 @@ impl ChainTree {
                     hash: node.hash,
                     error: e.to_string(),
                 })?;
+            let calculated_root = staged_utxo.compute_utxo_root();
+            if node.block.header.utxo_root != calculated_root {
+                return Err(ChainError::ReorgFailed {
+                    hash: node.hash,
+                    error: format!(
+                        "UTXO root commitment mismatch: expected {}, got {}",
+                        node.block.header.utxo_root, calculated_root
+                    ),
+                });
+            }
             connected_blocks.push(node.block.clone());
         }
 

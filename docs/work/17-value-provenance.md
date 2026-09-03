@@ -11,7 +11,7 @@ Task ID     : 17
 Task Name   : Value Provenance
 Phase       : Ledger / Auditability
 Level       : MEDIUM → HEAVY
-Status      : PLANNED
+Status      : COMPLETED / PRODUCTION-READY
 ```
 
 ### Primary Dependencies:
@@ -251,7 +251,7 @@ Task 17 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off. Roadmap tasks 01–17 fully defined.
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`COMPLETED / PRODUCTION-READY`**
 
 ---
 

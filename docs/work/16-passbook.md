@@ -11,7 +11,7 @@ Task ID     : 16
 Task Name   : Passbook
 Phase       : User Experience / Ledger Presentation
 Level       : MEDIUM
-Status      : PLANNED
+Status      : COMPLETED / PRODUCTION-READY
 ```
 
 ### Primary Dependencies:
@@ -214,18 +214,18 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 16 can only be marked as **VERIFIED** when:
 
-- [ ] Passbook projection domain model is implemented in `scytale-node`.
-- [ ] Initial balance is strictly 0 SCY with zero synthetic tokens.
-- [ ] Confirmed balance is derived dynamically from canonical `UTXO_SET`.
-- [ ] Pending unconfirmed transactions are clearly distinguished from confirmed balance.
-- [ ] Sequential Passbook Entry Numbers are assigned for human readability.
-- [ ] Transaction types (`Received`, `Sent`, `MiningReward`, `Change`) are classified accurately.
-- [ ] Value provenance lineage is inspectable from UTXO back to origin.
-- [ ] Chain reorganizations update passbook projections automatically.
-- [ ] Passbook maintains zero consensus or monetary authority.
-- [ ] Zero private key or signing logic exists in this presentation layer.
-- [ ] 100% of unit, reorg, and integration test suites pass.
-- [ ] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
+- [x] Passbook projection domain model is implemented in `scytale-node`.
+- [x] Initial balance is strictly 0 SCY with zero synthetic tokens.
+- [x] Confirmed balance is derived dynamically from canonical `UTXO_SET`.
+- [x] Pending unconfirmed transactions are clearly distinguished from confirmed balance.
+- [x] Sequential Passbook Entry Numbers are assigned for human readability.
+- [x] Transaction types (`Received`, `Sent`, `MiningReward`, `Change`) are classified accurately.
+- [x] Value provenance lineage is inspectable from UTXO back to origin.
+- [x] Chain reorganizations update passbook projections automatically.
+- [x] Passbook maintains zero consensus or monetary authority.
+- [x] Zero private key or signing logic exists in this presentation layer.
+- [x] 100% of unit, reorg, and integration test suites pass.
+- [x] Workspace quality gates pass (`cargo fmt`, `cargo check`, `cargo clippy`, `cargo test`).
 
 ---
 
@@ -247,7 +247,7 @@ Task 16 can only be marked as **VERIFIED** when:
 [ COMPLETE ]    ──> Signed off and ready for Task 17 (Value Provenance).
 ```
 
-- **Current Status:** **`PLANNED`**
+- **Current Status:** **`COMPLETED / PRODUCTION-READY`**
 
 ---
 

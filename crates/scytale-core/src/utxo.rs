@@ -1,6 +1,6 @@
 use crate::error::UtxoError;
 use crate::transaction::Transaction;
-use scytale_primitives::{OutPoint, Quanta, TxOut};
+use scytale_primitives::{Hash256, OutPoint, Quanta, TxOut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -120,6 +120,11 @@ impl UtxoSet {
 
         let txid = tx.txid();
         for (index, output) in tx.outputs.iter().enumerate() {
+            // Consensus rule: OP_RETURN outputs (starting with 0x6a) are provably unspendable data commitments,
+            // and must NOT be added to the active UTXO set.
+            if output.locking_condition.first() == Some(&0x6a) {
+                continue;
+            }
             let outpoint = OutPoint::new(txid, index as u32);
             let entry = UtxoEntry::new(output.clone(), block_height, false);
             self.entries.insert(outpoint, entry);
@@ -137,7 +142,7 @@ impl UtxoSet {
         }
 
         for output in &tx.outputs {
-            if output.value == 0 {
+            if output.value == 0 && output.locking_condition.first() != Some(&0x6a) {
                 return Err(UtxoError::TxError(
                     crate::error::TransactionError::ZeroOutputValue,
                 ));
@@ -149,6 +154,9 @@ impl UtxoSet {
 
         let txid = tx.txid();
         for (index, output) in tx.outputs.iter().enumerate() {
+            if output.locking_condition.first() == Some(&0x6a) {
+                continue;
+            }
             let outpoint = OutPoint::new(txid, index as u32);
             let entry = UtxoEntry::new(output.clone(), block_height, true);
             self.entries.insert(outpoint, entry);
@@ -183,6 +191,59 @@ impl UtxoSet {
         *self = staging;
         Ok(total_fees)
     }
+
+    /// Computes the canonical Merkle root for the entire in-memory UTXO set.
+    /// Sorts outpoints strictly lexicographically by (txid ASC, index ASC).
+    pub fn compute_utxo_root(&self) -> Hash256 {
+        let mut sorted_entries: Vec<(&OutPoint, &UtxoEntry)> = self.entries.iter().collect();
+        sorted_entries.sort_by(|(a_op, _), (b_op, _)| {
+            a_op.txid
+                .cmp(&b_op.txid)
+                .then_with(|| a_op.index.cmp(&b_op.index))
+        });
+        let leaves: Vec<Hash256> = sorted_entries
+            .into_iter()
+            .map(|(op, entry)| compute_utxo_leaf(op, &entry.output))
+            .collect();
+        compute_utxo_merkle_root(leaves)
+    }
+}
+
+/// Computes the 32-byte BLAKE3 canonical leaf hash for an active UTXO entry:
+/// `BLAKE3("SCYTALE_UTXO_LEAF_V1" || txid (32B) || index (4B LE) || value (8B LE) || locking_condition)`
+pub fn compute_utxo_leaf(outpoint: &OutPoint, output: &TxOut) -> Hash256 {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"SCYTALE_UTXO_LEAF_V1");
+    hasher.update(outpoint.txid.as_bytes());
+    hasher.update(&outpoint.index.to_le_bytes());
+    hasher.update(&output.value.to_le_bytes());
+    hasher.update(&output.locking_condition);
+    Hash256::new(*hasher.finalize().as_bytes())
+}
+
+/// Computes the canonical balanced binary Merkle root from a list of UTXO leaf hashes.
+/// - If leaves is empty, returns `Hash256::ZERO`.
+/// - If odd number of leaves, duplicates the last leaf.
+/// - Merges pairs: `Parent = BLAKE3(Left || Right)`.
+pub fn compute_utxo_merkle_root(mut leaves: Vec<Hash256>) -> Hash256 {
+    if leaves.is_empty() {
+        return Hash256::ZERO;
+    }
+    while leaves.len() > 1 {
+        if leaves.len() % 2 == 1 {
+            let last = *leaves.last().unwrap();
+            leaves.push(last);
+        }
+        let mut next_level = Vec::with_capacity(leaves.len() / 2);
+        for chunk in leaves.chunks_exact(2) {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(chunk[0].as_bytes());
+            hasher.update(chunk[1].as_bytes());
+            next_level.push(Hash256::new(*hasher.finalize().as_bytes()));
+        }
+        leaves = next_level;
+    }
+    leaves[0]
 }
 
 #[cfg(test)]
@@ -392,5 +453,48 @@ mod tests {
         assert_eq!(set.get(&op).unwrap().block_height, 0);
         assert!(set.get(&op).unwrap().is_coinbase);
         assert_eq!(set.total_quanta().unwrap(), 1_000_000_000);
+    }
+
+    #[test]
+    fn test_empty_utxo_root_is_zero() {
+        let set = UtxoSet::new();
+        assert_eq!(set.compute_utxo_root(), Hash256::ZERO);
+    }
+
+    #[test]
+    fn test_single_utxo_root() {
+        let mut set = UtxoSet::new();
+        let op = OutPoint::new(Hash256::hash(b"tx"), 0);
+        let out = TxOut::new(500, vec![1, 2, 3]);
+        set.insert(op, UtxoEntry::new(out.clone(), 0, true));
+
+        let expected_leaf = compute_utxo_leaf(&op, &out);
+        assert_eq!(set.compute_utxo_root(), expected_leaf);
+    }
+
+    #[test]
+    fn test_utxo_root_deterministic_ordering() {
+        let mut set1 = UtxoSet::new();
+        let mut set2 = UtxoSet::new();
+
+        let op1 = OutPoint::new(Hash256::new([1u8; 32]), 0);
+        let op2 = OutPoint::new(Hash256::new([2u8; 32]), 1);
+        let op3 = OutPoint::new(Hash256::new([1u8; 32]), 1);
+
+        let out1 = TxOut::new(100, vec![1]);
+        let out2 = TxOut::new(200, vec![2]);
+        let out3 = TxOut::new(300, vec![3]);
+
+        // Insert in different order
+        set1.insert(op1, UtxoEntry::new(out1.clone(), 0, false));
+        set1.insert(op2, UtxoEntry::new(out2.clone(), 0, false));
+        set1.insert(op3, UtxoEntry::new(out3.clone(), 0, false));
+
+        set2.insert(op3, UtxoEntry::new(out3, 0, false));
+        set2.insert(op1, UtxoEntry::new(out1, 0, false));
+        set2.insert(op2, UtxoEntry::new(out2, 0, false));
+
+        assert_eq!(set1.compute_utxo_root(), set2.compute_utxo_root());
+        assert_ne!(set1.compute_utxo_root(), Hash256::ZERO);
     }
 }

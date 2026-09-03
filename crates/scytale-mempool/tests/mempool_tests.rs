@@ -64,7 +64,7 @@ fn test_admit_valid_transaction() {
     let entry = mempool.get(&admitted_txid).unwrap();
     assert_eq!(entry.fee, 1_000_000);
     assert_eq!(entry.size_bytes, 73);
-    assert_eq!(entry.fee_rate, 1_000_000 / 73);
+    assert_eq!(entry.fee_rate, (1_000_000 * 1000) / 73);
 }
 
 #[test]
@@ -231,7 +231,15 @@ fn test_block_inclusion_removes_transactions() {
     // Block confirming Tx A
     let coinbase = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![])]);
     let block = Block::new(
-        BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000060, 0x1f00ffff, 0),
+        BlockHeader::new(
+            1,
+            Hash256::ZERO,
+            Hash256::ZERO,
+            Hash256::ZERO,
+            1700000060,
+            0x1f00ffff,
+            0,
+        ),
         vec![coinbase, tx_a.clone()],
     );
 
@@ -277,7 +285,15 @@ fn test_block_inclusion_evicts_conflicting_pending_tx() {
 
     let coinbase = Transaction::new_coinbase(1, vec![TxOut::new(1_000_000_000, vec![])]);
     let block = Block::new(
-        BlockHeader::new(1, Hash256::ZERO, Hash256::ZERO, 1700000060, 0x1f00ffff, 0),
+        BlockHeader::new(
+            1,
+            Hash256::ZERO,
+            Hash256::ZERO,
+            Hash256::ZERO,
+            1700000060,
+            0x1f00ffff,
+            0,
+        ),
         vec![coinbase, conflicting_block_tx],
     );
 

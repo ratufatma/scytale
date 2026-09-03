@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scytale Block Explorer & Mempool Inspector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            scytale: {
+              50: '#f4f6f8',
+              500: '#00dc82',
+              900: '#0b0f17',
+              800: '#111827',
+              700: '#1f2937'
+            }
+          },
+          fontFamily: {
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f17; }
+    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #374151; }
+    .badge-copy:active { transform: scale(0.95); }
+  </style>
+</head>
+<body class="bg-[#0b0f17] text-gray-200 font-sans min-h-screen antialiased flex flex-col">
+
+  <!-- TOP NAVBAR -->
+  <header class="border-b border-gray-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-emerald-500 to-teal-300 flex items-center justify-center font-mono font-black text-gray-950 text-xl shadow-lg shadow-emerald-500/20">
+          S
+        </div>
+        <div>
+          <span class="font-bold text-lg tracking-wider text-white">SCYTALE</span>
+          <span class="text-[11px] ml-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-mono font-semibold">EXPLORER</span>
+        </div>
+      </div>
+
+      <!-- Node Endpoint Config & Status -->
+      <div class="flex items-center gap-3 text-xs font-mono">
+        <div class="flex items-center bg-gray-900/90 border border-gray-800 rounded-lg px-3 py-1.5 shadow-inner">
+          <span class="text-gray-500 mr-2 select-none">API:</span>
+          <input id="nodeUrl" type="text" value="http://127.0.0.1:8332" class="bg-transparent text-gray-200 focus:outline-none w-44" />
+        </div>
+        <div id="connBadge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80 transition-all">
+          <span id="connDot" class="w-2 h-2 rounded-full bg-rose-500"></span>
+          <span id="connText">OFFLINE</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+    <!-- UNIVERSAL SEARCH BAR -->
+    <div class="relative">
+      <div class="relative flex items-center">
+        <input id="searchInput" type="text"
+          placeholder="Cari Height (#23), Block Hash (0x...), TxID, atau Alamat Bech32 (scy1...)..."
+          class="w-full bg-[#111827] border border-gray-800 rounded-xl px-4 py-3.5 pl-11 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500 font-mono shadow-lg transition"
+          onkeydown="if(event.key==='Enter') handleSearch()" />
+        <svg class="w-5 h-5 absolute left-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        </svg>
+        <button onclick="handleSearch()" class="absolute right-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
+          Cari
+        </button>
+      </div>
+    </div>
+
+    <!-- METRICS OVERVIEW CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
+        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Height</div>
+        <div id="metricHeight" class="text-2xl font-black font-mono text-white mt-1">--</div>
+        <div class="text-xs text-gray-500 mt-1">Blok Kanonikal Terkonfirmasi</div>
+      </div>
+
+      <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
+        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Tip Hash</div>
+        <div id="metricTip" class="text-xs font-mono text-emerald-400 mt-2 truncate select-all cursor-pointer hover:underline" onclick="copyText(this.title)" title="--">--</div>
+        <div class="text-xs text-gray-500 mt-1">Puncak Rantai Terberat</div>
+      </div>
+
+      <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
+        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mempool Transactions</div>
+        <div class="flex items-baseline gap-2 mt-1">
+          <span id="metricMempool" class="text-2xl font-black font-mono text-white">0</span>
+          <span id="metricMempoolBytes" class="text-xs font-mono text-gray-400">0 B</span>
+        </div>
+        <div class="text-xs text-gray-500 mt-1">Antrean Prioritas Pending</div>
+      </div>
+
+      <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
+        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mining Engine</div>
+        <div id="metricMining" class="flex items-center gap-2 mt-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
+          <span class="font-mono text-xs text-gray-400 font-bold">STANDBY</span>
+        </div>
+        <div class="text-xs text-gray-500 mt-1">Proof-of-Work Autonomous</div>
+      </div>
+    </div>
+
+    <!-- TABS NAVIGATION -->
+    <div class="flex border-b border-gray-800 text-sm font-medium gap-6">
+      <button onclick="switchTab('blocks')" id="tabBtn-blocks" class="pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition">
+        Recent Blocks
+      </button>
+      <button onclick="switchTab('mempool')" id="tabBtn-mempool" class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
+        <span>Mempool & Fee Market</span>
+        <span id="mempoolTabBadge" class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
+      </button>
+      <button onclick="switchTab('passbook')" id="tabBtn-passbook" class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+        Passbook Inspector
+      </button>
+    </div>
+
+    <!-- VIEW 1: RECENT BLOCKS -->
+    <div id="view-blocks" class="space-y-4">
+      <div class="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden shadow">
+        <div class="px-4 py-3 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
+          <h3 class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider">Daftar Blok Terakhir</h3>
+          <button onclick="fetchRecentBlocks()" class="text-xs text-emerald-400 hover:text-emerald-300 font-mono">Segarkan</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-gray-900/80 text-gray-400 uppercase border-b border-gray-800">
+              <tr>
+                <th class="px-4 py-3">Height</th>
+                <th class="px-4 py-3">Block Hash</th>
+                <th class="px-4 py-3 text-center">Txs</th>
+                <th class="px-4 py-3">Total (SCY)</th>
+                <th class="px-4 py-3">Nonce</th>
+                <th class="px-4 py-3">Timestamp</th>
+                <th class="px-4 py-3 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="blocksTableBody" class="divide-y divide-gray-800/60 text-gray-300">
+              <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Memuat blok dari node...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: MEMPOOL & FEE MARKET INSPECTOR -->
+    <div id="view-mempool" class="hidden space-y-5">
+      <!-- Mempool Gauges & Fee Market Summary -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Slots Capacity -->
+        <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
+          <div class="flex justify-between items-center text-xs text-gray-400 font-mono">
+            <span class="font-semibold">TX SLOTS</span>
+            <span id="mempoolSlotsText" class="text-white font-bold">0 / 5,000</span>
+          </div>
+          <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
+            <div id="mempoolSlotsBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
+            <span id="mempoolSlotsPercent">0.0% Terpakai</span>
+            <span>Max: 5,000 txs</span>
+          </div>
+        </div>
+
+        <!-- Memory Capacity -->
+        <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
+          <div class="flex justify-between items-center text-xs text-gray-400 font-mono">
+            <span class="font-semibold">MEMPOOL MEMORY</span>
+            <span id="mempoolMemoryText" class="text-white font-bold">0 KB / 5,000 KB</span>
+          </div>
+          <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
+            <div id="mempoolMemoryBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
+            <span id="mempoolMemoryPercent">0.0% Terpakai</span>
+            <span>Max: 5.0 MB</span>
+          </div>
+        </div>
+
+        <!-- Fee Market Summary -->
+        <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
+          <div class="text-xs text-gray-400 font-mono uppercase font-semibold">Total Pending Fees</div>
+          <div id="mempoolTotalFees" class="text-lg font-bold font-mono text-emerald-400 mt-1">0.00000000 SCY</div>
+          <div id="mempoolTotalFeesQuanta" class="text-[11px] text-gray-500 font-mono">0 quanta</div>
+        </div>
+
+        <!-- Min Relay Fee Floor -->
+        <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
+          <div class="text-xs text-gray-400 font-mono uppercase font-semibold">Min Relay Floor</div>
+          <div class="text-lg font-bold font-mono text-teal-300 mt-1">1.00 q/B</div>
+          <div class="text-[11px] text-gray-500 font-mono">1,000 milli-quanta/byte</div>
+        </div>
+      </div>
+
+      <!-- Priority Queue Table -->
+      <div class="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden shadow">
+        <div class="px-4 py-3 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
+          <h3 class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Antrean Transaksi Prioritas (Block-Space Auction)
+          </h3>
+          <span id="mempoolTableCountBadge" class="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-400">0 transaksi</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead class="bg-gray-900/80 text-gray-400 uppercase border-b border-gray-800">
+              <tr>
+                <th class="px-4 py-2.5">#Rank</th>
+                <th class="px-4 py-2.5">Transaction ID</th>
+                <th class="px-4 py-2.5 text-right">Size</th>
+                <th class="px-4 py-2.5 text-right">Fee (quanta)</th>
+                <th class="px-4 py-2.5 text-right">Density (q/B)</th>
+                <th class="px-4 py-2.5 text-center">Status Prioritas</th>
+                <th class="px-4 py-2.5 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="mempoolTableBody" class="divide-y divide-gray-800/60 text-gray-300">
+              <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang menunggu.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 3: PASSBOOK INSPECTOR -->
+    <div id="view-passbook" class="hidden space-y-4">
+      <div class="bg-[#111827] border border-gray-800 rounded-xl p-5 shadow">
+        <div class="max-w-xl flex items-center gap-2 mb-4">
+          <input id="passbookLockInput" type="text" placeholder="Masukkan Alamat Bech32 (scy1...) atau Hex Locking Script"
+            class="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-gray-200 focus:outline-none focus:border-emerald-500"
+            onkeydown="if(event.key==='Enter') inspectPassbook()" />
+          <button onclick="inspectPassbook()" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
+            Periksa Rekening
+          </button>
+        </div>
+
+        <div id="passbookResult" class="hidden space-y-4 font-mono">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
+            <div>
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Identitas / Kunci Rekening:</span>
+              <div id="pbLock" class="text-emerald-400 font-bold break-all flex items-center gap-1.5">
+                <span id="pbLockText">--</span>
+                <button onclick="copyText(document.getElementById('pbLockText').textContent)" class="text-gray-400 hover:text-white" title="Salin">📋</button>
+              </div>
+            </div>
+            <div>
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Confirmed Balance:</span>
+              <div id="pbBalance" class="text-white text-base font-black">0.00000000 SCY</div>
+              <div id="pbPending" class="text-gray-400 text-[11px] mt-0.5">Pending Delta: +0.00000000 SCY</div>
+            </div>
+          </div>
+
+          <div class="overflow-hidden border border-gray-800 rounded-xl">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-gray-900 text-gray-400 uppercase border-b border-gray-800">
+                <tr>
+                  <th class="px-4 py-2.5">#Entry</th>
+                  <th class="px-4 py-2.5">Tipe Mutasi</th>
+                  <th class="px-4 py-2.5">Jumlah</th>
+                  <th class="px-4 py-2.5">Status</th>
+                  <th class="px-4 py-2.5 text-center">Konfirmasi</th>
+                </tr>
+              </thead>
+              <tbody id="passbookTableBody" class="divide-y divide-gray-800 text-gray-300 font-mono"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- DETAIL MODAL -->
+  <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-[#111827] border border-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/70">
+        <h2 id="modalTitle" class="font-mono font-bold text-sm text-white">Inspeksi Objek</h2>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-white text-xl px-2">&times;</button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-4 font-mono text-xs">
+        <!-- Rendered Interactive Object View -->
+        <div id="modalRendered" class="space-y-4"></div>
+        
+        <!-- Toggle Raw JSON -->
+        <div class="pt-2 border-t border-gray-800/80">
+          <button onclick="toggleRawJson()" id="rawJsonBtn" class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
+            <span>▶ Tampilkan JSON Mentah</span>
+          </button>
+          <pre id="modalContent" class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800/80 text-emerald-400 overflow-x-auto select-all max-h-80"></pre>
+        </div>
+      </div>
+      <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+        <button onclick="closeModal()" class="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-emerald-950 text-emerald-300 border border-emerald-800 px-4 py-2.5 rounded-lg text-xs font-mono shadow-2xl hidden transition-all duration-300">
+    Tersalin ke clipboard!
+  </div>
+
+  <!-- JAVASCRIPT CONTROLLER LOGIC -->
+  <script>
+    let activeTab = 'blocks';
+    let lastMempoolData = null;
+
+    function getBaseUrl() {
+      return document.getElementById('nodeUrl').value.replace(/\/+$/, '');
+    }
+
+    // Format Quanta (1 SCY = 100,000,000 quanta)
+    function formatQuanta(quanta) {
+      const q = Number(quanta) || 0;
+      const scy = (q / 100000000).toFixed(8);
+      return `${scy} SCY (${q.toLocaleString()} quanta)`;
+    }
+
+    function formatScyOnly(quanta) {
+      const q = Number(quanta) || 0;
+      return `${(q / 100000000).toFixed(8)} SCY`;
+    }
+
+    // Truncate address / hash with middle ellipsis
+    function truncateMiddle(str, startChars = 8, endChars = 6) {
+      if (!str || str.length <= startChars + endChars) return str;
+      return `${str.slice(0, startChars)}...${str.slice(-endChars)}`;
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Tersalin: ' + truncateMiddle(text, 10, 6));
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg || 'Tersalin ke clipboard!';
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2200);
+    }
+
+    // Polling Status, Mempool, & Blocks
+    async function pollNode() {
+      const baseUrl = getBaseUrl();
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/status`);
+        if (!res.ok) throw new Error('Bad response');
+        const status = await res.json();
+
+        // Update Connection UI
+        document.getElementById('connBadge').className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/60 text-emerald-400 border border-emerald-800/80';
+        document.getElementById('connDot').className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        document.getElementById('connText').textContent = 'ONLINE';
+
+        // Update Overview Cards
+        document.getElementById('metricHeight').textContent = `#${status.canonical_height}`;
+        document.getElementById('metricTip').textContent = status.canonical_tip;
+        document.getElementById('metricTip').title = status.canonical_tip;
+        document.getElementById('metricMempool').textContent = status.mempool_tx_count;
+        document.getElementById('mempoolTabBadge').textContent = status.mempool_tx_count;
+
+        const miningBadge = document.getElementById('metricMining');
+        if (status.mining_active) {
+          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span><span class="font-mono text-xs text-emerald-400 font-bold">MINING...</span>`;
+        } else {
+          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span><span class="font-mono text-xs text-gray-400 font-bold">STANDBY</span>`;
+        }
+
+        // Fetch Mempool Telemetry
+        fetchMempoolTelemetry();
+
+        // Fetch Recent Blocks if in blocks tab
+        if (activeTab === 'blocks') {
+          fetchRecentBlocks();
+        }
+      } catch (err) {
+        document.getElementById('connBadge').className = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80';
+        document.getElementById('connDot').className = 'w-2 h-2 rounded-full bg-rose-500';
+        document.getElementById('connText').textContent = 'OFFLINE';
+      }
+    }
+
+    async function fetchMempoolTelemetry() {
+      const baseUrl = getBaseUrl();
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/mempool`);
+        if (!res.ok) return;
+        const mp = await res.json();
+        lastMempoolData = mp;
+
+        // Metric Card Bytes
+        const kb = (mp.total_bytes / 1024).toFixed(1);
+        document.getElementById('metricMempoolBytes').textContent = `${kb} KB`;
+
+        // Slots Gauge
+        const maxSlots = mp.max_count || 5000;
+        const slotsPercent = Math.min(100, (mp.count / maxSlots) * 100);
+        document.getElementById('mempoolSlotsText').textContent = `${mp.count.toLocaleString()} / ${maxSlots.toLocaleString()}`;
+        document.getElementById('mempoolSlotsPercent').textContent = `${slotsPercent.toFixed(1)}% Terpakai`;
+        const slotsBar = document.getElementById('mempoolSlotsBar');
+        slotsBar.style.width = `${slotsPercent}%`;
+        slotsBar.className = `h-2.5 rounded-full transition-all duration-500 ${
+          slotsPercent >= 90 ? 'bg-rose-500' : slotsPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+        }`;
+
+        // Memory Gauge
+        const maxBytes = mp.max_bytes || 5000000;
+        const memPercent = Math.min(100, (mp.total_bytes / maxBytes) * 100);
+        const memKb = Math.round(mp.total_bytes / 1024);
+        const maxMemKb = Math.round(maxBytes / 1024);
+        document.getElementById('mempoolMemoryText').textContent = `${memKb.toLocaleString()} KB / ${maxMemKb.toLocaleString()} KB`;
+        document.getElementById('mempoolMemoryPercent').textContent = `${memPercent.toFixed(1)}% Terpakai`;
+        const memBar = document.getElementById('mempoolMemoryBar');
+        memBar.style.width = `${memPercent}%`;
+        memBar.className = `h-2.5 rounded-full transition-all duration-500 ${
+          memPercent >= 90 ? 'bg-rose-500' : memPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+        }`;
+
+        // Fees
+        document.getElementById('mempoolTotalFees').textContent = formatScyOnly(mp.total_fees_quanta);
+        document.getElementById('mempoolTotalFeesQuanta').textContent = `${(mp.total_fees_quanta || 0).toLocaleString()} quanta`;
+        document.getElementById('mempoolTableCountBadge').textContent = `${mp.count} transaksi`;
+
+        // Table Render
+        const tbody = document.getElementById('mempoolTableBody');
+        const txs = mp.transactions || [];
+        if (txs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang menunggu.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = txs.map((tx, idx) => {
+          const density = ((tx.fee_rate_milli || (tx.fee_rate * 1000) || 1000) / 1000).toFixed(2);
+          const isEvictionRisk = (slotsPercent >= 90 || memPercent >= 90) && idx >= txs.length - 2;
+          const statusBadge = isEvictionRisk
+            ? `<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800">Eviction Risk</span>`
+            : `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">High Priority</span>`;
+
+          const rankColor = idx === 0 ? 'text-amber-400 font-black' : idx === 1 ? 'text-gray-300 font-bold' : idx === 2 ? 'text-amber-600 font-bold' : 'text-gray-400';
+
+          return `
+            <tr class="hover:bg-gray-900/50 transition">
+              <td class="px-4 py-3 ${rankColor}">#${idx + 1}</td>
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectTx('${tx.txid}')" title="${tx.txid}">${truncateMiddle(tx.txid, 10, 8)}</span>
+                  <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin TxID">📋</button>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-right text-gray-300">${tx.size_bytes.toLocaleString()} B</td>
+              <td class="px-4 py-3 text-right font-bold text-emerald-400">${tx.fee_quanta.toLocaleString()} q</td>
+              <td class="px-4 py-3 text-right text-teal-300 font-bold">${density} q/B</td>
+              <td class="px-4 py-3 text-center">${statusBadge}</td>
+              <td class="px-4 py-3 text-right">
+                <button onclick="inspectTx('${tx.txid}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">Inspeksi</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error('Error fetching mempool:', e);
+      }
+    }
+
+    async function fetchRecentBlocks() {
+      const baseUrl = getBaseUrl();
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/blocks?limit=10`);
+        if (!res.ok) return;
+        const blocks = await res.json();
+
+        const tbody = document.getElementById('blocksTableBody');
+        if (!blocks || blocks.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Belum ada blok yang tercatat.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = blocks.map(b => `
+          <tr class="hover:bg-gray-900/50 transition">
+            <td class="px-4 py-3 text-emerald-400 font-black">#${b.height}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectBlock('${b.hash}')" title="${b.hash}">${truncateMiddle(b.hash, 10, 8)}</span>
+                <button onclick="copyText('${b.hash}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin Hash">📋</button>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-center font-bold">${b.tx_count || (b.transactions ? b.transactions.length : 1)}</td>
+            <td class="px-4 py-3 text-emerald-300 font-bold">${b.total_scy ? b.total_scy + ' SCY' : formatScyOnly(b.total_quanta || 0)}</td>
+            <td class="px-4 py-3 text-gray-400">${b.nonce ? '0x' + b.nonce.toString(16) : '0x0'}</td>
+            <td class="px-4 py-3 text-gray-400">${new Date(b.timestamp * 1000).toLocaleTimeString()}</td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="inspectBlock('${b.hash}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">Rincian</button>
+            </td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        console.error('Error fetching blocks:', e);
+      }
+    }
+
+    async function inspectBlock(identifier) {
+      const baseUrl = getBaseUrl();
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/blocks/${identifier}`);
+        if (!res.ok) throw new Error('Blok tidak ditemukan');
+        const block = await res.json();
+
+        // Render formatted block view
+        let html = `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
+            <div><span class="text-gray-500">Height:</span> <span class="font-bold text-emerald-400">#${block.height}</span></div>
+            <div><span class="text-gray-500">Timestamp:</span> <span class="text-gray-300">${new Date(block.timestamp * 1000).toLocaleString()}</span></div>
+            <div class="col-span-1 sm:col-span-2">
+              <span class="text-gray-500">Block Hash:</span>
+              <div class="flex items-center gap-1.5 font-bold text-white break-all mt-0.5">
+                <span>${block.hash}</span>
+                <button onclick="copyText('${block.hash}')" class="text-gray-400 hover:text-white" title="Salin">📋</button>
+              </div>
+            </div>
+            <div class="col-span-1 sm:col-span-2">
+              <span class="text-gray-500">Previous Hash:</span>
+              <div class="font-bold text-gray-400 break-all mt-0.5">${block.previous_block_hash}</div>
+            </div>
+            <div><span class="text-gray-500">Nonce:</span> <span class="text-gray-300">0x${block.nonce.toString(16)}</span></div>
+            <div><span class="text-gray-500">Transactions:</span> <span class="font-bold text-white">${block.transactions ? block.transactions.length : block.tx_count}</span></div>
+          </div>
+
+          <div class="space-y-3 mt-4">
+            <h4 class="font-bold text-xs uppercase tracking-wider text-gray-400">Daftar Transaksi</h4>
+        `;
+
+        if (block.transactions && block.transactions.length > 0) {
+          html += block.transactions.map((tx, tIdx) => renderTxCard(tx, tIdx)).join('');
+        } else {
+          html += '<p class="text-gray-500">Tidak ada detail transaksi.</p>';
+        }
+
+        html += '</div>';
+
+        openModal(`Rincian Blok #${block.height}`, block, html);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function inspectTx(txid) {
+      const baseUrl = getBaseUrl();
+      try {
+        const clean = txid.replace(/^0x/, '');
+        const res = await fetch(`${baseUrl}/api/v1/tx/${clean}`);
+        if (!res.ok) throw new Error('Transaksi tidak ditemukan');
+        const tx = await res.json();
+        const html = renderTxCard(tx, 0);
+        openModal(`Transaksi: ${truncateMiddle(tx.txid, 10, 8)}`, tx, html);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function renderTxCard(tx, idx) {
+      const isCoinbase = tx.is_coinbase;
+      const statusBadge = tx.status === 'Confirmed'
+        ? `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">Confirmed (Blok #${tx.block_height})</span>`
+        : `<span class="px-2 py-0.5 rounded text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800">Pending Mempool</span>`;
+
+      let html = `
+        <div class="bg-gray-900/80 border border-gray-800 rounded-xl p-4 space-y-3 font-mono">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-emerald-400">Tx #${idx + 1}</span>
+              <span class="text-white font-bold">${truncateMiddle(tx.txid, 12, 10)}</span>
+              <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-white badge-copy" title="Salin TxID">📋</button>
+              ${isCoinbase ? '<span class="px-2 py-0.5 rounded text-[10px] bg-yellow-950/80 text-yellow-400 border border-yellow-800 font-bold">COINBASE</span>' : ''}
+            </div>
+            <div>${statusBadge}</div>
+          </div>
+
+          <!-- Inputs and Outputs Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <!-- Inputs -->
+            <div class="space-y-1.5">
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">Masukan (Inputs - ${tx.inputs ? tx.inputs.length : 0}):</span>
+              ${(tx.inputs || []).map(inp => `
+                <div class="bg-gray-950 p-2 rounded-lg border border-gray-800/80 text-[11px] break-all">
+                  ${isCoinbase ? '<span class="text-yellow-400">Mining Subsidy & Consensus Genesis</span>' : truncateMiddle(inp.previous_output, 16, 8)}
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- Outputs -->
+            <div class="space-y-1.5">
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">Keluaran (Outputs - ${tx.outputs ? tx.outputs.length : 0}):</span>
+              ${(tx.outputs || []).map(out => {
+                const isP2pkh = out.script_type === 'p2pkh';
+                const isOpReturn = out.script_type === 'op_return';
+                
+                let badge = '';
+                let dest = '';
+                if (isP2pkh && out.address) {
+                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">P2PKH</span>`;
+                  dest = `
+                    <div class="flex items-center justify-between gap-1.5 mt-1">
+                      <span class="text-emerald-400 font-bold cursor-pointer hover:underline" onclick="searchAddress('${out.address}')" title="Klik untuk lihat Passbook">${truncateMiddle(out.address, 10, 8)}</span>
+                      <button onclick="copyText('${out.address}')" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
+                    </div>
+                  `;
+                } else if (isOpReturn) {
+                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-950 text-purple-300 border border-purple-800 font-bold">DATA / OP_RETURN</span>`;
+                  dest = `
+                    <div class="text-[11px] text-purple-200 mt-1 bg-purple-950/40 p-1.5 rounded border border-purple-900/50 break-all">
+                      Payload: "${out.op_return_payload || ''}"
+                    </div>
+                  `;
+                } else {
+                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-gray-800 text-gray-400 font-bold">CUSTOM</span>`;
+                  dest = `<div class="text-[11px] text-gray-400 mt-1 truncate">${out.locking_script_hex || out.locking_script || ''}</div>`;
+                }
+
+                return `
+                  <div class="bg-gray-950 p-2.5 rounded-lg border border-gray-800/80 text-[11px]">
+                    <div class="flex items-center justify-between">
+                      ${badge}
+                      <span class="font-bold text-white">${out.value_scy ? out.value_scy + ' SCY' : formatScyOnly(out.value_quanta || 0)}</span>
+                    </div>
+                    ${dest}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+      return html;
+    }
+
+    function searchAddress(addr) {
+      closeModal();
+      switchTab('passbook');
+      document.getElementById('passbookLockInput').value = addr;
+      inspectPassbook(addr);
+    }
+
+    async function inspectPassbook(customLock) {
+      const baseUrl = getBaseUrl();
+      const lock = customLock || document.getElementById('passbookLockInput').value.trim();
+      if (!lock) return;
+
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/passbook/${lock}`);
+        if (!res.ok) throw new Error('Gagal mengambil data Passbook');
+        const data = await res.json();
+
+        document.getElementById('passbookResult').classList.remove('hidden');
+        document.getElementById('pbLockText').textContent = lock;
+        document.getElementById('pbBalance').textContent = formatQuanta(data.confirmed_balance_quanta || data.confirmed_balance || 0);
+        document.getElementById('pbPending').textContent = `Pending Delta: ${data.pending_balance_quanta >= 0 ? '+' : ''}${formatScyOnly(data.pending_balance_quanta || 0)}`;
+
+        const tbody = document.getElementById('passbookTableBody');
+        const entries = data.entries || [];
+        if (entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Belum ada mutasi tercatat untuk rekening ini.</td></tr>';
+        } else {
+          tbody.innerHTML = entries.map((e, idx) => `
+            <tr class="hover:bg-gray-900/50 transition">
+              <td class="px-4 py-2.5 text-gray-400">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
+              <td class="px-4 py-2.5 font-bold text-emerald-400">${e.entry_type || 'Transfer'}</td>
+              <td class="px-4 py-2.5 font-bold text-white">${formatQuanta(e.amount_quanta || e.amount || 0)}</td>
+              <td class="px-4 py-2.5 text-gray-400">${e.status || 'Confirmed'}</td>
+              <td class="px-4 py-2.5 text-center text-gray-400">${e.confirmations !== undefined ? e.confirmations : 1}</td>
+            </tr>
+          `).join('');
+        }
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function handleSearch() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (!query) return;
+
+      const baseUrl = getBaseUrl();
+
+      // Kasus 1: Alamat Bech32 Scytale (dimulai dengan scy1...)
+      if (query.toLowerCase().startsWith('scy1')) {
+        switchTab('passbook');
+        document.getElementById('passbookLockInput').value = query;
+        inspectPassbook(query);
+        return;
+      }
+
+      // Kasus 2: Height Numerik (misal: "0", "23")
+      if (/^\d+$/.test(query)) {
+        inspectBlock(query);
+        return;
+      }
+
+      // Kasus 3: Hash 32-byte / 64 karakter hex
+      const cleanHex = query.replace(/^0x/, '');
+      if (cleanHex.length === 64) {
+        // Coba cek blok terlebih dahulu
+        const resBlock = await fetch(`${baseUrl}/api/v1/blocks/${cleanHex}`);
+        if (resBlock.ok) {
+          inspectBlock(cleanHex);
+          return;
+        }
+        // Jika bukan blok, coba cek transaksi
+        const resTx = await fetch(`${baseUrl}/api/v1/tx/${cleanHex}`);
+        if (resTx.ok) {
+          inspectTx(cleanHex);
+          return;
+        }
+      }
+
+      // Kasus 4: Fallback ke Passbook Locking Script
+      switchTab('passbook');
+      document.getElementById('passbookLockInput').value = query;
+      inspectPassbook(query);
+    }
+
+    function switchTab(tab) {
+      activeTab = tab;
+      ['blocks', 'mempool', 'passbook'].forEach(t => {
+        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (t === tab) {
+          btn.className = 'pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition flex items-center gap-2';
+        } else {
+          btn.className = 'pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2';
+        }
+      });
+      if (tab === 'blocks') fetchRecentBlocks();
+      if (tab === 'mempool') fetchMempoolTelemetry();
+    }
+
+    function openModal(title, rawData, renderedHtml) {
+      document.getElementById('modalTitle').textContent = title;
+      document.getElementById('modalContent').textContent = JSON.stringify(rawData, null, 2);
+      document.getElementById('modalRendered').innerHTML = renderedHtml || '';
+      document.getElementById('modalContent').classList.add('hidden');
+      document.getElementById('rawJsonBtn').textContent = '▶ Tampilkan JSON Mentah';
+      document.getElementById('detailModal').classList.remove('hidden');
+    }
+
+    function toggleRawJson() {
+      const content = document.getElementById('modalContent');
+      const btn = document.getElementById('rawJsonBtn');
+      if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        btn.textContent = '▼ Sembunyikan JSON Mentah';
+      } else {
+        content.classList.add('hidden');
+        btn.textContent = '▶ Tampilkan JSON Mentah';
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    // Polling Loop (2 detik)
+    pollNode();
+    setInterval(pollNode, 2000);
+  </script>
+</body>
+</html>

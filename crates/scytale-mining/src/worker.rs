@@ -1,11 +1,15 @@
 use crate::error::MiningError;
 use scytale_consensus::{calculate_block_reward, verify_pow, ChainTree, Target};
-use scytale_core::{Block, BlockHeader, Hash256, Transaction, TxOut, UtxoSet};
+use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut, UtxoSet};
 use scytale_mempool::Mempool;
+use std::collections::HashSet;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
+
+/// Maximum canonical payload byte size for transactions in a block (excluding header).
+pub const MAX_BLOCK_PAYLOAD_SIZE: usize = 2_000_000;
 
 /// Candidate block template holding all data needed for a PoW nonce search.
 #[derive(Debug, Clone)]
@@ -18,6 +22,8 @@ pub struct BlockTemplate {
     pub compact_target: u32,
     /// Transactions to include (coinbase at index 0)
     pub transactions: Vec<Transaction>,
+    /// Prospective active UTXO Merkle root after block transactions
+    pub utxo_root: Hash256,
     /// Timestamp to embed in the header (Unix seconds)
     pub timestamp: u64,
 }
@@ -35,6 +41,7 @@ impl BlockTemplate {
             1,
             self.previous_block_hash,
             tx_commitment,
+            self.utxo_root,
             self.timestamp,
             self.compact_target,
             nonce,
@@ -77,21 +84,29 @@ pub fn build_template(
     let height = tip_node.height + 1;
     let subsidy = calculate_block_reward(height);
 
-    // Select mempool transactions sorted by fee-rate (highest first)
-    let mempool_entries = mempool.get_entries_sorted_by_fee_rate();
+    // Select mempool transactions sorted by fee-rate (highest first) up to block payload capacity
+    let (candidate_txs, _) = mempool.select_transactions_for_block(MAX_BLOCK_PAYLOAD_SIZE);
     let mut selected_txs: Vec<Transaction> = Vec::new();
     let mut total_fees: u64 = 0;
+    let mut spent_outputs: HashSet<OutPoint> = HashSet::new();
 
-    for entry in &mempool_entries {
-        // Validate input resolution against current canonical UTXO set
-        let all_inputs_valid = entry
-            .transaction
-            .inputs
-            .iter()
-            .all(|input| utxos.contains(&input.previous_output));
+    for tx in candidate_txs {
+        let all_inputs_valid = tx.inputs.iter().all(|input| {
+            !spent_outputs.contains(&input.previous_output)
+                && (utxos.contains(&input.previous_output)
+                    || selected_txs.iter().any(|stx| {
+                        stx.txid() == input.previous_output.txid
+                            && (input.previous_output.index as usize) < stx.outputs.len()
+                    }))
+        });
         if all_inputs_valid {
-            total_fees = total_fees.saturating_add(entry.fee);
-            selected_txs.push(entry.transaction.clone());
+            for input in &tx.inputs {
+                spent_outputs.insert(input.previous_output);
+            }
+            if let Some(entry) = mempool.get(&tx.txid()) {
+                total_fees = total_fees.saturating_add(entry.fee);
+            }
+            selected_txs.push(tx);
         }
     }
 
@@ -108,11 +123,33 @@ pub fn build_template(
     let mut transactions = vec![coinbase];
     transactions.extend(selected_txs);
 
+    // Simulate applying transactions and coinbase to calculate prospective utxo_root
+    let mut prospective_utxos = utxos.clone();
+    for tx in &transactions {
+        if !tx.is_coinbase() {
+            for input in &tx.inputs {
+                prospective_utxos.remove(&input.previous_output);
+            }
+        }
+        let txid = tx.txid();
+        for (idx, output) in tx.outputs.iter().enumerate() {
+            if output.locking_condition.first() != Some(&0x6a) {
+                let op = OutPoint::new(txid, idx as u32);
+                prospective_utxos.insert(
+                    op,
+                    scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
+                );
+            }
+        }
+    }
+    let utxo_root = prospective_utxos.compute_utxo_root();
+
     Ok(BlockTemplate {
         previous_block_hash: tip_hash,
         height,
         compact_target,
         transactions,
+        utxo_root,
         timestamp,
     })
 }

@@ -34,6 +34,7 @@ fn wait_for_height(node: &Node, target: u64, timeout_ms: u64) -> bool {
 }
 
 fn build_extending_block(
+    node: &Node,
     prev: scytale_core::Hash256,
     height: u64,
     payout: &[u8],
@@ -45,11 +46,17 @@ fn build_extending_block(
         vec![TxOut::new(calculate_block_reward(height), payout.to_vec())],
     );
     let commitment = Hash256::hash(coinbase.txid().as_bytes());
+    let mut staging = node.query_utxo_set();
+    staging.insert(
+        scytale_core::OutPoint::new(coinbase.txid(), 0),
+        scytale_core::UtxoEntry::new(coinbase.outputs[0].clone(), height, true),
+    );
+    let utxo_root = staging.compute_utxo_root();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let header = BlockHeader::new(1, prev, commitment, now, EASY_TARGET, 0);
+    let header = BlockHeader::new(1, prev, commitment, utxo_root, now, EASY_TARGET, 0);
     Block::new(header, vec![coinbase])
 }
 
@@ -229,7 +236,7 @@ fn test_incoming_block_cancels_mining_template() {
     for _ in 0..5000 {
         let tip = node.canonical_tip();
         let height = node.canonical_height();
-        let ext = build_extending_block(tip, height + 1, &payout);
+        let ext = build_extending_block(&node, tip, height + 1, &payout);
         if node.submit_external_block(ext.clone()).unwrap() {
             injected_hash = Some(ext.header.hash());
             injected_height = Some(height + 1);
