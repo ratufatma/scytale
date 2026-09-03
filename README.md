@@ -1,11 +1,12 @@
 # Scytale
 
-**Scytale** is a modular, pure-Rust, headless blockchain engine designed with:
+**Scytale** is a modular, high-performance Layer-1 blockchain engine designed with:
 - **Redb** for fast, embedded, ACID-compliant key-value storage.
-- **UTXO Model** for transparent and concurrent transaction verification.
-- **Proof-of-Work (PoW)** consensus with dynamic difficulty adjustment and smooth emission schedule.
-- **Mempool** with prioritized fee-market validation.
-- **Modular Architecture** partitioned across dedicated crates.
+- **Deterministic UTXO Model** with authenticated state commitment (`utxo_root` in 120-Byte BlockHeader).
+- **Proof-of-Work (PoW)** consensus powered by CPU-friendly BLAKE3 hashing.
+- **Deterministic Zero-Float Fee Market** with integer-only arithmetic.
+- **Go P2P Wire Network** with binary chunked Fast Sync streaming (`getsnap` / `snapshot`).
+- **Autonomous DNS Seeder** daemon for dynamic cold-start peer bootstrapping.
 
 ---
 
@@ -15,14 +16,35 @@
 scytale/
 ├── Cargo.toml                        # Workspace Manifest
 ├── README.md                         # Project Overview
+├── Dockerfile                        # Multi-stage production container build
+├── docker-compose.yml                # Cluster topology (Mining, Relay, Seeder, Coldstart)
 ├── crates/
-│   ├── scytale-core/                 # Primitives & Cryptography
-│   ├── scytale-storage/              # Redb Storage Engine
-│   ├── scytale-consensus/            # PoW, Emission, & Validation
-│   ├── scytale-mempool/              # Transaction Pool & Fee Market
-│   └── scytale-network/              # P2P Layer (Stub)
-└── apps/
-    └── scytale-node/                 # CLI & Node Daemon
+│   ├── scytale-primitives/           # Core cryptographic types, BlockHash, & Bech32 encoding
+│   ├── scytale-core/                 # Blocks, 120B Header, Transactions, UTXOs & Merkle trees
+│   ├── scytale-script/               # Forth-like stack execution engine & opcodes
+│   ├── scytale-storage/              # ACID redb engine, UTXO table, snapshots & indexers
+│   ├── scytale-consensus/            # PoW validation, BLAKE3 target, emissions & reorg rules
+│   ├── scytale-mempool/              # Transaction mempool & priority fee market
+│   ├── scytale-mining/               # CPU miner worker, template builder & coinbase generation
+│   └── scytale-bridge/               # Zero-copy binary IPC bridge between Rust and Go
+├── apps/
+│   ├── scytale-node/                 # Full node daemon, HTTP RPC gateway & supervisor
+│   └── scytale-cli/                  # Wallet management, keygen, balance & miner operator CLI
+├── network/                          # High-performance Go P2P subsystem
+│   ├── cmd/
+│   │   ├── scytale-p2p/              # P2P wire daemon subprocess
+│   │   └── scytale-seeder/           # Autonomous DNS seeder daemon
+│   └── internal/
+│       ├── bridge/                   # Unix domain socket IPC framing
+│       ├── gossip/                   # Transaction and block gossip relay
+│       ├── peer/                     # Peer state machine & dynamic DNS seed resolver
+│       ├── seeder/                   # Authoritative DNS server (:53) & health crawler
+│       ├── sync/                     # Block sync state machine & out-of-order snapshot assembler
+│       └── wire/                     # Binary frame codec & checksum verification
+├── web/
+│   └── explorer/                     # Embedded live block explorer and RPC dashboard
+├── scripts/                          # Automated cluster verification & chaos test suites
+└── docs/                             # Consolidated architecture & technical specifications
 ```
 
 ---
@@ -30,13 +52,19 @@ scytale/
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Rust 1.75+ (2021 edition)
+- **Rust**: 1.75+ (2021 edition)
+- **Go**: 1.22+ (for P2P networking & DNS seeder daemon)
+- **Docker & Docker Compose**: (optional, for multi-node cluster verification)
 
 ### Build & Check
 ```bash
+# Build & check all Rust workspace crates
 cargo check --workspace
 cargo build --workspace
 cargo test --workspace
+
+# Build & test Go P2P network subsystem
+cd network && go test -v -race ./... && cd ..
 ```
 
 ### Run Node
