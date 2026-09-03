@@ -1,0 +1,13 @@
+[package]
+name = "scytale-vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+scytale-sdk = { path = "../scytale-sdk", features = ["std"] }
+wasmi = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }

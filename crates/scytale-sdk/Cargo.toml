@@ -1,0 +1,12 @@
+[package]
+name = "scytale-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+bincode = { workspace = true }
+
+[features]
+default = []
+std = ["serde/std"]
