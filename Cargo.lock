@@ -800,7 +800,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scytale-bridge"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "scytale-core",
  "serde",
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-cli"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "clap",
@@ -833,7 +833,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-consensus"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "scytale-core",
  "scytale-primitives",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-core"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "bech32",
  "blake3",
@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-mempool"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "scytale-core",
  "scytale-primitives",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-mining"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "scytale-consensus",
  "scytale-core",
@@ -877,7 +877,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-node"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "axum",
  "blake3",
@@ -904,7 +904,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-primitives"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "serde",
@@ -913,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-script"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "ed25519-dalek",
@@ -922,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "scytale-storage"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "redb",
  "scytale-core",

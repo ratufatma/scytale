@@ -15,6 +15,7 @@ COPY network/go.mod network/go.sum* ./
 RUN go mod download
 COPY network/ ./
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/bin/scytale-p2p ./cmd/scytale-p2p
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /app/bin/scytale-seeder ./cmd/scytale-seeder
 
 # --- STAGE 3: Minimal Production Runtime Image ---
 FROM ubuntu:24.04
@@ -25,6 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iptables \
     iproute2 \
     procps \
+    dnsutils \
     tini && \
     rm -rf /var/lib/apt/lists/*
 
@@ -32,6 +34,7 @@ WORKDIR /app
 COPY target/release/scytale-node /usr/local/bin/scytale-node
 COPY target/release/scytale-cli /usr/local/bin/scytale-cli
 COPY target/release/scytale-p2p /usr/local/bin/scytale-p2p
+COPY target/release/scytale-seeder /usr/local/bin/scytale-seeder
 
 # Default runtime and state directories
 RUN mkdir -p /data /run/scytale /root/.scytale

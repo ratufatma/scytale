@@ -26,6 +26,8 @@ pub struct P2pSupervisor {
     shutdown_sender: broadcast::Sender<()>,
     child_process: Option<Child>,
     fast_sync: bool,
+    dns_seeds: Vec<String>,
+    no_dns_seeds: bool,
 }
 
 impl P2pSupervisor {
@@ -46,12 +48,20 @@ impl P2pSupervisor {
             shutdown_sender,
             child_process: None,
             fast_sync: false,
+            dns_seeds: Vec::new(),
+            no_dns_seeds: false,
         }
     }
 
     /// Configures fast sync state download mode for the supervised daemon.
     pub fn set_fast_sync(&mut self, fast_sync: bool) {
         self.fast_sync = fast_sync;
+    }
+
+    /// Configures DNS seed domains and bypass flag.
+    pub fn set_dns_seeds(&mut self, dns_seeds: Vec<String>, no_dns_seeds: bool) {
+        self.dns_seeds = dns_seeds;
+        self.no_dns_seeds = no_dns_seeds;
     }
 
     /// Resolves or compiles the `scytale-p2p` Go executable.
@@ -146,6 +156,12 @@ impl P2pSupervisor {
                 }
                 for peer in &self.peers {
                     cmd.arg("--peer").arg(peer);
+                }
+                if self.no_dns_seeds {
+                    cmd.arg("--no-dns-seeds");
+                }
+                for seed in &self.dns_seeds {
+                    cmd.arg("--dns-seed").arg(seed);
                 }
 
                 cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());

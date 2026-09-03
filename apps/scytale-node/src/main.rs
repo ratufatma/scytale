@@ -67,6 +67,14 @@ enum Commands {
         /// Enable UTXO snapshot fast sync mode
         #[arg(long, default_value_t = false)]
         fast_sync: bool,
+
+        /// DNS seed domain(s) to query for peer discovery (can be repeated)
+        #[arg(long = "dns-seed", action = clap::ArgAction::Append)]
+        dns_seeds: Vec<String>,
+
+        /// Disable DNS seed resolution for P2P network discovery
+        #[arg(long, default_value_t = false)]
+        no_dns_seeds: bool,
     },
     /// Inspect blockchain status
     Status,
@@ -96,6 +104,8 @@ async fn main() {
             http_bind,
             no_http,
             fast_sync,
+            dns_seeds,
+            no_dns_seeds,
         }) => {
             let diff_target = target.as_deref().and_then(|t| {
                 if let Some(hex) = t.strip_prefix("0x") {
@@ -161,7 +171,7 @@ async fn main() {
                     });
 
                     // Launch P2P Supervisor if not disabled
-                    let p2p_handle = if !no_p2p && (p2p_bind.is_some() || !peers.is_empty()) {
+                    let p2p_handle = if !no_p2p && (p2p_bind.is_some() || !peers.is_empty() || !dns_seeds.is_empty()) {
                         let bridge_sock = node.config().data_dir.join("p2p_bridge.sock");
                         let mut p2p_supervisor = P2pSupervisor::new(
                             bridge_sock,
@@ -172,6 +182,7 @@ async fn main() {
                             shutdown_tx.clone(),
                         );
                         p2p_supervisor.set_fast_sync(*fast_sync);
+                        p2p_supervisor.set_dns_seeds(dns_seeds.clone(), *no_dns_seeds);
                         Some(tokio::spawn(async move {
                             if let Err(e) = p2p_supervisor.run().await {
                                 tracing::error!("P2P supervisor error: {e}");

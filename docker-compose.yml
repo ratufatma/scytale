@@ -116,6 +116,61 @@ services:
       - "0x217fffff"
       - "--fast-sync"
 
+  seeder:
+    image: scytale:latest
+    container_name: scytale-seeder
+    hostname: seeder
+    profiles:
+      - seeder
+      - coldstart
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.5
+    ports:
+      - "1053:53/udp"
+      - "1053:53/tcp"
+    command:
+      - "scytale-seeder"
+      - "--domain=seed.scytale.org"
+      - "--nameserver=ns1.seed.scytale.org"
+      - "--listen=:53"
+      - "--p2p-port=9001"
+      - "--seeds=172.28.0.10:9001,172.28.0.20:9002"
+      - "--data-file=/data/seeder_nodes.json"
+      - "--workers=4"
+      - "--probe-interval=10s"
+
+  node-coldstart:
+    image: scytale:latest
+    container_name: scytale-node-coldstart
+    hostname: node-coldstart
+    profiles:
+      - coldstart
+    dns:
+      - 172.28.0.5
+    networks:
+      scytale-net:
+        ipv4_address: 172.28.0.50
+    ports:
+      - "9005:9005"
+      - "8336:8336"
+    depends_on:
+      - seeder
+      - node-1
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--p2p-bind"
+      - "0.0.0.0:9005"
+      - "--http-bind"
+      - "0.0.0.0:8336"
+      - "--target"
+      - "0x217fffff"
+
 networks:
   scytale-net:
     name: scytale-net
