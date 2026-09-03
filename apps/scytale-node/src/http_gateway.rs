@@ -39,6 +39,21 @@ async fn serve_explorer() -> Html<String> {
     Html(EXPLORER_HTML.to_string())
 }
 
+/// Embedded static SVG favicon and branding asset.
+const FAVICON_SVG: &str = include_str!("../../../web/explorer/favicon.svg");
+
+async fn serve_favicon_svg() -> impl axum::response::IntoResponse {
+    let content = if let Ok(c) = std::fs::read_to_string("web/explorer/favicon.svg") {
+        c
+    } else if let Ok(c) = std::fs::read_to_string("/web/explorer/favicon.svg") {
+        c
+    } else {
+        FAVICON_SVG.to_string()
+    };
+
+    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], content)
+}
+
 /// Response payload for `GET /api/v1/status`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StatusResponse {
@@ -650,6 +665,10 @@ pub fn router(node: Arc<Node>) -> Router {
     Router::new()
         .route("/", get(serve_explorer))
         .route("/index.html", get(serve_explorer))
+        .route("/favicon.svg", get(serve_favicon_svg))
+        .route("/gemini-svg.svg", get(serve_favicon_svg))
+        .route("/logo.svg", get(serve_favicon_svg))
+        .route("/favicon.ico", get(serve_favicon_svg))
         .route("/health", get(health_check))
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/status", get(get_status))

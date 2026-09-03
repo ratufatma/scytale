@@ -182,6 +182,9 @@ impl Node {
         // Replay blocks into a fresh chain tree, rebuilding the canonical UTXO set.
         let mut tree = scytale_consensus::ChainTree::new(path_rev[0].clone());
         let mut utxo_set = UtxoSet::new();
+        utxo_set
+            .apply_coinbase(&path_rev[0].transactions[0], 0)
+            .map_err(|e| NodeError::InconsistentState(format!("genesis utxo: {e}")))?;
         for block in &path_rev[1..] {
             tree.process_block(block.clone(), &mut utxo_set)?;
         }

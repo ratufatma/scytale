@@ -355,6 +355,7 @@ async fn test_embedded_explorer_endpoint() {
 
     // Test GET /index.html
     let response_index = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri("/index.html")
@@ -364,6 +365,36 @@ async fn test_embedded_explorer_endpoint() {
         .await
         .unwrap();
     assert_eq!(response_index.status(), StatusCode::OK);
+
+    // Test GET /favicon.svg
+    let response_favicon = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/favicon.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_favicon.status(), StatusCode::OK);
+    assert_eq!(
+        response_favicon.headers().get("content-type").unwrap(),
+        "image/svg+xml; charset=utf-8"
+    );
+
+    // Test GET /gemini-svg.svg
+    let response_gemini = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/gemini-svg.svg")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_gemini.status(), StatusCode::OK);
 }
 
 #[tokio::test]
