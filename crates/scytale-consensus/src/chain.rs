@@ -234,22 +234,26 @@ impl ChainTree {
         connected_nodes.push(new_node.clone());
 
         // 6. Atomic State Transition Simulation
-        // Path from Genesis to common_ancestor:
-        let genesis_to_ancestor = self.get_path_from_genesis(&common_ancestor)?;
-
-        let mut staged_utxo = UtxoSet::new();
-        for node in &genesis_to_ancestor {
-            staged_utxo
-                .apply_block_transactions(
-                    &node.block.transactions[0],
-                    &node.block.transactions[1..],
-                    node.height,
-                )
-                .map_err(|e| ChainError::ReorgFailed {
-                    hash: node.hash,
-                    error: e.to_string(),
-                })?;
-        }
+        let mut staged_utxo = if common_ancestor == old_tip {
+            utxo_set.clone()
+        } else {
+            // Replay from Genesis to common_ancestor on actual deep reorg
+            let genesis_to_ancestor = self.get_path_from_genesis(&common_ancestor)?;
+            let mut staged = UtxoSet::new();
+            for node in &genesis_to_ancestor {
+                staged
+                    .apply_block_transactions(
+                        &node.block.transactions[0],
+                        &node.block.transactions[1..],
+                        node.height,
+                    )
+                    .map_err(|e| ChainError::ReorgFailed {
+                        hash: node.hash,
+                        error: e.to_string(),
+                    })?;
+            }
+            staged
+        };
 
         // Apply all blocks in connected_nodes
         let mut connected_blocks = Vec::new();

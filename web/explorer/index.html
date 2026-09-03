@@ -54,7 +54,7 @@
       <div class="flex items-center gap-3 text-xs font-mono">
         <div class="flex items-center bg-gray-900/90 border border-gray-800 rounded-lg px-3 py-1.5 shadow-inner">
           <span class="text-gray-500 mr-2 select-none">API:</span>
-          <input id="nodeUrl" type="text" value="http://127.0.0.1:8332" class="bg-transparent text-gray-200 focus:outline-none w-44" />
+          <input id="nodeUrl" type="text" value="" placeholder="Origin / URL" class="bg-transparent text-gray-200 focus:outline-none w-44" />
         </div>
         <div id="connBadge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80 transition-all">
           <span id="connDot" class="w-2 h-2 rounded-full bg-rose-500"></span>
@@ -327,7 +327,15 @@
     let lastMempoolData = null;
 
     function getBaseUrl() {
-      return document.getElementById('nodeUrl').value.replace(/\/+$/, '');
+      const input = document.getElementById('nodeUrl');
+      const val = input ? input.value.trim() : '';
+      if (val) {
+        return val.replace(/\/+$/, '');
+      }
+      if (window.location && window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file:')) {
+        return window.location.origin.replace(/\/+$/, '');
+      }
+      return '';
     }
 
     // Format Quanta (1 SCY = 100,000,000 quanta)
@@ -779,6 +787,18 @@
     function closeModal() {
       document.getElementById('detailModal').classList.add('hidden');
     }
+
+    // Auto-detect dynamic API base URL from current host / origin
+    (function initNodeUrl() {
+      const input = document.getElementById('nodeUrl');
+      if (input && !input.value) {
+        if (window.location && window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file:')) {
+          input.value = window.location.origin;
+        } else {
+          input.value = 'http://127.0.0.1:8332';
+        }
+      }
+    })();
 
     // Polling Loop (2 detik)
     pollNode();
