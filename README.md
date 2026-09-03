@@ -74,6 +74,7 @@ cargo run -p scytale-node -- --help
 - [Testing Strategy & QA Framework](docs/TESTING-STRATEGY.md)
 - [Security & Threat Model](docs/SECURITY-THREAT-MODEL.md)
 - [Autonomous DNS Seeder & Cloudflare NS Delegation](docs/DNS-SEEDER-DEPLOYMENT-GUIDE.md)
+- [Consolidated Milestone Specification: Tasks 32–38](docs/TASKS_32_TO_38.md)
 
 
 
