@@ -73,6 +73,7 @@ cargo run -p scytale-node -- --help
 - [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
 - [Testing Strategy & QA Framework](docs/TESTING-STRATEGY.md)
 - [Security & Threat Model](docs/SECURITY-THREAT-MODEL.md)
+- [Autonomous DNS Seeder & Cloudflare NS Delegation](docs/DNS-SEEDER-DEPLOYMENT-GUIDE.md)
 
 
 
