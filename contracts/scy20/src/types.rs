@@ -19,6 +19,16 @@ pub struct Scy20Datum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScriptContext {
+    pub token_id: TokenId,
+    pub inputs: Vec<Scy20Datum>,
+    pub outputs: Vec<Scy20Datum>,
+    pub signers: Vec<Address>,
+    pub current_supply: u128,
+    pub metadata: Option<TokenMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Scy20Redeemer {
     Transfer,
     Mint { amount: u128 },

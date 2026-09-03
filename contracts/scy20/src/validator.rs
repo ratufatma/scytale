@@ -1,5 +1,5 @@
 use crate::error::Scy20Error;
-use crate::types::{Address, Scy20Datum, TokenId, TokenMetadata};
+use crate::types::{Address, Scy20Datum, Scy20Redeemer, ScriptContext, TokenId, TokenMetadata};
 
 /// Validasi state transition eUTXO untuk transfer token Scy-20
 pub fn validate_transfer(
@@ -120,6 +120,39 @@ pub fn validate_burn(
     Ok(())
 }
 
+/// Entrypoint validasi eksekusi kontrak Scy-20.
+pub fn validate_scy20_execution(
+    context: &ScriptContext,
+    redeemer: &Scy20Redeemer,
+) -> Result<(), Scy20Error> {
+    match redeemer {
+        Scy20Redeemer::Transfer => {
+            validate_transfer(&context.inputs, &context.outputs, &context.signers)
+        }
+        Scy20Redeemer::Mint { amount } => {
+            let metadata = context
+                .metadata
+                .as_ref()
+                .ok_or(Scy20Error::DeserializationFailed)?;
+            validate_mint(
+                &context.token_id,
+                &context.outputs,
+                *amount,
+                context.current_supply,
+                metadata,
+                &context.signers,
+            )
+        }
+        Scy20Redeemer::Burn { amount } => validate_burn(
+            &context.token_id,
+            &context.inputs,
+            &context.outputs,
+            *amount,
+            &context.signers,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,6 +175,22 @@ mod tests {
             symbol: "TST".to_owned(),
             decimals: 0,
             max_supply,
+        }
+    }
+
+    fn context(
+        inputs: Vec<Scy20Datum>,
+        outputs: Vec<Scy20Datum>,
+        signers: Vec<Address>,
+        metadata: Option<TokenMetadata>,
+    ) -> ScriptContext {
+        ScriptContext {
+            token_id: TOKEN_ID,
+            inputs,
+            outputs,
+            signers,
+            current_supply: 0,
+            metadata,
         }
     }
 
@@ -214,6 +263,39 @@ mod tests {
         assert_eq!(
             validate_burn(&TOKEN_ID, &inputs, &outputs, 40, &[OWNER]),
             Ok(())
+        );
+    }
+
+    #[test]
+    fn test_dispatcher_transfer_route() {
+        let execution_context = context(
+            vec![datum(TOKEN_ID, OWNER, 100)],
+            vec![datum(TOKEN_ID, [4; 32], 70), datum(TOKEN_ID, OWNER, 30)],
+            vec![OWNER],
+            None,
+        );
+
+        assert_eq!(
+            validate_scy20_execution(&execution_context, &Scy20Redeemer::Transfer),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_dispatcher_mint_missing_metadata() {
+        let execution_context = context(
+            Vec::new(),
+            vec![datum(TOKEN_ID, OWNER, 100)],
+            vec![OWNER],
+            None,
+        );
+
+        assert_eq!(
+            validate_scy20_execution(
+                &execution_context,
+                &Scy20Redeemer::Mint { amount: 100 },
+            ),
+            Err(Scy20Error::DeserializationFailed)
         );
     }
 }
