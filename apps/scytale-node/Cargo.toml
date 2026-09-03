@@ -18,6 +18,9 @@ scytale-mempool = { path = "../../crates/scytale-mempool" }
 scytale-mining = { path = "../../crates/scytale-mining" }
 scytale-bridge = { path = "../../crates/scytale-bridge" }
 scytale-script = { path = "../../crates/scytale-script" }
+scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
+scytale-vm = { path = "../../crates/scytale-vm" }
+bincode = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -33,3 +36,5 @@ tempfile = "3.10"
 tower = { version = "0.5", features = ["util"] }
 blake3 = { workspace = true }
 ed25519-dalek = { version = "2.1", default-features = false }
+bincode = { workspace = true }
+serde = { workspace = true }

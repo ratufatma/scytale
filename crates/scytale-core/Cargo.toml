@@ -16,6 +16,10 @@ blake3 = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 bech32 = "0.11"
+bincode = { workspace = true }
+hex = { workspace = true }
+scytale-sdk = { path = "../scytale-sdk", features = ["std"] }
+scytale-vm = { path = "../scytale-vm" }
 
 [dev-dependencies]
 serde_json = { workspace = true }

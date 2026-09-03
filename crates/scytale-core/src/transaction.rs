@@ -72,6 +72,26 @@ impl Transaction {
         Hash256::hash(&bytes)
     }
 
+    /// Computes the raw 32-byte BLAKE3 transaction hash digest.
+    pub fn compute_hash(&self) -> [u8; 32] {
+        *self.txid().as_bytes()
+    }
+
+    /// Helper constructor to instantiate a transaction from eUTXO input/output models.
+    pub fn from_eutxo(
+        version: u32,
+        inputs: &[TxInput],
+        outputs: &[TxOutput],
+        lock_time: u64,
+    ) -> Self {
+        Self {
+            version,
+            inputs: inputs.iter().map(|i| i.to_tx_in()).collect(),
+            outputs: outputs.iter().map(|o| o.to_tx_out()).collect(),
+            lock_time,
+        }
+    }
+
     /// Computes the 32-byte BLAKE3 sighash digest for an input being spent.
     ///
     /// Binds:
@@ -205,6 +225,135 @@ pub fn calculate_fee(
     total_input_quanta
         .checked_sub(total_output_quanta)
         .ok_or(TransactionError::ArithmeticOverflow)
+}
+
+/// Represents the spending condition of an eUTXO output.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum OutputLock {
+    PublicKey([u8; 32]),
+    Script {
+        script_hash: [u8; 32],
+        datum: Vec<u8>,
+    },
+}
+
+impl OutputLock {
+    pub const MAGIC_PREFIX: [u8; 4] = [0x53, 0x43, 0x59, 0x01]; // "SCY\x01"
+
+    pub fn to_locking_condition(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(64);
+        bytes.extend_from_slice(&Self::MAGIC_PREFIX);
+        if let Ok(data) = bincode::serialize(self) {
+            bytes.extend_from_slice(&data);
+        }
+        bytes
+    }
+
+    pub fn from_locking_condition(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() >= 4 && bytes[..4] == Self::MAGIC_PREFIX {
+            bincode::deserialize(&bytes[4..]).ok()
+        } else {
+            bincode::deserialize(bytes).ok()
+        }
+    }
+}
+
+/// High-level eUTXO output specification.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TxOutput {
+    pub value: u64,
+    pub lock: OutputLock,
+}
+
+impl TxOutput {
+    pub fn new(value: u64, lock: OutputLock) -> Self {
+        Self { value, lock }
+    }
+
+    pub fn to_tx_out(&self) -> TxOut {
+        TxOut::new(self.value, self.lock.to_locking_condition())
+    }
+
+    pub fn from_tx_out(tx_out: &TxOut) -> Option<Self> {
+        let lock = OutputLock::from_locking_condition(&tx_out.locking_condition)?;
+        Some(Self {
+            value: tx_out.value,
+            lock,
+        })
+    }
+}
+
+/// High-level eUTXO input specification with optional signature, redeemer, and wasm bytecode.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TxInput {
+    pub prev_tx_hash: [u8; 32],
+    pub output_index: u32,
+    /// Ed25519 signature bytes (64 bytes), stored as Vec<u8> for serde compatibility.
+    pub signature: Option<Vec<u8>>,
+    pub redeemer: Option<Vec<u8>>,
+    pub script_source: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EutxoWitness {
+    pub signature: Option<Vec<u8>>,
+    pub redeemer: Option<Vec<u8>>,
+    pub script_source: Option<Vec<u8>>,
+}
+
+impl TxInput {
+    pub const MAGIC_PREFIX: [u8; 4] = [0x53, 0x43, 0x59, 0x02]; // "SCY\x02"
+
+    pub fn new(
+        prev_tx_hash: [u8; 32],
+        output_index: u32,
+        signature: Option<Vec<u8>>,
+        redeemer: Option<Vec<u8>>,
+        script_source: Option<Vec<u8>>,
+    ) -> Self {
+        Self {
+            prev_tx_hash,
+            output_index,
+            signature,
+            redeemer,
+            script_source,
+        }
+    }
+
+    pub fn to_authorization(&self) -> Vec<u8> {
+        let witness = EutxoWitness {
+            signature: self.signature.clone(),
+            redeemer: self.redeemer.clone(),
+            script_source: self.script_source.clone(),
+        };
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&Self::MAGIC_PREFIX);
+        if let Ok(data) = bincode::serialize(&witness) {
+            bytes.extend_from_slice(&data);
+        }
+        bytes
+    }
+
+    pub fn from_tx_in(tx_in: &TxIn) -> Option<Self> {
+        let bytes = &tx_in.authorization;
+        let witness: EutxoWitness = if bytes.len() >= 4 && bytes[..4] == Self::MAGIC_PREFIX {
+            bincode::deserialize(&bytes[4..]).ok()?
+        } else {
+            bincode::deserialize(bytes).ok()?
+        };
+        Some(Self {
+            prev_tx_hash: *tx_in.previous_output.txid.as_bytes(),
+            output_index: tx_in.previous_output.index,
+            signature: witness.signature,
+            redeemer: witness.redeemer,
+            script_source: witness.script_source,
+        })
+    }
+
+    pub fn to_tx_in(&self) -> TxIn {
+        let prev_out = OutPoint::new(Hash256::new(self.prev_tx_hash), self.output_index);
+        TxIn::new(prev_out, self.to_authorization())
+    }
 }
 
 #[cfg(test)]

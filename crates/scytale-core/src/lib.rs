@@ -7,6 +7,7 @@ pub mod codec;
 pub mod error;
 pub mod transaction;
 pub mod utxo;
+pub mod vm_adapter;
 
 pub use address::{Address, AddressError};
 pub use authorization::{
@@ -20,5 +21,11 @@ pub use error::{
 pub use scytale_primitives::{
     Hash, Hash256, OutPoint, PrimitiveError, Quanta, TxOut, QUANTA_PER_SCY,
 };
-pub use transaction::{calculate_fee, Transaction, TxIn, TRANSACTION_VERSION_1};
+pub use transaction::{
+    calculate_fee, EutxoWitness, OutputLock, Transaction, TxIn, TxInput, TxOutput,
+    TRANSACTION_VERSION_1,
+};
 pub use utxo::{compute_utxo_leaf, compute_utxo_merkle_root, UtxoEntry, UtxoSet};
+pub use vm_adapter::{
+    create_tx_context, verify_transaction_eutxo, EutxoValidationError, MAX_BLOCK_GAS, MAX_TX_GAS,
+};

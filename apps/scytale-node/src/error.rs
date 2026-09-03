@@ -58,4 +58,6 @@ pub enum NodeError {
     InvalidScript(String),
     #[error("script evaluation failed: top stack item is false or stack empty")]
     ScriptEvaluationFailed,
+    #[error("eUTXO smart contract validation failed: {0}")]
+    EutxoValidation(#[from] scytale_core::EutxoValidationError),
 }

@@ -10,7 +10,7 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use scytale_core::{
     AuthorizationError, AuthorizationVerifier, Block, BlockHeader, Hash256, OutPoint, Transaction,
-    TxOut, UtxoSet,
+    TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
 use scytale_mining::{build_template, run_pow_search};
@@ -288,10 +288,28 @@ impl Node {
             // Verify non-coinbase transaction scripts against current UTXO set if extending canonical tip
             if block.header.previous_block_hash == chain.canonical_tip() {
                 let height = chain.canonical_height() + 1;
+                let block_time = block.header.timestamp;
                 let mut staging_utxos = utxos.clone();
+                let mut block_gas_consumed: u64 = 0;
                 for tx in &block.transactions {
                     if !tx.is_coinbase() {
                         Self::verify_transaction_scripts(tx, height, &staging_utxos)?;
+                        // eUTXO ScyVM validation
+                        let tx_gas = verify_transaction_eutxo(
+                            tx,
+                            block_time,
+                            &staging_utxos,
+                            MAX_TX_GAS,
+                        ).map_err(NodeError::EutxoValidation)?;
+                        block_gas_consumed = block_gas_consumed.saturating_add(tx_gas);
+                        if block_gas_consumed > MAX_BLOCK_GAS {
+                            return Err(NodeError::EutxoValidation(
+                                EutxoValidationError::BlockGasLimitExceeded {
+                                    consumed: block_gas_consumed,
+                                    limit: MAX_BLOCK_GAS,
+                                },
+                            ));
+                        }
                         for input in &tx.inputs {
                             staging_utxos.remove(&input.previous_output);
                         }
@@ -707,12 +725,15 @@ impl Node {
         let height = self.canonical_height();
         let utxos = self.shared.utxo_set.lock().unwrap();
         Self::verify_transaction_scripts(&tx, height, &utxos)?;
-        let mut mempool = self.shared.mempool.lock().unwrap();
-        let verifier = PermissiveVerifier;
+        // eUTXO ScyVM validation gate
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
             .unwrap_or(0);
+        verify_transaction_eutxo(&tx, now, &utxos, MAX_TX_GAS)
+            .map_err(NodeError::EutxoValidation)?;
+        let mut mempool = self.shared.mempool.lock().unwrap();
+        let verifier = PermissiveVerifier;
         let txid = mempool.admit_transaction(tx.clone(), &utxos, &verifier, now)?;
 
         if let Ok(bytes) = tx.to_canonical_bytes() {

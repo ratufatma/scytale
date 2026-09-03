@@ -908,9 +908,13 @@ name = "scytale-core"
 version = "0.3.0"
 dependencies = [
  "bech32",
+ "bincode",
  "blake3",
+ "hex",
  "scytale-primitives",
  "scytale-script",
+ "scytale-sdk",
+ "scytale-vm",
  "serde",
  "serde_json",
  "thiserror",
@@ -942,6 +946,7 @@ name = "scytale-node"
 version = "0.3.0"
 dependencies = [
  "axum",
+ "bincode",
  "blake3",
  "clap",
  "ed25519-dalek",
@@ -952,7 +957,9 @@ dependencies = [
  "scytale-mining",
  "scytale-primitives",
  "scytale-script",
+ "scytale-sdk",
  "scytale-storage",
+ "scytale-vm",
  "serde",
  "serde_json",
  "tempfile",
