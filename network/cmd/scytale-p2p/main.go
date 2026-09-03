@@ -42,6 +42,8 @@ type Daemon struct {
 	peersFile       string
 	maxOutbound     int
 	fastSync        bool
+	dnsSeeds        []string
+	noDNSSeeds      bool
 
 	bridge            *bridge.SocketConsensusBridge
 	filter            *gossip.Filter
@@ -65,10 +67,18 @@ func main() {
 		peersFile       = flag.String("peers-file", "peers.json", "Path to peers database JSON file")
 		maxOutbound     = flag.Int("max-outbound", 8, "Target maximum outbound connections")
 		fastSync        = flag.Bool("fast-sync", false, "Enable UTXO snapshot fast sync mode")
+		noDNSSeeds      = flag.Bool("no-dns-seeds", false, "Disable querying DNS seeders for peer discovery")
 	)
 	var peersFlag stringList
 	flag.Var(&peersFlag, "peer", "Initial peer address to dial (can be specified multiple times)")
+
+	var dnsSeedsFlag stringList
+	flag.Var(&dnsSeedsFlag, "dns-seed", "DNS seed domain to query on cold start (can be specified multiple times)")
 	flag.Parse()
+
+	if len(dnsSeedsFlag) == 0 {
+		dnsSeedsFlag = []string{"seed.scytale.org"}
+	}
 
 	if *bridgeSocket == "" {
 		log.Println("Initializing Scytale P2P Network Service...")
@@ -78,14 +88,16 @@ func main() {
 	}
 
 	d := &Daemon{
-		bridgeSocket:    *bridgeSocket,
-		p2pBind:         *p2pBind,
-		peers:           peersFlag,
-		networkID:       uint32(*networkID),
-		allowLocalPeers: *allowLocalPeers,
+		bridgeSocket:      *bridgeSocket,
+		p2pBind:           *p2pBind,
+		peers:             peersFlag,
+		networkID:         uint32(*networkID),
+		allowLocalPeers:   *allowLocalPeers,
 		peersFile:         *peersFile,
 		maxOutbound:       *maxOutbound,
 		fastSync:          *fastSync,
+		dnsSeeds:          dnsSeedsFlag,
+		noDNSSeeds:        *noDNSSeeds,
 		peerPool:          make(map[string]*peer.Peer),
 		snapshotAssembler: peer.NewSnapshotAssembler(),
 		triggerDial:       make(chan struct{}, 1),
@@ -114,6 +126,11 @@ func (d *Daemon) Run() error {
 	// Seed static peers from CLI into Address Book
 	for _, pAddr := range d.peers {
 		d.addrBook.AddAddress(pAddr, "cli-seed")
+	}
+
+	// Cold-start DNS seed discovery if AddrBook is empty and DNS seeds enabled
+	if !d.noDNSSeeds && len(d.dnsSeeds) > 0 && d.addrBook.Size() == 0 {
+		go d.queryDNSSeedsAsync()
 	}
 
 	log.Printf("[P2P] Consensus bridge established.")
@@ -149,15 +166,40 @@ func (d *Daemon) Run() error {
 	return nil
 }
 
+func (d *Daemon) queryDNSSeedsAsync() {
+	log.Printf("[P2P] Resolving DNS seeds: %s...", strings.Join(d.dnsSeeds, ", "))
+	resolved := peer.ResolveDNSSeeds(d.dnsSeeds, 9001, nil)
+	if len(resolved) == 0 {
+		log.Printf("[P2P] DNS seed resolution returned 0 addresses.")
+		return
+	}
+
+	added := d.addrBook.AddAddresses(resolved, "dns-seed")
+	log.Printf("[P2P] DNS seed discovery added %d new peers (out of %d resolved).", added, len(resolved))
+	if added > 0 {
+		select {
+		case d.triggerDial <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (d *Daemon) autoDialerLoop() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
+
+	dnsFallbackTicker := time.NewTicker(3 * time.Minute)
+	defer dnsFallbackTicker.Stop()
 
 	for {
 		select {
 		case <-d.shutdown:
 			return
 		case <-d.triggerDial:
+		case <-dnsFallbackTicker.C:
+			if !d.noDNSSeeds && len(d.dnsSeeds) > 0 && d.addrBook.Size() == 0 {
+				go d.queryDNSSeedsAsync()
+			}
 		case <-ticker.C:
 		}
 
