@@ -17,6 +17,10 @@ pub struct NodeConfig {
     pub shutdown_timeout_secs: u64,
     /// Genesis difficulty compact target baked into the chain head.
     pub genesis_difficulty_target: u32,
+    /// Optional outbound explorer API URL for indexing blocks.
+    pub explorer_url: Option<String>,
+    /// Optional Bearer authorization key for indexer requests.
+    pub indexer_key: Option<String>,
 }
 
 impl Default for NodeConfig {
@@ -28,6 +32,8 @@ impl Default for NodeConfig {
             miner_payout_script: vec![0x01, 0x02, 0x03],
             shutdown_timeout_secs: 10,
             genesis_difficulty_target: 0x1d00_ffff,
+            explorer_url: None,
+            indexer_key: None,
         }
     }
 }

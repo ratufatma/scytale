@@ -8,6 +8,7 @@
 
 use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
+use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_core::{
     AuthorizationError, AuthorizationVerifier, Block, BlockHeader, Hash256, OutPoint, Transaction,
     TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
@@ -50,6 +51,24 @@ impl AuthorizationVerifier for PermissiveVerifier {
     }
 }
 
+/// Persists a validated block to disk storage and, if configured, non-blockingly
+/// dispatches the block metadata to the external indexer.
+#[allow(clippy::result_large_err)]
+pub fn commit_block(
+    storage: &StorageEngine,
+    block: &Block,
+    height: u64,
+    cumulative_work: [u64; 4],
+    indexer_handle: Option<&IndexerHandle>,
+) -> Result<(), scytale_storage::StorageError> {
+    storage.commit_block(block, height, cumulative_work)?;
+    if let Some(indexer) = indexer_handle {
+        let payload = BlockPayload::from_block(block, height);
+        let _ = indexer.sender.try_send(payload);
+    }
+    Ok(())
+}
+
 /// A running node's shared, contemporaneously-mutated subsystem state.
 ///
 /// The mining worker and the main node thread access these locks concurrently;
@@ -70,6 +89,7 @@ pub struct Node {
     mining_cancel: Arc<AtomicBool>,
     mining_handle: Mutex<Option<JoinHandle<()>>>,
     peer_count: Arc<AtomicUsize>,
+    indexer: Option<Arc<IndexerHandle>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -110,7 +130,18 @@ impl Node {
             mining_handle: Mutex::new(None),
             peer_count: Arc::new(AtomicUsize::new(0)),
             config,
+            indexer: None,
         })
+    }
+
+    /// Returns a reference to the active indexer handle, if configured.
+    pub fn indexer(&self) -> Option<&IndexerHandle> {
+        self.indexer.as_deref()
+    }
+
+    /// Sets or replaces the active indexer handle.
+    pub fn set_indexer(&mut self, indexer: IndexerHandle) {
+        self.indexer = Some(Arc::new(indexer));
     }
 
     /// Runs the full deterministic startup sequence and returns in `Ready`/`Running` state.
@@ -143,7 +174,13 @@ impl Node {
             *chain_tree = scytale_consensus::ChainTree::new(genesis.clone());
             let tip_height = chain_tree.canonical_height();
             let work = chain_tree.canonical_work().0;
-            self.storage.commit_block(&genesis, tip_height, work)?;
+            commit_block(
+                &self.storage,
+                &genesis,
+                tip_height,
+                work,
+                self.indexer.as_deref(),
+            )?;
 
             let mut utxo_set = UtxoSet::new();
             utxo_set
@@ -217,9 +254,10 @@ impl Node {
         let shared = Arc::clone(&self.shared);
         let payout = self.config.miner_payout_script.clone();
         let initial_target = self.config.genesis_difficulty_target;
+        let indexer = self.indexer.clone();
 
         *handle_guard = Some(std::thread::spawn(move || {
-            mining_worker_loop(storage, shared, initial_target, payout, cancel);
+            mining_worker_loop(storage, shared, initial_target, payout, cancel, indexer);
         }));
         Ok(true)
     }
@@ -347,7 +385,13 @@ impl Node {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        self.storage.commit_block(&block, height, work)?;
+                        commit_block(
+                            &self.storage,
+                            &block,
+                            height,
+                            work,
+                            self.indexer.as_deref(),
+                        )?;
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -363,6 +407,12 @@ impl Node {
                             .collect::<Vec<_>>();
                         self.storage
                             .apply_reorganization(&reorg.disconnected_blocks, &connected_meta)?;
+                        if let Some(indexer) = self.indexer.as_deref() {
+                            for (b, h, _) in &connected_meta {
+                                let payload = BlockPayload::from_block(b, *h);
+                                let _ = indexer.sender.try_send(payload);
+                            }
+                        }
                         let mut mempool = self.shared.mempool.lock().unwrap();
                         let verifier = PermissiveVerifier;
                         let now = SystemTime::now()
@@ -853,6 +903,7 @@ fn mining_worker_loop(
     initial_target: u32,
     payout: Vec<u8>,
     cancel: Arc<AtomicBool>,
+    indexer: Option<Arc<IndexerHandle>>,
 ) {
     let mut compact_target = initial_target;
     loop {
@@ -919,7 +970,13 @@ fn mining_worker_loop(
                     let height = template.height;
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        let _ = storage.commit_block(&block, height, work);
+                        let _ = commit_block(
+                            &storage,
+                            &block,
+                            height,
+                            work,
+                            indexer.as_deref(),
+                        );
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -935,6 +992,12 @@ fn mining_worker_loop(
                             .collect::<Vec<_>>();
                         let _ = storage
                             .apply_reorganization(&reorg.disconnected_blocks, &connected_meta);
+                        if let Some(indexer_ref) = indexer.as_deref() {
+                            for (b, h, _) in &connected_meta {
+                                let payload = BlockPayload::from_block(b, *h);
+                                let _ = indexer_ref.sender.try_send(payload);
+                            }
+                        }
 
                         let verifier = PermissiveVerifier;
                         let mut mempool = shared.mempool.lock().unwrap();

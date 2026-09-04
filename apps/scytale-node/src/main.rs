@@ -22,8 +22,21 @@ struct Cli {
     /// Path to IPC Unix domain socket
     #[arg(long, default_value = DEFAULT_SOCKET_PATH)]
     socket: String,
+
+    /// Enable autonomous Proof-of-Work mining
+    #[arg(short, long, default_value_t = false)]
+    mine: bool,
+
+    /// Outbound Explorer URL for block indexer (e.g. http://127.0.0.1:8080)
+    #[arg(long)]
+    explorer_url: Option<String>,
+
+    /// Bearer API key for indexer authentication
+    #[arg(long)]
+    indexer_key: Option<String>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand, Debug)]
 enum Commands {
     /// Start the Scytale full node daemon
@@ -31,6 +44,14 @@ enum Commands {
         /// Enable autonomous Proof-of-Work mining
         #[arg(short, long, default_value_t = false)]
         mine: bool,
+
+        /// Outbound Explorer URL for block indexer (e.g. http://127.0.0.1:8080)
+        #[arg(long)]
+        explorer_url: Option<String>,
+
+        /// Bearer API key for indexer authentication
+        #[arg(long)]
+        indexer_key: Option<String>,
 
         /// TCP bind address for Go P2P daemon (e.g. 127.0.0.1:9001)
         #[arg(long)]
@@ -80,6 +101,23 @@ enum Commands {
     Status,
 }
 
+struct StartOptions {
+    mine: bool,
+    explorer_url: Option<String>,
+    indexer_key: Option<String>,
+    p2p_bind: Option<String>,
+    peers: Vec<String>,
+    p2p_bin: Option<std::path::PathBuf>,
+    target: Option<String>,
+    miner_payout: Option<String>,
+    no_p2p: bool,
+    http_bind: String,
+    no_http: bool,
+    fast_sync: bool,
+    dns_seeds: Vec<String>,
+    no_dns_seeds: bool,
+}
+
 #[allow(clippy::result_large_err)]
 #[tokio::main]
 async fn main() {
@@ -92,9 +130,11 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    match &cli.command {
+    let start_opts = match &cli.command {
         Some(Commands::Start {
             mine,
+            explorer_url,
+            indexer_key,
             p2p_bind,
             peers,
             p2p_bin,
@@ -106,149 +146,199 @@ async fn main() {
             fast_sync,
             dns_seeds,
             no_dns_seeds,
-        }) => {
-            let diff_target = target.as_deref().and_then(|t| {
-                if let Some(hex) = t.strip_prefix("0x") {
-                    u32::from_str_radix(hex, 16).ok()
-                } else {
-                    t.parse::<u32>().ok()
-                }
-            });
-
-            let miner_payout_script = miner_payout
-                .as_deref()
-                .and_then(|s| scytale_primitives::from_hex(s).ok())
-                .unwrap_or_else(|| vec![0x01, 0x02, 0x03]);
-
-            let config = NodeConfig {
-                data_dir: cli.data_dir.clone().into(),
-                mining_enabled: *mine,
-                miner_payout_script,
-                genesis_difficulty_target: diff_target.unwrap_or(0x1d00_ffff),
-                ..NodeConfig::default()
-            };
-            tracing::info!(
-                data_dir = %config.data_dir.display(),
-                mining = config.mining_enabled,
-                socket = %cli.socket,
-                p2p_bind = ?p2p_bind,
-                peers = ?peers,
-                http_bind = ?http_bind,
-                http_enabled = !no_http,
-                "starting scytale node daemon"
-            );
-            tracing::info!(
-                "protocol baseline: initial subsidy = {} quanta ({} SCY)",
-                INITIAL_REWARD,
-                INITIAL_REWARD / QUANTA_PER_SCY
-            );
-
-            let res = tokio::task::spawn_blocking(move || {
-                let mut node = Node::open(config)?;
-                node.start()?;
-                Ok::<Node, scytale_node::NodeError>(node)
-            })
-            .await;
-
-            match res {
-                Ok(Ok(node)) => {
-                    let node = Arc::new(node);
-                    tracing::info!(
-                        height = node.canonical_height(),
-                        tip = ?node.canonical_tip(),
-                        state = ?node.state(),
-                        "node is running; awaiting shutdown signal (Ctrl+C or IPC)"
-                    );
-
-                    let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
-                    let ipc_server =
-                        IpcServer::new(&cli.socket, Arc::clone(&node), shutdown_tx.clone());
-
-                    let ipc_handle = tokio::spawn(async move {
-                        if let Err(e) = ipc_server.run().await {
-                            tracing::error!("IPC server error: {e}");
-                        }
-                    });
-
-                    // Launch P2P Supervisor if not disabled
-                    let p2p_handle = if !no_p2p && (p2p_bind.is_some() || !peers.is_empty() || !dns_seeds.is_empty()) {
-                        let bridge_sock = node.config().data_dir.join("p2p_bridge.sock");
-                        let mut p2p_supervisor = P2pSupervisor::new(
-                            bridge_sock,
-                            p2p_bind.clone(),
-                            peers.clone(),
-                            p2p_bin.clone(),
-                            Arc::clone(&node),
-                            shutdown_tx.clone(),
-                        );
-                        p2p_supervisor.set_fast_sync(*fast_sync);
-                        p2p_supervisor.set_dns_seeds(dns_seeds.clone(), *no_dns_seeds);
-                        Some(tokio::spawn(async move {
-                            if let Err(e) = p2p_supervisor.run().await {
-                                tracing::error!("P2P supervisor error: {e}");
-                            }
-                        }))
-                    } else {
-                        None
-                    };
-
-                    // Launch HTTP Gateway if not disabled
-                    let http_handle = if !no_http {
-                        let node_http = Arc::clone(&node);
-                        let http_addr = http_bind.clone();
-                        let rx = shutdown_tx.subscribe();
-                        Some(tokio::spawn(async move {
-                            if let Err(e) =
-                                scytale_node::run_http_gateway(&http_addr, node_http, rx).await
-                            {
-                                tracing::error!("HTTP gateway error: {e}");
-                            }
-                        }))
-                    } else {
-                        None
-                    };
-
-                    tokio::select! {
-                        _ = shutdown_rx.recv() => {
-                            tracing::info!("IPC shutdown signal received");
-                        }
-                        ctrl_c_res = tokio::signal::ctrl_c() => {
-                            if let Err(e) = ctrl_c_res {
-                                tracing::error!("failed to listen for Ctrl+C: {e}");
-                            } else {
-                                tracing::info!("Ctrl+C signal received");
-                            }
-                            let _ = shutdown_tx.send(());
-                        }
-                    }
-
-                    tracing::info!("initiating node shutdown sequence");
-                    let node_clone = Arc::clone(&node);
-                    match tokio::task::spawn_blocking(move || node_clone.shutdown()).await {
-                        Ok(Ok(())) => tracing::info!("node shutdown completed cleanly"),
-                        Ok(Err(e)) => tracing::error!("error during shutdown: {e}"),
-                        Err(e) => tracing::error!("shutdown task failed to join: {e}"),
-                    }
-                    let _ = ipc_handle.await;
-                    if let Some(h) = p2p_handle {
-                        let _ = h.await;
-                    }
-                    if let Some(h) = http_handle {
-                        let _ = h.await;
-                    }
-                }
-                Ok(Err(e)) => tracing::error!("node failed to start: {e}"),
-                Err(e) => tracing::error!("node start task failed to join: {e}"),
-            }
-        }
+        }) => Some(StartOptions {
+            mine: *mine || cli.mine,
+            explorer_url: explorer_url.clone().or_else(|| cli.explorer_url.clone()),
+            indexer_key: indexer_key.clone().or_else(|| cli.indexer_key.clone()),
+            p2p_bind: p2p_bind.clone(),
+            peers: peers.clone(),
+            p2p_bin: p2p_bin.clone(),
+            target: target.clone(),
+            miner_payout: miner_payout.clone(),
+            no_p2p: *no_p2p,
+            http_bind: http_bind.clone(),
+            no_http: *no_http,
+            fast_sync: *fast_sync,
+            dns_seeds: dns_seeds.clone(),
+            no_dns_seeds: *no_dns_seeds,
+        }),
         Some(Commands::Status) => {
             println!(
                 "Scytale Node Status: Operational (data dir: {})",
                 cli.data_dir
             );
+            return;
         }
         None => {
-            println!("No subcommand specified. Run with `--help` for available commands.");
+            if cli.mine || cli.explorer_url.is_some() {
+                Some(StartOptions {
+                    mine: cli.mine,
+                    explorer_url: cli.explorer_url.clone(),
+                    indexer_key: cli.indexer_key.clone(),
+                    p2p_bind: None,
+                    peers: Vec::new(),
+                    p2p_bin: None,
+                    target: None,
+                    miner_payout: None,
+                    no_p2p: false,
+                    http_bind: scytale_node::DEFAULT_HTTP_BIND.to_string(),
+                    no_http: false,
+                    fast_sync: false,
+                    dns_seeds: Vec::new(),
+                    no_dns_seeds: false,
+                })
+            } else {
+                println!("No subcommand specified. Run with `--help` for available commands.");
+                return;
+            }
+        }
+    };
+
+    if let Some(opts) = start_opts {
+        let diff_target = opts.target.as_deref().and_then(|t| {
+            if let Some(hex) = t.strip_prefix("0x") {
+                u32::from_str_radix(hex, 16).ok()
+            } else {
+                t.parse::<u32>().ok()
+            }
+        });
+
+        let miner_payout_script = opts
+            .miner_payout
+            .as_deref()
+            .and_then(|s| scytale_primitives::from_hex(s).ok())
+            .unwrap_or_else(|| vec![0x01, 0x02, 0x03]);
+
+        let config = NodeConfig {
+            data_dir: cli.data_dir.clone().into(),
+            mining_enabled: opts.mine,
+            miner_payout_script,
+            genesis_difficulty_target: diff_target.unwrap_or(0x1d00_ffff),
+            explorer_url: opts.explorer_url.clone(),
+            indexer_key: opts.indexer_key.clone(),
+            ..NodeConfig::default()
+        };
+        tracing::info!(
+            data_dir = %config.data_dir.display(),
+            mining = config.mining_enabled,
+            socket = %cli.socket,
+            p2p_bind = ?opts.p2p_bind,
+            peers = ?opts.peers,
+            http_bind = %opts.http_bind,
+            http_enabled = !opts.no_http,
+            explorer_url = ?opts.explorer_url,
+            "starting scytale node daemon"
+        );
+        tracing::info!(
+            "protocol baseline: initial subsidy = {} quanta ({} SCY)",
+            INITIAL_REWARD,
+            INITIAL_REWARD / QUANTA_PER_SCY
+        );
+
+        // If explorer-url is present, initialize indexer and pass handle down into node state
+        let indexer_handle = opts.explorer_url.as_ref().map(|url| {
+            scytale_node::indexer::start_indexer(url.clone(), opts.indexer_key.clone())
+        });
+
+        let res = tokio::task::spawn_blocking(move || {
+            let mut node = Node::open(config)?;
+            if let Some(indexer) = indexer_handle {
+                node.set_indexer(indexer);
+            }
+            node.start()?;
+            Ok::<Node, scytale_node::NodeError>(node)
+        })
+        .await;
+
+        match res {
+            Ok(Ok(node)) => {
+                let node = Arc::new(node);
+                tracing::info!(
+                    height = node.canonical_height(),
+                    tip = ?node.canonical_tip(),
+                    state = ?node.state(),
+                    "node is running; awaiting shutdown signal (Ctrl+C or IPC)"
+                );
+
+                let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
+                let ipc_server =
+                    IpcServer::new(&cli.socket, Arc::clone(&node), shutdown_tx.clone());
+
+                let ipc_handle = tokio::spawn(async move {
+                    if let Err(e) = ipc_server.run().await {
+                        tracing::error!("IPC server error: {e}");
+                    }
+                });
+
+                // Launch P2P Supervisor if not disabled
+                let p2p_handle = if !opts.no_p2p && (opts.p2p_bind.is_some() || !opts.peers.is_empty() || !opts.dns_seeds.is_empty()) {
+                    let bridge_sock = node.config().data_dir.join("p2p_bridge.sock");
+                    let mut p2p_supervisor = P2pSupervisor::new(
+                        bridge_sock,
+                        opts.p2p_bind.clone(),
+                        opts.peers.clone(),
+                        opts.p2p_bin.clone(),
+                        Arc::clone(&node),
+                        shutdown_tx.clone(),
+                    );
+                    p2p_supervisor.set_fast_sync(opts.fast_sync);
+                    p2p_supervisor.set_dns_seeds(opts.dns_seeds.clone(), opts.no_dns_seeds);
+                    Some(tokio::spawn(async move {
+                        if let Err(e) = p2p_supervisor.run().await {
+                            tracing::error!("P2P supervisor error: {e}");
+                        }
+                    }))
+                } else {
+                    None
+                };
+
+                // Launch HTTP Gateway if not disabled
+                let http_handle = if !opts.no_http {
+                    let node_http = Arc::clone(&node);
+                    let http_addr = opts.http_bind.clone();
+                    let rx = shutdown_tx.subscribe();
+                    Some(tokio::spawn(async move {
+                        if let Err(e) =
+                            scytale_node::run_http_gateway(&http_addr, node_http, rx).await
+                        {
+                            tracing::error!("HTTP gateway error: {e}");
+                        }
+                    }))
+                } else {
+                    None
+                };
+
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        tracing::info!("IPC shutdown signal received");
+                    }
+                    ctrl_c_res = tokio::signal::ctrl_c() => {
+                        if let Err(e) = ctrl_c_res {
+                            tracing::error!("failed to listen for Ctrl+C: {e}");
+                        } else {
+                            tracing::info!("Ctrl+C signal received");
+                        }
+                        let _ = shutdown_tx.send(());
+                    }
+                }
+
+                tracing::info!("initiating node shutdown sequence");
+                let node_clone = Arc::clone(&node);
+                match tokio::task::spawn_blocking(move || node_clone.shutdown()).await {
+                    Ok(Ok(())) => tracing::info!("node shutdown completed cleanly"),
+                    Ok(Err(e)) => tracing::error!("error during shutdown: {e}"),
+                    Err(e) => tracing::error!("shutdown task failed to join: {e}"),
+                }
+                let _ = ipc_handle.await;
+                if let Some(h) = p2p_handle {
+                    let _ = h.await;
+                }
+                if let Some(h) = http_handle {
+                    let _ = h.await;
+                }
+            }
+            Ok(Err(e)) => tracing::error!("node failed to start: {e}"),
+            Err(e) => tracing::error!("node start task failed to join: {e}"),
         }
     }
 }

@@ -3,6 +3,7 @@
 pub mod config;
 pub mod error;
 pub mod http_gateway;
+pub mod indexer;
 pub mod ipc;
 pub mod node;
 pub mod p2p_supervisor;
@@ -11,8 +12,9 @@ pub mod passbook;
 pub use config::NodeConfig;
 pub use error::{NodeError, NodeState};
 pub use http_gateway::{run_http_gateway, DEFAULT_HTTP_BIND};
+pub use indexer::{start_indexer, BlockPayload, IndexerHandle};
 pub use ipc::{IpcServer, DEFAULT_SOCKET_PATH};
-pub use node::{Node, PermissiveVerifier};
+pub use node::{commit_block, Node, PermissiveVerifier};
 pub use p2p_supervisor::P2pSupervisor;
 pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookEntry, PassbookError, PassbookView,
