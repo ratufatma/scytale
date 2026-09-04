@@ -380,7 +380,7 @@
       if (val) {
         return val.replace(/\/+$/, '');
       }
-      return '/rpc';
+      return '';
     }
 
     // Format Quanta (1 SCY = 100,000,000 quanta)
@@ -594,8 +594,9 @@
               <span class="text-gray-500">Previous Hash:</span>
               <div class="font-bold text-gray-400 break-all mt-0.5">${block.previous_block_hash}</div>
             </div>
-            <div><span class="text-gray-500">Nonce:</span> <span class="text-gray-300">0x${block.nonce.toString(16)}</span></div>
+            <div><span class="text-gray-500">Nonce:</span> <span class="text-gray-300">${block.nonce ? '0x' + block.nonce.toString(16) : '0x0'}</span></div>
             <div><span class="text-gray-500">Transactions:</span> <span class="font-bold text-white">${block.transactions ? block.transactions.length : block.tx_count}</span></div>
+            ${block.miner ? `<div class="col-span-1 sm:col-span-2"><span class="text-gray-500">Miner / Coinbase:</span> <span class="font-bold text-emerald-300 break-all">${block.miner}</span></div>` : ''}
           </div>
 
           <div class="space-y-3 mt-4">
