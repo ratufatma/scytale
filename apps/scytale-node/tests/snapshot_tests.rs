@@ -71,7 +71,7 @@ fn test_export_and_apply_snapshot_roundtrip() {
     // Initialize node B (non-mining, clean at genesis)
     let mut node_b = Node::open(test_config(dir_b.path().to_path_buf(), false)).unwrap();
     node_b.start().unwrap();
-    assert_eq!(node_b.query_utxo_set().len(), 1); // 1 genesis coinbase UTXO
+    assert_eq!(node_b.query_utxo_set().len(), 3); // 3 genesis allocation UTXOs (Founder, Dev, Community)
 
     // Apply snapshot to Node B
     let applied_count = node_b

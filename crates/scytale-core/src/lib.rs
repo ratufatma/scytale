@@ -5,6 +5,7 @@ pub mod authorization;
 pub mod block;
 pub mod codec;
 pub mod error;
+pub mod genesis;
 pub mod transaction;
 pub mod utxo;
 pub mod vm_adapter;

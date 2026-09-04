@@ -95,8 +95,8 @@ fn test_node_state_transitions() {
 
 #[test]
 fn test_fresh_node_zero_balance_bootstrap() {
-    use scytale_consensus::calculate_block_reward;
     let dir = tempfile::TempDir::new().unwrap();
+
 
     // Fresh node, mining disabled: reaches Running. The only value present is the
     // defined genesis emission; no user or wallet account is credited — a freshly
@@ -104,7 +104,7 @@ fn test_fresh_node_zero_balance_bootstrap() {
     let mut node = Node::open(test_config(dir.path().join("db1"), false)).unwrap();
     node.start().unwrap();
     assert_eq!(node.state(), NodeState::Running);
-    let genesis_emission: u64 = calculate_block_reward(0);
+    let genesis_emission: u64 = scytale_core::genesis::TOTAL_GENESIS_QUANTA;
     assert_eq!(
         node.total_utxo_quanta(),
         genesis_emission,

@@ -231,10 +231,10 @@ impl Passbook {
                 .unwrap_or(0);
 
             if tx.is_coinbase() || height == 0 {
-                let category = if tx.is_coinbase() {
-                    ProvenanceCategory::Coinbase
-                } else {
+                let category = if height == 0 {
                     ProvenanceCategory::Genesis
+                } else {
+                    ProvenanceCategory::Coinbase
                 };
                 rev.push(ProvenanceStep {
                     txid: cur.txid,

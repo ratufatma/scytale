@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tempfile::tempdir;
 
 use scytale_bridge::{NodeRequest, NodeResponse};
+use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut};
 use scytale_node::{IpcServer, Node, NodeConfig};
 
 #[allow(dead_code)]
@@ -425,22 +426,27 @@ async fn test_ipc_request_response_roundtrip() {
         other => panic!("Unexpected response for GetStatus: {other:?}"),
     }
 
-    // 2. Query Passbook
+    // 2. Query Passbook (Founder Genesis Output)
+    let founder_lock = scytale_core::genesis::GENESIS_FOUNDER_LOCK_HEX;
     let resp = client::send_node_request(
         &sock_path,
         NodeRequest::GetPassbook {
-            locking_script_hex: "010203".into(),
+            locking_script_hex: founder_lock.into(),
         },
     )
     .await
     .unwrap();
     match resp {
         NodeResponse::Passbook(view) => {
-            assert_eq!(view.account_lock_hex, "010203");
-            assert_eq!(view.confirmed_balance_quanta, 1_000_000_000);
+            assert_eq!(view.account_lock_hex, founder_lock);
+            assert_eq!(
+                view.confirmed_balance_quanta,
+                scytale_core::genesis::GENESIS_FOUNDER_QUANTA
+            );
         }
         other => panic!("Unexpected response for GetPassbook: {other:?}"),
     }
+
 
     // 3. Toggle Mining On and Off
     let resp = client::send_node_request(&sock_path, NodeRequest::SetMining { enabled: true })
@@ -455,6 +461,21 @@ async fn test_ipc_request_response_roundtrip() {
         resp,
         NodeResponse::MiningToggled { active: false }
     ));
+
+    // Connect Block 1 to fund 010203 so SendTransaction has confirmed inputs
+    let genesis_tip = node.canonical_tip();
+    let subsidy = scytale_consensus::calculate_block_reward(1);
+    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy, vec![0x01, 0x02, 0x03])]);
+    let mut staging = node.query_utxo_set();
+    staging.insert(
+        OutPoint::new(cb1.txid(), 0),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy, vec![0x01, 0x02, 0x03]), 1, true),
+    );
+    let utxo_root = staging.compute_utxo_root();
+    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
+    let block1 = Block::new(header, vec![cb1]);
+    assert!(node.submit_external_block(block1).unwrap());
+    assert_eq!(node.canonical_height(), 1);
 
     // 4. Send Transaction via IPC
     let resp = client::send_node_request(
@@ -500,11 +521,12 @@ async fn test_ipc_request_response_roundtrip() {
             assert_eq!(trace.steps.len(), 1);
             assert_eq!(
                 trace.steps[0].category,
-                scytale_bridge::ProvenanceCategoryDto::Coinbase
+                scytale_bridge::ProvenanceCategoryDto::Genesis
             );
         }
         other => panic!("Unexpected response for TraceProvenance: {other:?}"),
     }
+
 
     // 7. Stop Node
     let resp = client::send_node_request(&sock_path, NodeRequest::StopNode)

@@ -41,3 +41,9 @@ explorer/out/
 explorer/dist/
 explorer/.env*.local
 explorer/.turbo/
+
+# Secret and Genesis keys
+.genesis_keys.json
+*.key.json
+
+

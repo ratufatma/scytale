@@ -120,16 +120,28 @@ fn test_node_op_return_output_handling() {
     let mut node = Node::open(config).unwrap();
     node.start().unwrap();
 
-    // 1. Initial coinbase (Height 0) in genesis
+    // 1. Initial Genesis state has 3 outputs
     let genesis_tip = node.canonical_tip();
-    let subsidy = scytale_consensus::calculate_block_reward(1);
+    let subsidy1 = scytale_consensus::calculate_block_reward(1);
 
-    // 2. Mine a block with a standard output and an OP_RETURN data carrier
-    let coinbase = Transaction::new_coinbase(1, vec![TxOut::new(subsidy, vec![0x01, 0x02, 0x03])]);
-    let prev_op = OutPoint::new(
-        node.query_utxo_set().entries().keys().next().unwrap().txid,
-        0,
+    // 2. Mine Block 1 with a coinbase paying to test lock 010203
+    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy1, vec![0x01, 0x02, 0x03])]);
+    let mut staging1 = node.query_utxo_set();
+    staging1.insert(
+        OutPoint::new(cb1.txid(), 0),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy1, vec![0x01, 0x02, 0x03]), 1, true),
     );
+    let utxo_root1 = staging1.compute_utxo_root();
+    let header1 = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root1, 100, 0x207fffff, 0);
+    let block1 = Block::new(header1, vec![cb1.clone()]);
+    assert!(node.submit_external_block(block1).unwrap());
+    assert_eq!(node.canonical_height(), 1);
+
+    // 3. In Block 2, spend Block 1 coinbase with standard output and OP_RETURN data carrier
+    let tip1 = node.canonical_tip();
+    let subsidy2 = scytale_consensus::calculate_block_reward(2);
+    let cb2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy2, vec![0x01, 0x02, 0x03])]);
+    let prev_op = OutPoint::new(cb1.txid(), 0);
 
     let op_return_lock = vec![0x6a, 0x08, b'S', b'C', b'Y', b'T', b'A', b'L', b'E', b'1'];
     let transfer_tx = Transaction::new(
@@ -143,22 +155,23 @@ fn test_node_op_return_output_handling() {
     );
     let transfer_txid = transfer_tx.txid();
 
-    let mut staging = node.query_utxo_set();
-    staging.remove(&prev_op);
-    staging.insert(
+    let mut staging2 = node.query_utxo_set();
+    staging2.remove(&prev_op);
+    staging2.insert(
         OutPoint::new(transfer_txid, 0),
-        scytale_core::UtxoEntry::new(TxOut::new(50_000_000, vec![0xaa, 0xbb]), 1, false),
+        scytale_core::UtxoEntry::new(TxOut::new(50_000_000, vec![0xaa, 0xbb]), 2, false),
     );
-    staging.insert(
-        OutPoint::new(coinbase.txid(), 0),
-        scytale_core::UtxoEntry::new(TxOut::new(subsidy, vec![0x01, 0x02, 0x03]), 1, true),
+    staging2.insert(
+        OutPoint::new(cb2.txid(), 0),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy2, vec![0x01, 0x02, 0x03]), 2, true),
     );
-    let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
-    let block = Block::new(header, vec![coinbase, transfer_tx]);
+    let utxo_root2 = staging2.compute_utxo_root();
+    let header2 = BlockHeader::new(2, tip1, Hash256::ZERO, utxo_root2, 200, 0x207fffff, 0);
+    let block2 = Block::new(header2, vec![cb2, transfer_tx]);
 
-    assert!(node.submit_external_block(block).unwrap());
-    assert_eq!(node.canonical_height(), 1);
+    assert!(node.submit_external_block(block2).unwrap());
+    assert_eq!(node.canonical_height(), 2);
+
 
     // 3. Verify standard output is present in the UTXO set
     let utxo_set = node.query_utxo_set();

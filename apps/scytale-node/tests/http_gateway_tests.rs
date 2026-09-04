@@ -2,7 +2,6 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use scytale_core::QUANTA_PER_SCY;
 use scytale_node::{
     http_gateway::{router, StatusResponse},
     Node, NodeConfig,
@@ -162,8 +161,8 @@ async fn test_http_tx_endpoint() {
     assert_eq!(tx["is_coinbase"], true);
     assert_eq!(tx["status"], "Confirmed");
     assert_eq!(tx["block_height"], 0);
-    assert_eq!(tx["total_output_quanta"], 1_000_000_000);
-    assert_eq!(tx["total_output_scy"], "10.00000000");
+    assert_eq!(tx["total_output_quanta"], scytale_core::genesis::TOTAL_GENESIS_QUANTA);
+    assert_eq!(tx["total_output_scy"], "13020000.00000000");
 
     // 2. Non-existent transaction returns 404
     let response = app
@@ -183,12 +182,13 @@ async fn test_http_passbook_endpoint() {
     let node = setup_test_node();
     let app = router(Arc::clone(&node));
 
-    // Genesis rewards are paid to 010203
+    // Genesis rewards are paid to Founder lock
+    let founder_lock = scytale_core::genesis::GENESIS_FOUNDER_LOCK_HEX;
     let response = app
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/v1/passbook/010203")
+                .uri(format!("/api/v1/passbook/{}", founder_lock))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -197,8 +197,8 @@ async fn test_http_passbook_endpoint() {
     assert_eq!(response.status(), StatusCode::OK);
     let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     let pb: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(pb["account_lock_hex"], "010203");
-    assert_eq!(pb["confirmed_balance_quanta"], 1_000_000_000);
+    assert_eq!(pb["account_lock_hex"], founder_lock);
+    assert_eq!(pb["confirmed_balance_quanta"], scytale_core::genesis::GENESIS_FOUNDER_QUANTA);
     assert_eq!(pb["total_entries"], 1);
 
     // Empty passbook for unused lock
@@ -278,8 +278,11 @@ async fn test_http_mempool_and_provenance() {
     let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     let prov: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(prov["steps"].as_array().unwrap().len(), 1);
-    assert_eq!(prov["steps"][0]["category"], "Coinbase");
-    assert_eq!(prov["steps"][0]["value_quanta"], 10 * QUANTA_PER_SCY);
+    assert_eq!(prov["steps"][0]["category"], "Genesis");
+    assert_eq!(
+        prov["steps"][0]["value_quanta"],
+        scytale_core::genesis::GENESIS_FOUNDER_QUANTA
+    );
 }
 
 #[tokio::test]
@@ -402,7 +405,7 @@ async fn test_tx_output_script_analysis() {
     let node = setup_test_node();
     let app = router(Arc::clone(&node));
 
-    // Genesis tx output 0 is 010203 (custom)
+    // Genesis tx output 0 is Founder P2PKH script
     let chain = node.query_canonical_chain().unwrap();
     let genesis_txid = chain[0].0.transactions[0].txid();
 
@@ -419,10 +422,14 @@ async fn test_tx_output_script_analysis() {
     assert_eq!(response.status(), StatusCode::OK);
     let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     let tx: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(tx["outputs"][0]["script_type"], "custom");
-    assert_eq!(tx["outputs"][0]["address"], serde_json::Value::Null);
+    assert_eq!(tx["outputs"][0]["script_type"], "p2pkh");
+    assert_eq!(
+        tx["outputs"][0]["address"],
+        scytale_core::genesis::GENESIS_FOUNDER_ADDRESS
+    );
     assert_eq!(
         tx["outputs"][0]["op_return_payload"],
         serde_json::Value::Null
     );
+
 }

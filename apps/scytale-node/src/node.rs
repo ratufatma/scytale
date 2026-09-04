@@ -10,7 +10,7 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_core::{
-    AuthorizationError, AuthorizationVerifier, Block, BlockHeader, Hash256, OutPoint, Transaction,
+    AuthorizationError, AuthorizationVerifier, Block, Hash256, OutPoint, Transaction,
     TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
@@ -276,29 +276,17 @@ impl Node {
 
     /// Constructs the Genesis Block 0 for a fresh database.
     ///
-    /// Genesis carries the network's initial monetary emission as a coinbase output
-    /// owned by the genesis payer. No *user* or wallet account is ever credited,
-    /// preserving the permissionless zero-balance bootstrap invariant: a new node
-    /// has a spendable balance of 0 SCY and may begin mining immediately.
+    /// Block 0 provisions the official 31% Genesis Allocation:
+    /// - Output 0: Founder Allocation (21% / 8,820,000 SCY)
+    /// - Output 1: Developer Fund (5% / 2,100,000 SCY)
+    /// - Output 2: Community Reserve (5% / 2,100,000 SCY)
+    ///
+    /// Preserves the permissionless zero-balance bootstrap invariant: an arbitrary
+    /// fresh node has a spendable balance of 0 SCY and may begin mining immediately.
     fn make_genesis(config: &NodeConfig) -> Block {
-        let subsidy = scytale_consensus::calculate_block_reward(0);
-        let coinbase =
-            Transaction::new_coinbase(0, vec![TxOut::new(subsidy, vec![0x01, 0x02, 0x03])]);
-        let commitment = Hash256::hash(coinbase.txid().as_bytes());
-        let genesis_outpoint = OutPoint::new(coinbase.txid(), 0);
-        let genesis_utxo_root =
-            scytale_core::compute_utxo_leaf(&genesis_outpoint, &coinbase.outputs[0]);
-        let header = BlockHeader::new(
-            1,
-            Hash256::ZERO,
-            commitment,
-            genesis_utxo_root,
-            0,
-            config.genesis_difficulty_target,
-            0,
-        );
-        Block::new(header, vec![coinbase])
+        scytale_core::genesis::build_genesis_block(config.genesis_difficulty_target)
     }
+
 
     /// Returns a fresh chain tree seeded with a placeholder genesis (used before recovery).
     fn empty_chain(config: &NodeConfig) -> scytale_consensus::ChainTree {

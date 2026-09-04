@@ -8,24 +8,27 @@ This document defines the architectural specification, transparency framework, d
 
 Scytale enforces an immutable supply ceiling of **42,000,000 SCY** ($4,200,000,000,000,000\text{ quanta}$). The total supply of Scytale Coin is strictly partitioned across four locked categories:
 
+### 1. Locked Distribution Breakdown
+
 ```text
-42,000,000 SCY (100%)
-├── Genesis Allocation (25% / 10,500,000 SCY)
-│   ├── Founder Allocation          : 15% ( 6,300,000 SCY)
-│   ├── Development / Treasury      :  5% ( 2,100,000 SCY)
-│   └── Ecosystem / Community       :  5% ( 2,100,000 SCY)
+Maximum Supply Ceiling = 42,000,000 SCY (4,200,000,000,000,000 quanta)
+
+├── Genesis Allocation (31% / 13,020,000 SCY)
+│   ├── Founder Allocation          : 21% ( 8,820,000 SCY / 882,000,000,000,000 quanta)
+│   ├── Development / Treasury      :  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
+│   └── Ecosystem / Community       :  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
 │
-└── Mining Emission Reserve         : 75% (31,500,000 SCY)
+└── Mining Emission Reserve         : 69% (28,980,000 SCY / 2,898,000,000,000,000 quanta)
 ```
 
 ### Macro Allocation Table:
 
 | Category | Supply Share (%) | Amount (SCY) | Amount (Integer Quanta) | Distribution Method |
 | :--- | :---: | :---: | :---: | :--- |
-| **Founder Allocation** | `15%` | `6,300,000 SCY` | `630,000,000,000,000 quanta` | One-time Genesis Block Allocation |
+| **Founder Allocation** | `21%` | `8,820,000 SCY` | `882,000,000,000,000 quanta` | One-time Genesis Block Allocation |
 | **Development / Treasury** | `5%` | `2,100,000 SCY` | `210,000,000,000,000 quanta` | One-time Genesis Block Allocation |
 | **Ecosystem / Community** | `5%` | `2,100,000 SCY` | `210,000,000,000,000 quanta` | One-time Genesis Block Allocation |
-| **Mining Emission Reserve** | `75%` | `31,500,000 SCY` | `3,150,000,000,000,000 quanta` | Proof-of-Work Block Subsidies |
+| **Mining Emission Reserve** | `69%` | `28,980,000 SCY` | `2,898,000,000,000,000 quanta` | Proof-of-Work Block Subsidies |
 | **Total Maximum Supply** | **`100%`** | **`42,000,000 SCY`** | **`4,200,000,000,000,000 quanta`** | Strict Consensus Ceiling |
 
 ---
@@ -34,11 +37,11 @@ Scytale enforces an immutable supply ceiling of **42,000,000 SCY** ($4,200,000,0
 
 The distribution model is governed by eight foundational architectural principles:
 
-1. **Founder Contribution Recognition:** The 15% founder allocation provides meaningful, upfront alignment for the core architectural engineering and ongoing research without requiring ongoing protocol extraction.
+1. **Founder Contribution Recognition:** The 21% founder allocation provides meaningful, upfront alignment for the core architectural engineering and ongoing research without requiring ongoing protocol extraction.
 2. **Strict One-Time Genesis Event:** The founder allocation is minted exclusively at Block 0. There are zero ongoing founder cuts from mined blocks and zero developer tax fees.
 3. **Restrained Treasury Allocation:** The 5% treasury pool is deliberately constrained to prevent excessive capital concentration under centralized or internal operational control.
 4. **Measured Ecosystem Reserve:** The 5% ecosystem/community allocation provides targeted support for developer tooling, infrastructure grants, and early participation without diluting mining incentives.
-5. **Mining-Centric Distribution:** The vast majority of total supply (**75%**) is reserved exclusively for Proof-of-Work miners who commit computational energy to secure the network.
+5. **Mining-Centric Distribution:** The vast majority of total supply (**69%**) is reserved exclusively for Proof-of-Work miners who commit computational energy to secure the network.
 6. **Strict Supply Boundary:** Every single quantum across all categories is strictly bounded within the 42,000,000 SCY cap.
 7. **Zero Hidden Allocations:** No off-ledger, unindexed, synthetic, or private pools exist.
 8. **No Future Mint Authority:** No protocol role, founder key, or administrative multisig possesses discretionary minting authority post-genesis.
@@ -49,39 +52,30 @@ The distribution model is governed by eight foundational architectural principle
 
 Block 0 materializes the entire Genesis Allocation in a single canonical **Genesis Bootstrap Transaction** with exactly three outputs:
 
-### 3.1 Founder Allocation (15% / 6,300,000 SCY)
+### 3.1 Founder Allocation (21% / 8,820,000 SCY)
 - **Genesis OutPoint:** `OutPoint(GenesisTxID, 0)`
-- **Quota:** `630,000,000,000,000 quanta` ($6,300,000\text{ SCY}$)
+- **Quota:** `882,000,000,000,000 quanta` ($8,820,000\text{ SCY}$)
 - **Occurrence:** One-time issuance executed at Block 0.
-- **Constraints:**
-  - Carries no ongoing percentage of block subsidies or transaction fees.
-  - Grants no special voting, staking, or governance privileges.
-  - Fully bound to genesis ledger outputs with verifiable Value Provenance.
-- **Specification Status:**
-  - `Founder Recipient / Address: TBD`
-  - `Founder Vesting Schedule: TBD`
+- **Address:** `scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q`
+- **Locking Script:** `73a0209bbccb9b6620952fb8e5608e75b58589f4551ac5d1f8699cbe3f93dab94ff40f88ac`
 
 ### 3.2 Development / Treasury (5% / 2,100,000 SCY)
 - **Genesis OutPoint:** `OutPoint(GenesisTxID, 1)`
 - **Quota:** `210,000,000,000,000 quanta` ($2,100,000\text{ SCY}$)
-- **Purpose:** Protocol maintenance, cryptographic audits, core node infrastructure, security bug bounties, and essential operational needs.
-- **Design Intent:** Kept small (5%) to prevent internal centralization of protocol capital.
-- **Specification Status:**
-  - `Treasury Control Model: TBD` (e.g., timelocked multi-signature governance).
-  - `Treasury Release Policy: TBD`
+- **Purpose:** Protocol engineering sustainability, infrastructure maintenance, security audits, and core tool development.
+- **Address:** `scy1q5nhm4ge3m2myr65x5s8jdfesy5xtm0k0ddkm2qua36rw62z06zswrq8e0`
+- **Locking Script:** `73a02005277dd5198ed5b20f543520793539812865edf67b5b6da81cec743769427e8588ac`
 
 ### 3.3 Ecosystem / Community (5% / 2,100,000 SCY)
 - **Genesis OutPoint:** `OutPoint(GenesisTxID, 2)`
 - **Quota:** `210,000,000,000,000 quanta` ($2,100,000\text{ SCY}$)
-- **Purpose:** Open-source developer grants, client SDKs, documentation tooling, integrations, and initial community bootstrapping initiatives.
-- **Design Intent:** Kept limited (5%) to avoid aggressive supply dilution against Proof-of-Work miners.
-- **Specification Status:**
-  - `Community Distribution Mechanism: TBD`
-  - `Ecosystem Release Policy: TBD`
+- **Purpose:** Developer grants, third-party tooling, community education, and ecosystem integrations.
+- **Address:** `scy1nrlpqplz9f8dvauz2zmmgqcjxr7xvpfc95lewxft5anvgev57kmsxce3kd`
+- **Locking Script:** `73a02098fe1007e22a4ed6778250b7b4031230fc6605382d3f97192ba766c46594f5b788ac`
 
-### 3.4 Mining Emission Reserve (75% / 31,500,000 SCY)
-- **Quota:** `3,150,000,000,000,000 quanta` ($31,500,000\text{ SCY}$)
-- **Purpose:** Distributed to permissionless network miners via block subsidies over successive halving epochs as specified in [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md), [`docs/POW-SPEC.md`](POW-SPEC.md), and [`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md).
+### 3.4 Mining Emission Reserve (69% / 28,980,000 SCY)
+- **Quota:** `2,898,000,000,000,000 quanta` ($28,980,000\text{ SCY}$)
+- **Purpose:** Distributed to permissionless network miners via block subsidies terminating at height `3,696,000`.
 - **Incentive Alignment:** Proof-of-Work mining forms the primary, sovereign path for currency dispersion.
 
 ---
@@ -92,27 +86,23 @@ Scytale mandates exact integer reconciliation across all supply components:
 
 $$\text{Founder} + \text{Treasury} + \text{Ecosystem} + \text{Mining Reserve} = 42,000,000\text{ SCY}$$
 
-$$6,300,000\text{ SCY} + 2,100,000\text{ SCY} + 2,100,000\text{ SCY} + 31,500,000\text{ SCY} = 42,000,000\text{ SCY}$$
+$$8,820,000\text{ SCY} + 2,100,000\text{ SCY} + 2,100,000\text{ SCY} + 28,980,000\text{ SCY} = 42,000,000\text{ SCY}$$
 
 ### Integer Quanta Accounting:
-$$630,000,000,000,000 + 210,000,000,000,000 + 210,000,000,000,000 + 3,150,000,000,000,000 = 4,200,000,000,000,000\text{ quanta}$$
-
-> [!WARNING]
-> ### CONSENSUS ISSUE — REQUIRES RESOLUTION
-> While the static allocation quotas sum to exactly $4,200,000,000,000,000\text{ quanta}$ ($42\text{M}$ SCY), the standard unadjusted infinite geometric halving series ($10\text{ SCY} \times 2,100,000\text{ blocks} \times 2 = 42\text{M}$ SCY) produces $42\text{M}$ SCY of mining emission alone. Adding the $10.5\text{M}$ SCY ($25\%$) Genesis Allocation yields $52.5\text{M}$ SCY, breaching the $42\text{M}$ cap. Protocol consensus must explicitly resolve this (e.g. via a $31.5\text{M}$ SCY hard mining cap or subsidy recalibration) before finalizing consensus emission code.
+$$882,000,000,000,000 + 210,000,000,000,000 + 210,000,000,000,000 + 2,898,000,000,000,000 = 4,200,000,000,000,000\text{ quanta}$$
 
 ```text
 +-------------------------------------------------------------------------+
 |                    Maximum Supply: 42,000,000 SCY                       |
 |                     (4,200,000,000,000,000 quanta)                      |
 +------------------------------------+------------------------------------+
-|   Total Genesis Allocation (25%)   |    Mining Emission Reserve (75%)   |
-|        10,500,000 SCY              |           31,500,000 SCY           |
-| (1,050,000,000,000,000 quanta)     |   (3,150,000,000,000,000 quanta)   |
+|   Total Genesis Allocation (31%)   |    Mining Emission Reserve (69%)   |
+|        13,020,000 SCY              |           28,980,000 SCY           |
+| (1,302,000,000,000,000 quanta)     |   (2,898,000,000,000,000 quanta)   |
 |                                    |                                    |
-| - Founder:    15% (6,300,000 SCY)  | - Minted via Proof-of-Work         |
-| - Treasury:    5% (2,100,000 SCY)  |   block subsidies over halving     |
-| - Ecosystem:   5% (2,100,000 SCY)  |   epochs                           |
+| - Founder:    21% (8,820,000 SCY)  | - Minted over time via Proof-      |
+| - Treasury:    5% (2,100,000 SCY)  |   of-Work block rewards            |
+| - Ecosystem:   5% (2,100,000 SCY)  |   until height 3,696,000           |
 +------------------------------------+------------------------------------+
 ```
 
