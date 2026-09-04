@@ -27,25 +27,25 @@ use crate::passbook::Passbook;
 pub const DEFAULT_HTTP_BIND: &str = "127.0.0.1:8332";
 
 /// Embedded static Web Explorer HTML single-page application.
-const EXPLORER_HTML: &str = include_str!("../../../web/explorer/index.html");
+const EXPLORER_HTML: &str = include_str!("../../../explorer/index.html");
 
 async fn serve_explorer() -> Html<String> {
-    if let Ok(content) = std::fs::read_to_string("web/explorer/index.html") {
+    if let Ok(content) = std::fs::read_to_string("explorer/index.html") {
         return Html(content);
     }
-    if let Ok(content) = std::fs::read_to_string("/web/explorer/index.html") {
+    if let Ok(content) = std::fs::read_to_string("/explorer/index.html") {
         return Html(content);
     }
     Html(EXPLORER_HTML.to_string())
 }
 
 /// Embedded static SVG favicon and branding asset.
-const FAVICON_SVG: &str = include_str!("../../../web/explorer/favicon.svg");
+const FAVICON_SVG: &str = include_str!("../../../explorer/favicon.svg");
 
 async fn serve_favicon_svg() -> impl axum::response::IntoResponse {
-    let content = if let Ok(c) = std::fs::read_to_string("web/explorer/favicon.svg") {
+    let content = if let Ok(c) = std::fs::read_to_string("explorer/favicon.svg") {
         c
-    } else if let Ok(c) = std::fs::read_to_string("/web/explorer/favicon.svg") {
+    } else if let Ok(c) = std::fs::read_to_string("/explorer/favicon.svg") {
         c
     } else {
         FAVICON_SVG.to_string()

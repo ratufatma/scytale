@@ -33,3 +33,11 @@ data/
 .vscode/
 *.log
 .DS_Store
+
+# Web Explorer Dependencies & Build Artifacts
+explorer/node_modules/
+explorer/.next/
+explorer/out/
+explorer/dist/
+explorer/.env*.local
+explorer/.turbo/

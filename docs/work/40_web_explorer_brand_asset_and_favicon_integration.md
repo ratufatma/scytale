@@ -5,8 +5,8 @@
 Task ID       : 40
 Task Name     : Web Explorer Brand Asset & Favicon SVG Integration
 Phase         : Phase 4 — Production Tooling & Web Explorer
-Target Files  : web/explorer/favicon.svg, web/explorer/gemini-svg.svg, web/explorer/logo.svg, web/explorer/index.html, apps/scytale-node/src/http_gateway.rs, docs/work/40-web-explorer-brand-asset-and-favicon-integration.md
-Reference     : web/explorer, apps/scytale-node
+Target Files  : explorer/favicon.svg, explorer/gemini-svg.svg, explorer/logo.svg, explorer/index.html, apps/scytale-node/src/http_gateway.rs, docs/work/40-web-explorer-brand-asset-and-favicon-integration.md
+Reference     : explorer, apps/scytale-node
 Status        : COMPLETED
 Invariants    : Standard SVG MIME Type (image/svg+xml), Zero Broken Assets, Dual-Mode Serving (Static & Embedded Fallback), Browser Favicon & Apple Touch Icon Compatibility
 ```
@@ -16,8 +16,8 @@ Invariants    : Standard SVG MIME Type (image/svg+xml), Zero Broken Assets, Dual
 ### 1. Objective
 
 Integrasikan aset visual vektor master (`favicon.svg`, `gemini-svg.svg`, `logo.svg`) ke dalam portal **Scytale Web Explorer**:
-1. Menempatkan aset SVG master di dalam direktori `web/explorer/`.
-2. Menyisipkan tag `<link rel="icon">`, `<link rel="alternate icon">`, dan `<link rel="apple-touch-icon">` ke dalam elemen `<head>` pada `web/explorer/index.html`.
+1. Menempatkan aset SVG master di dalam direktori `explorer/`.
+2. Menyisipkan tag `<link rel="icon">`, `<link rel="alternate icon">`, dan `<link rel="apple-touch-icon">` ke dalam elemen `<head>` pada `explorer/index.html`.
 3. Memperluas routing HTTP gateway pada `apps/scytale-node/src/http_gateway.rs` untuk melayani rute berkas `/favicon.svg`, `/gemini-svg.svg`, `/logo.svg`, dan `/favicon.ico` dengan header `Content-Type: image/svg+xml; charset=utf-8`.
 4. Mengintegrasikan logo SVG ke dalam navbar header web explorer.
 5. Membangun ulang binary dan container, serta memverifikasi respons HTTP 200 secara lokal maupun via public tunnel.
@@ -26,12 +26,12 @@ Integrasikan aset visual vektor master (`favicon.svg`, `gemini-svg.svg`, `logo.s
 
 ### 2. Implementation Summary
 
-1. **Brand Asset Storage (`web/explorer/`)**:
-   - `web/explorer/favicon.svg` (3,170 bytes master asset)
-   - `web/explorer/gemini-svg.svg` (3,170 bytes master asset)
-   - `web/explorer/logo.svg` (3,170 bytes master asset)
+1. **Brand Asset Storage (`explorer/`)**:
+   - `explorer/favicon.svg` (3,170 bytes master asset)
+   - `explorer/gemini-svg.svg` (3,170 bytes master asset)
+   - `explorer/logo.svg` (3,170 bytes master asset)
 
-2. **HTML Head Injections (`web/explorer/index.html`)**:
+2. **HTML Head Injections (`explorer/index.html`)**:
    ```html
    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
    <link rel="alternate icon" href="/gemini-svg.svg" />
@@ -43,7 +43,7 @@ Integrasikan aset visual vektor master (`favicon.svg`, `gemini-svg.svg`, `logo.s
    ```
 
 3. **HTTP Gateway Routes (`apps/scytale-node/src/http_gateway.rs`)**:
-   - Menggunakan `FAVICON_SVG` konstan yang di-embed secara compile-time dengan fallback runtime ke disk (`web/explorer/favicon.svg` atau `/web/explorer/favicon.svg`).
+   - Menggunakan `FAVICON_SVG` konstan yang di-embed secara compile-time dengan fallback runtime ke disk (`explorer/favicon.svg` atau `/explorer/favicon.svg`).
    - Handler `serve_favicon_svg` mengembalikan header `Content-Type: image/svg+xml; charset=utf-8`.
    - Menambahkan rute `/favicon.svg`, `/gemini-svg.svg`, `/logo.svg`, dan `/favicon.ico`.
 

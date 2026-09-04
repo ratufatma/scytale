@@ -101,7 +101,7 @@ Paruh kedua Fase 3 mematangkan Scytale dari protokol konsensus dasar menjadi eko
 ## TASK 31: EMBEDDED WEB EXPLORER UPGRADE (BECH32 DISPLAY & MEMPOOL INSPECTOR)
 
 * **Tujuan:** Memperkaya antarmuka Web Explorer tersemat (*zero-dependency embedded SPA*) untuk menampilkan visualisasi pasar biaya mempool live dan parsing alamat Bech32 tanpa pustaka eksternal.
-* **Komponen:** `apps/scytale-node/src/http_gateway.rs`, `web/explorer/index.html`
+* **Komponen:** `apps/scytale-node/src/http_gateway.rs`, `explorer/index.html`
 * **Arsitektur & Invarian:**
   * **Pengayaan Backend HTTP DTO:**
     * `analyze_locking_script`: Mengurai tipe skrip transaksi secara otomatis menjadi `p2pkh`, `op_return`, atau `custom`.

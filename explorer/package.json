@@ -1,0 +1,7 @@
+{
+    "name": "scytale-explorer",
+    "private": true,
+    "scripts": {
+        "build": "node build.mjs"
+    }
+}

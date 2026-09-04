@@ -5,7 +5,7 @@
 Document ID   : SPEC-TASK-31
 Task ID       : 31 (Embedded Web Explorer Upgrade)
 Phase         : Phase 3 — User-Facing Protocol & Client Tooling
-Target Files  : apps/scytale-node/src/http_gateway.rs, web/explorer/index.html
+Target Files  : apps/scytale-node/src/http_gateway.rs, explorer/index.html
 Status        : COMPLETED / PRODUCTION-READY
 Invariants    : Zero-Dependency Runtime, Embedded Binary HTML (include_str!), Dual Bech32/Hex Resolution, Real-Time Fee Market Telemetry
 ```
@@ -23,12 +23,12 @@ Rencana pembaruan antarmuka **Web Explorer Tersemat** dirancang untuk memanfaatk
 │   GET /api/v1/blocks   ──► TxOutputDto diperkaya dengan `address`      │
 │                            (otomatis di-encode ke scy1... jika P2PKH)  │
 │   GET /api/v1/mempool  ──► Menyajikan metrik kapasitas & antrean       │
-│   GET /                ──► web/explorer/index.html                     │
+│   GET /                ──► explorer/index.html                     │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        web/explorer/index.html                         │
+│                        explorer/index.html                         │
 │                                                                        │
 │  [ Panel 1: Header & Global Search ]                                   │
 │  • Input pencarian mendukung: Block Height, Block Hash, TxID, dan       │
@@ -101,7 +101,7 @@ Tambahkan konstanta kapasitas dan ambang batas pasar biaya pada response `Mempoo
 
 ---
 
-## 3. Spesifikasi Tampilan Frontend (`web/explorer/index.html`)
+## 3. Spesifikasi Tampilan Frontend (`explorer/index.html`)
 
 ### A. Komponen Mempool & Fee Inspector
 1. **Dua Progress Bar Kapasitas Real-Time:**

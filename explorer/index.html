@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id" class="dark">
+
 <head>
   <link rel="icon" type="image/svg+xml" href="/gemini-svg.svg">
   <link rel="alternate icon" href="/favicon.svg">
@@ -31,23 +32,42 @@
   </script>
   <style>
     /* Custom scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #0b0f17; }
-    ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #374151; }
-    .badge-copy:active { transform: scale(0.95); }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #0b0f17;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1f2937;
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #374151;
+    }
+
+    .badge-copy:active {
+      transform: scale(0.95);
+    }
   </style>
 </head>
+
 <body class="bg-[#0b0f17] text-gray-200 font-sans min-h-screen antialiased flex flex-col">
 
   <!-- TOP NAVBAR -->
   <header class="border-b border-gray-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-30">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <img src="/favicon.svg" class="w-9 h-9 rounded-lg shadow-lg shadow-emerald-500/20 object-contain" alt="Scytale Logo" />
+        <img src="/favicon.svg" class="w-9 h-9 rounded-lg shadow-lg shadow-emerald-500/20 object-contain"
+          alt="Scytale Logo" />
         <div>
           <span class="font-bold text-lg tracking-wider text-white">SCYTALE</span>
-          <span class="text-[11px] ml-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-mono font-semibold">EXPLORER</span>
+          <span
+            class="text-[11px] ml-1.5 px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800 font-mono font-semibold">EXPLORER</span>
         </div>
       </div>
 
@@ -55,9 +75,11 @@
       <div class="flex items-center gap-3 text-xs font-mono">
         <div class="flex items-center bg-gray-900/90 border border-gray-800 rounded-lg px-3 py-1.5 shadow-inner">
           <span class="text-gray-500 mr-2 select-none">API:</span>
-          <input id="nodeUrl" type="text" value="" placeholder="Origin / URL" class="bg-transparent text-gray-200 focus:outline-none w-44" />
+          <input id="nodeUrl" type="text" value="" placeholder="/rpc atau URL node"
+            class="bg-transparent text-gray-200 focus:outline-none w-44" />
         </div>
-        <div id="connBadge" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80 transition-all">
+        <div id="connBadge"
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80 transition-all">
           <span id="connDot" class="w-2 h-2 rounded-full bg-rose-500"></span>
           <span id="connText">OFFLINE</span>
         </div>
@@ -75,10 +97,13 @@
           placeholder="Cari Height (#23), Block Hash (0x...), TxID, atau Alamat Bech32 (scy1...)..."
           class="w-full bg-[#111827] border border-gray-800 rounded-xl px-4 py-3.5 pl-11 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500 font-mono shadow-lg transition"
           onkeydown="if(event.key==='Enter') handleSearch()" />
-        <svg class="w-5 h-5 absolute left-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+        <svg class="w-5 h-5 absolute left-3.5 text-gray-500 pointer-events-none" fill="none" stroke="currentColor"
+          viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
         </svg>
-        <button onclick="handleSearch()" class="absolute right-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
+        <button onclick="handleSearch()"
+          class="absolute right-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
           Cari
         </button>
       </div>
@@ -94,7 +119,9 @@
 
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
         <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Tip Hash</div>
-        <div id="metricTip" class="text-xs font-mono text-emerald-400 mt-2 truncate select-all cursor-pointer hover:underline" onclick="copyText(this.title)" title="--">--</div>
+        <div id="metricTip"
+          class="text-xs font-mono text-emerald-400 mt-2 truncate select-all cursor-pointer hover:underline"
+          onclick="copyText(this.title)" title="--">--</div>
         <div class="text-xs text-gray-500 mt-1">Puncak Rantai Terberat</div>
       </div>
 
@@ -119,14 +146,18 @@
 
     <!-- TABS NAVIGATION -->
     <div class="flex border-b border-gray-800 text-sm font-medium gap-6">
-      <button onclick="switchTab('blocks')" id="tabBtn-blocks" class="pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition">
+      <button onclick="switchTab('blocks')" id="tabBtn-blocks"
+        class="pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition">
         Recent Blocks
       </button>
-      <button onclick="switchTab('mempool')" id="tabBtn-mempool" class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
+      <button onclick="switchTab('mempool')" id="tabBtn-mempool"
+        class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
         <span>Mempool & Fee Market</span>
-        <span id="mempoolTabBadge" class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
+        <span id="mempoolTabBadge"
+          class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
       </button>
-      <button onclick="switchTab('passbook')" id="tabBtn-passbook" class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
+      <button onclick="switchTab('passbook')" id="tabBtn-passbook"
+        class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
         Passbook Inspector
       </button>
     </div>
@@ -136,7 +167,8 @@
       <div class="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden shadow">
         <div class="px-4 py-3 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
           <h3 class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider">Daftar Blok Terakhir</h3>
-          <button onclick="fetchRecentBlocks()" class="text-xs text-emerald-400 hover:text-emerald-300 font-mono">Segarkan</button>
+          <button onclick="fetchRecentBlocks()"
+            class="text-xs text-emerald-400 hover:text-emerald-300 font-mono">Segarkan</button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs font-mono">
@@ -172,7 +204,8 @@
             <span id="mempoolSlotsText" class="text-white font-bold">0 / 5,000</span>
           </div>
           <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
-            <div id="mempoolSlotsBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+            <div id="mempoolSlotsBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500"
+              style="width: 0%"></div>
           </div>
           <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
             <span id="mempoolSlotsPercent">0.0% Terpakai</span>
@@ -187,7 +220,8 @@
             <span id="mempoolMemoryText" class="text-white font-bold">0 KB / 5,000 KB</span>
           </div>
           <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
-            <div id="mempoolMemoryBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+            <div id="mempoolMemoryBar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-500"
+              style="width: 0%"></div>
           </div>
           <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
             <span id="mempoolMemoryPercent">0.0% Terpakai</span>
@@ -217,7 +251,8 @@
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Antrean Transaksi Prioritas (Block-Space Auction)
           </h3>
-          <span id="mempoolTableCountBadge" class="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-400">0 transaksi</span>
+          <span id="mempoolTableCountBadge" class="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-400">0
+            transaksi</span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs font-mono">
@@ -234,7 +269,8 @@
             </thead>
             <tbody id="mempoolTableBody" class="divide-y divide-gray-800/60 text-gray-300">
               <tr>
-                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang menunggu.</td>
+                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang
+                  menunggu.</td>
               </tr>
             </tbody>
           </table>
@@ -246,21 +282,26 @@
     <div id="view-passbook" class="hidden space-y-4">
       <div class="bg-[#111827] border border-gray-800 rounded-xl p-5 shadow">
         <div class="max-w-xl flex items-center gap-2 mb-4">
-          <input id="passbookLockInput" type="text" placeholder="Masukkan Alamat Bech32 (scy1...) atau Hex Locking Script"
+          <input id="passbookLockInput" type="text"
+            placeholder="Masukkan Alamat Bech32 (scy1...) atau Hex Locking Script"
             class="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-gray-200 focus:outline-none focus:border-emerald-500"
             onkeydown="if(event.key==='Enter') inspectPassbook()" />
-          <button onclick="inspectPassbook()" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
+          <button onclick="inspectPassbook()"
+            class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
             Periksa Rekening
           </button>
         </div>
 
         <div id="passbookResult" class="hidden space-y-4 font-mono">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
             <div>
-              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Identitas / Kunci Rekening:</span>
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Identitas / Kunci
+                Rekening:</span>
               <div id="pbLock" class="text-emerald-400 font-bold break-all flex items-center gap-1.5">
                 <span id="pbLockText">--</span>
-                <button onclick="copyText(document.getElementById('pbLockText').textContent)" class="text-gray-400 hover:text-white" title="Salin">📋</button>
+                <button onclick="copyText(document.getElementById('pbLockText').textContent)"
+                  class="text-gray-400 hover:text-white" title="Salin">📋</button>
               </div>
             </div>
             <div>
@@ -291,8 +332,10 @@
   </main>
 
   <!-- DETAIL MODAL -->
-  <div id="detailModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-[#111827] border border-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+  <div id="detailModal"
+    class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div
+      class="bg-[#111827] border border-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
       <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/70">
         <h2 id="modalTitle" class="font-mono font-bold text-sm text-white">Inspeksi Objek</h2>
         <button onclick="closeModal()" class="text-gray-400 hover:text-white text-xl px-2">&times;</button>
@@ -300,17 +343,20 @@
       <div class="p-6 overflow-y-auto space-y-4 font-mono text-xs">
         <!-- Rendered Interactive Object View -->
         <div id="modalRendered" class="space-y-4"></div>
-        
+
         <!-- Toggle Raw JSON -->
         <div class="pt-2 border-t border-gray-800/80">
-          <button onclick="toggleRawJson()" id="rawJsonBtn" class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
+          <button onclick="toggleRawJson()" id="rawJsonBtn"
+            class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
             <span>▶ Tampilkan JSON Mentah</span>
           </button>
-          <pre id="modalContent" class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800/80 text-emerald-400 overflow-x-auto select-all max-h-80"></pre>
+          <pre id="modalContent"
+            class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800/80 text-emerald-400 overflow-x-auto select-all max-h-80"></pre>
         </div>
       </div>
       <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
-        <button onclick="closeModal()" class="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
+        <button onclick="closeModal()"
+          class="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
           Tutup
         </button>
       </div>
@@ -318,7 +364,8 @@
   </div>
 
   <!-- TOAST NOTIFICATION -->
-  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-emerald-950 text-emerald-300 border border-emerald-800 px-4 py-2.5 rounded-lg text-xs font-mono shadow-2xl hidden transition-all duration-300">
+  <div id="toast"
+    class="fixed bottom-5 right-5 z-50 bg-emerald-950 text-emerald-300 border border-emerald-800 px-4 py-2.5 rounded-lg text-xs font-mono shadow-2xl hidden transition-all duration-300">
     Tersalin ke clipboard!
   </div>
 
@@ -333,10 +380,7 @@
       if (val) {
         return val.replace(/\/+$/, '');
       }
-      if (window.location && window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file:')) {
-        return window.location.origin.replace(/\/+$/, '');
-      }
-      return '';
+      return '/rpc';
     }
 
     // Format Quanta (1 SCY = 100,000,000 quanta)
@@ -430,9 +474,8 @@
         document.getElementById('mempoolSlotsPercent').textContent = `${slotsPercent.toFixed(1)}% Terpakai`;
         const slotsBar = document.getElementById('mempoolSlotsBar');
         slotsBar.style.width = `${slotsPercent}%`;
-        slotsBar.className = `h-2.5 rounded-full transition-all duration-500 ${
-          slotsPercent >= 90 ? 'bg-rose-500' : slotsPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-        }`;
+        slotsBar.className = `h-2.5 rounded-full transition-all duration-500 ${slotsPercent >= 90 ? 'bg-rose-500' : slotsPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+          }`;
 
         // Memory Gauge
         const maxBytes = mp.max_bytes || 5000000;
@@ -443,9 +486,8 @@
         document.getElementById('mempoolMemoryPercent').textContent = `${memPercent.toFixed(1)}% Terpakai`;
         const memBar = document.getElementById('mempoolMemoryBar');
         memBar.style.width = `${memPercent}%`;
-        memBar.className = `h-2.5 rounded-full transition-all duration-500 ${
-          memPercent >= 90 ? 'bg-rose-500' : memPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-        }`;
+        memBar.className = `h-2.5 rounded-full transition-all duration-500 ${memPercent >= 90 ? 'bg-rose-500' : memPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+          }`;
 
         // Fees
         document.getElementById('mempoolTotalFees').textContent = formatScyOnly(mp.total_fees_quanta);
@@ -622,32 +664,32 @@
             <div class="space-y-1.5">
               <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">Keluaran (Outputs - ${tx.outputs ? tx.outputs.length : 0}):</span>
               ${(tx.outputs || []).map(out => {
-                const isP2pkh = out.script_type === 'p2pkh';
-                const isOpReturn = out.script_type === 'op_return';
-                
-                let badge = '';
-                let dest = '';
-                if (isP2pkh && out.address) {
-                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">P2PKH</span>`;
-                  dest = `
+        const isP2pkh = out.script_type === 'p2pkh';
+        const isOpReturn = out.script_type === 'op_return';
+
+        let badge = '';
+        let dest = '';
+        if (isP2pkh && out.address) {
+          badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">P2PKH</span>`;
+          dest = `
                     <div class="flex items-center justify-between gap-1.5 mt-1">
                       <span class="text-emerald-400 font-bold cursor-pointer hover:underline" onclick="searchAddress('${out.address}')" title="Klik untuk lihat Passbook">${truncateMiddle(out.address, 10, 8)}</span>
                       <button onclick="copyText('${out.address}')" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
                     </div>
                   `;
-                } else if (isOpReturn) {
-                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-950 text-purple-300 border border-purple-800 font-bold">DATA / OP_RETURN</span>`;
-                  dest = `
+        } else if (isOpReturn) {
+          badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-950 text-purple-300 border border-purple-800 font-bold">DATA / OP_RETURN</span>`;
+          dest = `
                     <div class="text-[11px] text-purple-200 mt-1 bg-purple-950/40 p-1.5 rounded border border-purple-900/50 break-all">
                       Payload: "${out.op_return_payload || ''}"
                     </div>
                   `;
-                } else {
-                  badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-gray-800 text-gray-400 font-bold">CUSTOM</span>`;
-                  dest = `<div class="text-[11px] text-gray-400 mt-1 truncate">${out.locking_script_hex || out.locking_script || ''}</div>`;
-                }
+        } else {
+          badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-gray-800 text-gray-400 font-bold">CUSTOM</span>`;
+          dest = `<div class="text-[11px] text-gray-400 mt-1 truncate">${out.locking_script_hex || out.locking_script || ''}</div>`;
+        }
 
-                return `
+        return `
                   <div class="bg-gray-950 p-2.5 rounded-lg border border-gray-800/80 text-[11px]">
                     <div class="flex items-center justify-between">
                       ${badge}
@@ -656,7 +698,7 @@
                     ${dest}
                   </div>
                 `;
-              }).join('')}
+      }).join('')}
             </div>
           </div>
         </div>
@@ -806,4 +848,5 @@
     setInterval(pollNode, 2000);
   </script>
 </body>
+
 </html>

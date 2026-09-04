@@ -157,7 +157,7 @@ External applications, block explorers, and monitoring dashboards needed access 
   - `GET /api/v1/passbook/:lock_hex`: Canonical Passbook ledger for any locking script.
   - `GET /api/v1/provenance/:txid/:index`: Lineage DAG tracing for value origin.
   - `GET /health`: Node health probe (HTTP 200 OK).
-- **Embedded Web Explorer (`web/explorer/index.html`)**:
+- **Embedded Web Explorer (`explorer/index.html`)**:
   - Zero-dependency Single Page Application compiled directly into the `scytale-node` binary data segment via `include_str!`.
   - Served at `GET /` and `GET /index.html` with `text/html; charset=utf-8`.
   - Interactive block list, transaction viewer, passbook search, and live network polling.
