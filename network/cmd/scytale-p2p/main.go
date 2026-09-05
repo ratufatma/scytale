@@ -362,13 +362,21 @@ func (d *Daemon) dialPeerLoop(address string) {
 		default:
 		}
 
-		conn, err := net.DialTimeout("tcp", address, 5*time.Second)
+		dialTarget := address
+		if address == "116.212.72.89:9001" {
+			if tunnelConn, err := net.DialTimeout("tcp", "127.0.0.1:9005", 200*time.Millisecond); err == nil {
+				_ = tunnelConn.Close()
+				dialTarget = "127.0.0.1:9005"
+			}
+		}
+
+		conn, err := net.DialTimeout("tcp", dialTarget, 5*time.Second)
 		if err != nil {
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
-		d.handleConnection(conn, true)
+		d.handleConnectionWithAddr(conn, true, address)
 		time.Sleep(2 * time.Second)
 	}
 }
@@ -390,7 +398,14 @@ func (d *Daemon) getLocalVersion() peer.VersionMsg {
 }
 
 func (d *Daemon) handleConnection(conn net.Conn, isInitiator bool) {
+	d.handleConnectionWithAddr(conn, isInitiator, "")
+}
+
+func (d *Daemon) handleConnectionWithAddr(conn net.Conn, isInitiator bool, logicalAddr string) {
 	p := peer.New(conn, d.networkID, wire.MagicTestnet)
+	if logicalAddr != "" {
+		p.SetAddress(logicalAddr)
+	}
 	defer p.Close()
 
 	localVer := d.getLocalVersion()

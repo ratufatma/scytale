@@ -5,7 +5,7 @@ use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut, Ut
 use scytale_mempool::Mempool;
 use std::collections::HashSet;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 
@@ -171,34 +171,98 @@ pub fn run_pow_search(
 ) -> Result<BlockHeader, MiningError> {
     let target = template.target();
     let initial_header = template.build_header(start_nonce);
-    let mut header_bytes = initial_header
+    let proto_bytes = initial_header
         .to_canonical_bytes()
         .map_err(|_| MiningError::ExhaustedNonce {
             height: template.height,
             searched: 0,
         })?;
 
-    for i in 0..max_iterations {
-        // Poll cancellation token every 4096 iterations for high throughput
-        if (i & 4095) == 0 && cancel.load(Ordering::Relaxed) {
-            return Err(MiningError::Cancelled {
-                height: template.height,
+    let num_threads = std::thread::available_parallelism()
+        .map(|n| n.get().min(8) as u64)
+        .unwrap_or(4);
+
+    if max_iterations < 100_000 || num_threads <= 1 {
+        let mut header_bytes = proto_bytes;
+        for i in 0..max_iterations {
+            if (i & 4095) == 0 && cancel.load(Ordering::Relaxed) {
+                return Err(MiningError::Cancelled {
+                    height: template.height,
+                });
+            }
+
+            let nonce = start_nonce.wrapping_add(i);
+            let nonce_bytes = nonce.to_le_bytes();
+            let len = header_bytes.len();
+            if len >= 8 {
+                header_bytes[len - 8..len].copy_from_slice(&nonce_bytes);
+            }
+
+            let hash = Hash256::hash(&header_bytes);
+            if target.is_met_by(&hash) {
+                let mut solved = initial_header;
+                solved.nonce = nonce;
+                return Ok(solved);
+            }
+        }
+        return Err(MiningError::ExhaustedNonce {
+            height: template.height,
+            searched: max_iterations,
+        });
+    }
+
+    let chunk_size = max_iterations / num_threads;
+    let found_solution = AtomicBool::new(false);
+    let solved_nonce = AtomicU64::new(0);
+
+    std::thread::scope(|s| {
+        for t in 0..num_threads {
+            let t_start = start_nonce.wrapping_add(t * chunk_size);
+            let t_count = if t == num_threads - 1 {
+                max_iterations - (t * chunk_size)
+            } else {
+                chunk_size
+            };
+            let mut header_bytes = proto_bytes.clone();
+            let found = &found_solution;
+            let solved_n = &solved_nonce;
+
+            s.spawn(move || {
+                for i in 0..t_count {
+                    if (i & 4095) == 0 {
+                        if cancel.load(Ordering::Relaxed) || found.load(Ordering::Relaxed) {
+                            return;
+                        }
+                    }
+
+                    let nonce = t_start.wrapping_add(i);
+                    let nonce_bytes = nonce.to_le_bytes();
+                    let len = header_bytes.len();
+                    if len >= 8 {
+                        header_bytes[len - 8..len].copy_from_slice(&nonce_bytes);
+                    }
+
+                    let hash = Hash256::hash(&header_bytes);
+                    if target.is_met_by(&hash) {
+                        solved_n.store(nonce, Ordering::Relaxed);
+                        found.store(true, Ordering::Relaxed);
+                        return;
+                    }
+                }
             });
         }
+    });
 
-        let nonce = start_nonce.wrapping_add(i);
-        let nonce_bytes = nonce.to_le_bytes();
-        let len = header_bytes.len();
-        if len >= 8 {
-            header_bytes[len - 8..len].copy_from_slice(&nonce_bytes);
-        }
+    if cancel.load(Ordering::Relaxed) {
+        return Err(MiningError::Cancelled {
+            height: template.height,
+        });
+    }
 
-        let hash = Hash256::hash(&header_bytes);
-        if target.is_met_by(&hash) {
-            let mut solved = initial_header;
-            solved.nonce = nonce;
-            return Ok(solved);
-        }
+    if found_solution.load(Ordering::Relaxed) {
+        let mut solved = initial_header;
+        solved.nonce = solved_nonce.load(Ordering::Relaxed);
+        return Ok(solved);
     }
 
     Err(MiningError::ExhaustedNonce {

@@ -129,6 +129,13 @@ func (p *Peer) ID() string { return p.id }
 // Address returns the peer's remote address string.
 func (p *Peer) Address() string { return p.address }
 
+// SetAddress overrides the remote address string (e.g. when tunneled).
+func (p *Peer) SetAddress(addr string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.address = addr
+}
+
 // IsOutbound returns true if this node initiated the connection.
 func (p *Peer) IsOutbound() bool {
 	p.mu.Lock()

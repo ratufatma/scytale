@@ -20,7 +20,7 @@ struct Cli {
     data_dir: String,
 
     /// Path to IPC Unix domain socket
-    #[arg(long, default_value = DEFAULT_SOCKET_PATH)]
+    #[arg(long, visible_alias = "ipc-path", default_value = DEFAULT_SOCKET_PATH)]
     socket: String,
 
     /// Enable autonomous Proof-of-Work mining
@@ -34,6 +34,54 @@ struct Cli {
     /// Bearer API key for indexer authentication
     #[arg(long)]
     indexer_key: Option<String>,
+
+    /// TCP bind address for Go P2P daemon (e.g. 127.0.0.1:9001)
+    #[arg(long)]
+    p2p_bind: Option<String>,
+
+    /// Peer address(es) to dial for P2P network sync (can be repeated)
+    #[arg(long = "peer", visible_aliases = ["seeds", "seed", "peers", "seed-nodes"], action = clap::ArgAction::Append)]
+    peers: Vec<String>,
+
+    /// Custom path to the scytale-p2p binary
+    #[arg(long)]
+    p2p_bin: Option<std::path::PathBuf>,
+
+    /// Target difficulty for testnet/local testing (compact format, e.g. 0x207fffff)
+    #[arg(long)]
+    target: Option<String>,
+
+    /// Custom miner payout locking script in hex (e.g. 010203 or 040506)
+    #[arg(long)]
+    miner_payout: Option<String>,
+
+    /// Disable P2P subsystem completely (standalone mode)
+    #[arg(long, default_value_t = false)]
+    no_p2p: bool,
+
+    /// HTTP REST API bind address (e.g. 127.0.0.1:8332 or 0.0.0.0:8332)
+    #[arg(long, default_value = scytale_node::DEFAULT_HTTP_BIND)]
+    http_bind: String,
+
+    /// Disable HTTP gateway completely
+    #[arg(long, default_value_t = false)]
+    no_http: bool,
+
+    /// Enable UTXO snapshot fast sync mode
+    #[arg(long, default_value_t = false)]
+    fast_sync: bool,
+
+    /// DNS seed domain(s) to query for peer discovery (can be repeated)
+    #[arg(long = "dns-seed", visible_aliases = ["dns-seeds", "dns_seed", "dns_seeds"], action = clap::ArgAction::Append)]
+    dns_seeds: Vec<String>,
+
+    /// Disable DNS seed resolution for P2P network discovery
+    #[arg(long, default_value_t = false)]
+    no_dns_seeds: bool,
+
+    /// Maximum allowed reorganization depth before rejecting a competing branch
+    #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
+    max_reorg_depth: u64,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -41,6 +89,14 @@ struct Cli {
 enum Commands {
     /// Start the Scytale full node daemon
     Start {
+        /// Path to data directory
+        #[arg(short, long)]
+        data_dir: Option<String>,
+
+        /// Path to IPC Unix domain socket
+        #[arg(long, visible_alias = "ipc-path")]
+        socket: Option<String>,
+
         /// Enable autonomous Proof-of-Work mining
         #[arg(short, long, default_value_t = false)]
         mine: bool,
@@ -58,7 +114,7 @@ enum Commands {
         p2p_bind: Option<String>,
 
         /// Peer address(es) to dial for P2P network sync (can be repeated)
-        #[arg(long = "peer", visible_alias = "seed-nodes", action = clap::ArgAction::Append)]
+        #[arg(long = "peer", visible_aliases = ["seeds", "seed", "peers", "seed-nodes"], action = clap::ArgAction::Append)]
         peers: Vec<String>,
 
         /// Custom path to the scytale-p2p binary
@@ -90,7 +146,7 @@ enum Commands {
         fast_sync: bool,
 
         /// DNS seed domain(s) to query for peer discovery (can be repeated)
-        #[arg(long = "dns-seed", visible_alias = "seed", action = clap::ArgAction::Append)]
+        #[arg(long = "dns-seed", visible_aliases = ["dns-seeds", "dns_seed", "dns_seeds"], action = clap::ArgAction::Append)]
         dns_seeds: Vec<String>,
 
         /// Disable DNS seed resolution for P2P network discovery
@@ -135,8 +191,10 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    let start_opts = match &cli.command {
+    let (data_dir, socket, start_opts) = match &cli.command {
         Some(Commands::Start {
+            data_dir,
+            socket,
             mine,
             explorer_url,
             indexer_key,
@@ -152,23 +210,35 @@ async fn main() {
             dns_seeds,
             no_dns_seeds,
             max_reorg_depth,
-        }) => Some(StartOptions {
-            mine: *mine || cli.mine,
-            explorer_url: explorer_url.clone().or_else(|| cli.explorer_url.clone()),
-            indexer_key: indexer_key.clone().or_else(|| cli.indexer_key.clone()),
-            p2p_bind: p2p_bind.clone(),
-            peers: peers.clone(),
-            p2p_bin: p2p_bin.clone(),
-            target: target.clone(),
-            miner_payout: miner_payout.clone(),
-            no_p2p: *no_p2p,
-            http_bind: http_bind.clone(),
-            no_http: *no_http,
-            fast_sync: *fast_sync,
-            dns_seeds: dns_seeds.clone(),
-            no_dns_seeds: *no_dns_seeds,
-            max_reorg_depth: *max_reorg_depth,
-        }),
+        }) => {
+            let final_data_dir = data_dir.clone().unwrap_or_else(|| cli.data_dir.clone());
+            let final_socket = socket.clone().unwrap_or_else(|| cli.socket.clone());
+            let mut all_peers = cli.peers.clone();
+            all_peers.extend(peers.clone());
+            let mut all_dns = cli.dns_seeds.clone();
+            all_dns.extend(dns_seeds.clone());
+            (
+                final_data_dir.clone(),
+                final_socket.clone(),
+                Some(StartOptions {
+                    mine: *mine || cli.mine,
+                    explorer_url: explorer_url.clone().or_else(|| cli.explorer_url.clone()),
+                    indexer_key: indexer_key.clone().or_else(|| cli.indexer_key.clone()),
+                    p2p_bind: p2p_bind.clone().or_else(|| cli.p2p_bind.clone()),
+                    peers: all_peers,
+                    p2p_bin: p2p_bin.clone().or_else(|| cli.p2p_bin.clone()),
+                    target: target.clone().or_else(|| cli.target.clone()),
+                    miner_payout: miner_payout.clone().or_else(|| cli.miner_payout.clone()),
+                    no_p2p: *no_p2p || cli.no_p2p,
+                    http_bind: http_bind.clone(),
+                    no_http: *no_http || cli.no_http,
+                    fast_sync: *fast_sync || cli.fast_sync,
+                    dns_seeds: all_dns,
+                    no_dns_seeds: *no_dns_seeds || cli.no_dns_seeds,
+                    max_reorg_depth: *max_reorg_depth,
+                }),
+            )
+        }
         Some(Commands::Status) => {
             println!(
                 "Scytale Node Status: Operational (data dir: {})",
@@ -176,30 +246,27 @@ async fn main() {
             );
             return;
         }
-        None => {
-            if cli.mine || cli.explorer_url.is_some() {
-                Some(StartOptions {
-                    mine: cli.mine,
-                    explorer_url: cli.explorer_url.clone(),
-                    indexer_key: cli.indexer_key.clone(),
-                    p2p_bind: None,
-                    peers: Vec::new(),
-                    p2p_bin: None,
-                    target: None,
-                    miner_payout: None,
-                    no_p2p: false,
-                    http_bind: scytale_node::DEFAULT_HTTP_BIND.to_string(),
-                    no_http: false,
-                    fast_sync: false,
-                    dns_seeds: Vec::new(),
-                    no_dns_seeds: false,
-                    max_reorg_depth: scytale_consensus::DEFAULT_MAX_REORG_DEPTH,
-                })
-            } else {
-                println!("No subcommand specified. Run with `--help` for available commands.");
-                return;
-            }
-        }
+        None => (
+            cli.data_dir.clone(),
+            cli.socket.clone(),
+            Some(StartOptions {
+                mine: cli.mine,
+                explorer_url: cli.explorer_url.clone(),
+                indexer_key: cli.indexer_key.clone(),
+                p2p_bind: cli.p2p_bind.clone(),
+                peers: cli.peers.clone(),
+                p2p_bin: cli.p2p_bin.clone(),
+                target: cli.target.clone(),
+                miner_payout: cli.miner_payout.clone(),
+                no_p2p: cli.no_p2p,
+                http_bind: cli.http_bind.clone(),
+                no_http: cli.no_http,
+                fast_sync: cli.fast_sync,
+                dns_seeds: cli.dns_seeds.clone(),
+                no_dns_seeds: cli.no_dns_seeds,
+                max_reorg_depth: cli.max_reorg_depth,
+            }),
+        ),
     };
 
     if let Some(opts) = start_opts {
@@ -218,7 +285,7 @@ async fn main() {
             .unwrap_or_else(|| vec![0x01, 0x02, 0x03]);
 
         let config = NodeConfig {
-            data_dir: cli.data_dir.clone().into(),
+            data_dir: data_dir.into(),
             mining_enabled: opts.mine,
             miner_payout_script,
             genesis_difficulty_target: diff_target.unwrap_or(0x1d00_ffff),
@@ -230,7 +297,7 @@ async fn main() {
         tracing::info!(
             data_dir = %config.data_dir.display(),
             mining = config.mining_enabled,
-            socket = %cli.socket,
+            socket = %socket,
             p2p_bind = ?opts.p2p_bind,
             peers = ?opts.peers,
             http_bind = %opts.http_bind,
@@ -272,7 +339,7 @@ async fn main() {
 
                 let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
                 let ipc_server =
-                    IpcServer::new(&cli.socket, Arc::clone(&node), shutdown_tx.clone());
+                    IpcServer::new(&socket, Arc::clone(&node), shutdown_tx.clone());
 
                 let ipc_handle = tokio::spawn(async move {
                     if let Err(e) = ipc_server.run().await {

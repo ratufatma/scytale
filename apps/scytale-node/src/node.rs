@@ -30,7 +30,7 @@ use scytale_core::codec::CanonicalSerialize;
 use tokio::sync::broadcast;
 
 /// Upper bound on the nonce space searched per template before refresh.
-const MAX_NONCE_ITERATIONS: u64 = 20_000_000;
+const MAX_NONCE_ITERATIONS: u64 = 80_000_000;
 
 /// Permissionless verifier used during mempool reconciliation.
 ///
