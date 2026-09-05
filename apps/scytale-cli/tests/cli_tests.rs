@@ -34,14 +34,40 @@ struct TestCli {
     command: TestCommands,
 }
 
+#[derive(clap::Args, Debug, PartialEq, Eq)]
+struct TestPassbookArgs {
+    #[arg(short, long)]
+    lock: Option<String>,
+
+    #[command(subcommand)]
+    subcommand: Option<TestPassbookSubcommand>,
+}
+
+#[derive(clap::Subcommand, Debug, PartialEq, Eq)]
+enum TestPassbookSubcommand {
+    Show {
+        address: String,
+        #[arg(long)]
+        from_height: Option<u64>,
+        #[arg(long)]
+        to_height: Option<u64>,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+    },
+    Statement {
+        address: String,
+        #[arg(short, long)]
+        output: Option<std::path::PathBuf>,
+        #[arg(long)]
+        verify: bool,
+    },
+}
+
 #[derive(clap::Subcommand, Debug, PartialEq, Eq)]
 enum TestCommands {
     Status,
     Account(TestAccountArgs),
-    Passbook {
-        #[arg(short, long)]
-        lock: Option<String>,
-    },
+    Passbook(TestPassbookArgs),
     Balance {
         #[arg(short, long)]
         account: Option<String>,
@@ -149,14 +175,21 @@ fn test_cli_argument_parsing() {
     assert_eq!(cli.command, TestCommands::Status);
 
     let cli = TestCli::try_parse_from(["scytale-cli", "passbook"]).unwrap();
-    assert_eq!(cli.command, TestCommands::Passbook { lock: None });
+    assert_eq!(
+        cli.command,
+        TestCommands::Passbook(TestPassbookArgs {
+            lock: None,
+            subcommand: None,
+        })
+    );
 
     let cli = TestCli::try_parse_from(["scytale-cli", "passbook", "--lock", "010203"]).unwrap();
     assert_eq!(
         cli.command,
-        TestCommands::Passbook {
-            lock: Some("010203".into())
-        }
+        TestCommands::Passbook(TestPassbookArgs {
+            lock: Some("010203".into()),
+            subcommand: None,
+        })
     );
 
     let cli = TestCli::try_parse_from(["scytale-cli", "balance"]).unwrap();
@@ -564,4 +597,125 @@ fn test_formatter_pure_integer_math() {
         formatter::format_integer_commas(1000000000),
         "1,000,000,000"
     );
+}
+
+#[test]
+fn test_passbook_subcommand_parsing_and_table_rendering() {
+    // Test show subcommand parsing
+    let cli = TestCli::try_parse_from([
+        "scytale-cli",
+        "passbook",
+        "show",
+        "scy1qtestaccount",
+        "--from-height",
+        "10",
+        "--limit",
+        "25",
+    ])
+    .unwrap();
+
+    match cli.command {
+        TestCommands::Passbook(args) => match args.subcommand {
+            Some(TestPassbookSubcommand::Show {
+                address,
+                from_height,
+                to_height,
+                limit,
+            }) => {
+                assert_eq!(address, "scy1qtestaccount");
+                assert_eq!(from_height, Some(10));
+                assert_eq!(to_height, None);
+                assert_eq!(limit, 25);
+            }
+            _ => panic!("Expected TestPassbookSubcommand::Show"),
+        },
+        _ => panic!("Expected TestCommands::Passbook"),
+    }
+
+    // Test statement subcommand parsing with verify and output
+    let cli2 = TestCli::try_parse_from([
+        "scytale-cli",
+        "passbook",
+        "statement",
+        "scy1qtestaccount",
+        "--verify",
+        "--output",
+        "/tmp/statement.json",
+    ])
+    .unwrap();
+
+    match cli2.command {
+        TestCommands::Passbook(args) => match args.subcommand {
+            Some(TestPassbookSubcommand::Statement {
+                address,
+                output,
+                verify,
+            }) => {
+                assert_eq!(address, "scy1qtestaccount");
+                assert_eq!(output, Some(std::path::PathBuf::from("/tmp/statement.json")));
+                assert!(verify);
+            }
+            _ => panic!("Expected TestPassbookSubcommand::Statement"),
+        },
+        _ => panic!("Expected TestCommands::Passbook"),
+    }
+
+    // Render table with mock PassbookView to ensure zero panics
+    let mut token_balances = std::collections::BTreeMap::new();
+    token_balances.insert(scytale_primitives::Hash256::new([0x77; 32]), 50_000);
+
+    let view = scytale_node::passbook::PassbookView {
+        confirmed_native_balance_quanta: 15_000_000_000,
+        token_balances,
+        pending_native_balance_quanta: -100_000_000,
+        entries: vec![
+            scytale_node::passbook::PassbookEntry {
+                entry_number: 1,
+                timestamp: 1725500000,
+                asset: scytale_node::passbook::PassbookAsset::Native,
+                action: scytale_node::passbook::PassbookAction::MiningReward,
+                amount_quanta: 5_000_000_000,
+                fee_quanta: 0,
+                status: scytale_node::passbook::EntryStatus::Confirmed { confirmations: 10 },
+                txid: scytale_primitives::Hash256::new([0x11; 32]),
+                outpoint: Some(scytale_primitives::OutPoint::new(
+                    scytale_primitives::Hash256::new([0x11; 32]),
+                    0,
+                )),
+                block_height: Some(1),
+                datum_hash: None,
+            },
+            scytale_node::passbook::PassbookEntry {
+                entry_number: 2,
+                timestamp: 1725501000,
+                asset: scytale_node::passbook::PassbookAsset::Scy20 {
+                    token_id: scytale_primitives::Hash256::new([0x77; 32]),
+                },
+                action: scytale_node::passbook::PassbookAction::Scy20Mint,
+                amount_quanta: 50_000,
+                fee_quanta: 0,
+                status: scytale_node::passbook::EntryStatus::Confirmed { confirmations: 9 },
+                txid: scytale_primitives::Hash256::new([0x22; 32]),
+                outpoint: None,
+                block_height: Some(2),
+                datum_hash: None,
+            },
+        ],
+    };
+
+    formatter::print_passbook_view_table("scy1qtestaccount", &view);
+
+    // Mock statement verification output test
+    let statement = scytale_node::passbook::PassbookStatement {
+        account: scytale_core::Address::new([0x55; 32]),
+        generated_at_height: 5,
+        block_hash: scytale_primitives::Hash256::new([0xaa; 32]),
+        utxo_root: scytale_primitives::Hash256::new([0xbb; 32]),
+        confirmed_native_balance_quanta: 15_000_000_000,
+        token_balances: std::collections::BTreeMap::new(),
+        entries: vec![],
+        active_utxo_proofs: vec![],
+    };
+    formatter::print_statement_verification(&statement, true);
+    formatter::print_statement_verification(&statement, false);
 }

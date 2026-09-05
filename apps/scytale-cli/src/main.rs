@@ -44,6 +44,14 @@ pub struct Cli {
     )]
     pub identity_file: Option<PathBuf>,
 
+    #[arg(
+        long,
+        global = true,
+        default_value = "http://127.0.0.1:8332",
+        help = "HTTP Gateway URL of the node"
+    )]
+    pub node_url: String,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -56,12 +64,8 @@ pub enum Commands {
     /// Manage local wallet identities and account profiles
     Account(AccountArgs),
 
-    /// Query and display the canonical passbook ledger for an account (defaults to active account)
-    Passbook {
-        /// Optional account alias or locking condition hex script (e.g. 010203 or 'default')
-        #[arg(short, long)]
-        lock: Option<String>,
-    },
+    /// Query and display the canonical passbook ledger or cryptographic statement
+    Passbook(PassbookArgs),
 
     /// Shortcut to display the confirmed and pending balance of an account
     Balance {
@@ -223,6 +227,45 @@ pub enum PeerSubcommands {
 }
 
 #[derive(Args, Debug, PartialEq, Eq)]
+pub struct PassbookArgs {
+    /// Optional account alias or locking condition hex script (e.g. 010203 or 'default')
+    #[arg(short, long)]
+    pub lock: Option<String>,
+
+    #[command(subcommand)]
+    pub subcommand: Option<PassbookSubcommand>,
+}
+
+#[derive(Subcommand, Debug, PartialEq, Eq)]
+pub enum PassbookSubcommand {
+    /// Show financial passbook table for an address
+    Show {
+        /// Bech32 account address (e.g. scy1...)
+        address: String,
+        /// Starting block height (optional)
+        #[arg(long)]
+        from_height: Option<u64>,
+        /// Ending block height (optional)
+        #[arg(long)]
+        to_height: Option<u64>,
+        /// Maximum entries to display
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Export or verify a cryptographic Merkle passbook statement for an address
+    Statement {
+        /// Bech32 account address (e.g. scy1...)
+        address: String,
+        /// Optional path to save JSON statement output
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Cryptographically verify Merkle inclusion proofs offline against the utxo_root
+        #[arg(long)]
+        verify: bool,
+    },
+}
+
+#[derive(Args, Debug, PartialEq, Eq)]
 pub struct AccountArgs {
     #[command(subcommand)]
     pub action: Option<AccountSubcommands>,
@@ -353,28 +396,104 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
             }
         },
 
-        Commands::Passbook { lock } => {
-            let lock_hex = store.resolve_locking_script(lock.as_deref()).map_err(|e| {
-                CliClientError::User(format!("Could not resolve account lock: {e}"))
-            })?;
+        Commands::Passbook(args) => match args.subcommand {
+            Some(PassbookSubcommand::Show {
+                address,
+                from_height,
+                to_height,
+                limit,
+            }) => {
+                let mut url = format!(
+                    "{}/api/v1/passbook?address={}",
+                    cli.node_url.trim_end_matches('/'),
+                    address
+                );
+                if let Some(fh) = from_height {
+                    url.push_str(&format!("&from_height={fh}"));
+                }
+                if let Some(th) = to_height {
+                    url.push_str(&format!("&to_height={th}"));
+                }
+                url.push_str(&format!("&limit={limit}"));
 
-            let resp = send_node_request(
-                &cli.socket,
-                NodeRequest::GetPassbook {
-                    locking_script_hex: lock_hex,
-                },
-            )
-            .await?;
-            match resp {
-                NodeResponse::Passbook(view) => {
-                    formatter::print_passbook(&view);
-                }
-                NodeResponse::Error { message } => {
-                    eprintln!("Error from node: {message}");
-                }
-                other => eprintln!("Unexpected response: {other:?}"),
+                let resp = ureq::get(&url)
+                    .call()
+                    .map_err(|e| CliClientError::User(format!("HTTP request failed to {url}: {e}")))?;
+
+                let view: scytale_node::passbook::PassbookView = resp.into_json().map_err(|e| {
+                    CliClientError::User(format!("Failed to parse PassbookView JSON response: {e}"))
+                })?;
+
+                formatter::print_passbook_view_table(&address, &view);
             }
-        }
+            Some(PassbookSubcommand::Statement {
+                address,
+                output,
+                verify,
+            }) => {
+                let url = format!(
+                    "{}/api/v1/passbook/statement?address={}",
+                    cli.node_url.trim_end_matches('/'),
+                    address
+                );
+
+                let resp = ureq::get(&url)
+                    .call()
+                    .map_err(|e| CliClientError::User(format!("HTTP request failed to {url}: {e}")))?;
+
+                let statement: scytale_node::passbook::PassbookStatement = resp.into_json().map_err(|e| {
+                    CliClientError::User(format!("Failed to parse PassbookStatement JSON response: {e}"))
+                })?;
+
+                if let Some(output_path) = output {
+                    let json_str = serde_json::to_string_pretty(&statement).map_err(|e| {
+                        CliClientError::User(format!("Failed to serialize statement JSON: {e}"))
+                    })?;
+                    std::fs::write(&output_path, json_str).map_err(|e| {
+                        CliClientError::User(format!(
+                            "Failed to write statement to {}: {e}",
+                            output_path.display()
+                        ))
+                    })?;
+                    println!("Passbook statement saved to {}", output_path.display());
+                }
+
+                if verify {
+                    let is_valid = statement.verify_integrity();
+                    formatter::print_statement_verification(&statement, is_valid);
+                    if !is_valid {
+                        return Err(CliClientError::User(
+                            "Cryptographic statement verification failed!".to_string(),
+                        ));
+                    }
+                } else {
+                    let is_valid = statement.verify_integrity();
+                    formatter::print_statement_verification(&statement, is_valid);
+                }
+            }
+            None => {
+                let lock_hex = store.resolve_locking_script(args.lock.as_deref()).map_err(|e| {
+                    CliClientError::User(format!("Could not resolve account lock: {e}"))
+                })?;
+
+                let resp = send_node_request(
+                    &cli.socket,
+                    NodeRequest::GetPassbook {
+                        locking_script_hex: lock_hex,
+                    },
+                )
+                .await?;
+                match resp {
+                    NodeResponse::Passbook(view) => {
+                        formatter::print_passbook(&view);
+                    }
+                    NodeResponse::Error { message } => {
+                        eprintln!("Error from node: {message}");
+                    }
+                    other => eprintln!("Unexpected response: {other:?}"),
+                }
+            }
+        },
 
         Commands::Balance { account } => {
             let lock_hex = store

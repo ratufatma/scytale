@@ -448,5 +448,102 @@ async fn test_tx_output_script_analysis() {
         tx["outputs"][0]["op_return_payload"],
         serde_json::Value::Null
     );
+}
 
+#[tokio::test]
+async fn test_http_passbook_api_and_statement_endpoints() {
+    let node = setup_test_node();
+    let app = router(Arc::clone(&node));
+
+    let founder_address = scytale_core::genesis::GENESIS_FOUNDER_ADDRESS;
+
+    // 1. GET /api/v1/passbook?address=<founder>
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/passbook?address={}", founder_address))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    let view: scytale_node::passbook::PassbookView = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        view.confirmed_native_balance_quanta,
+        scytale_core::genesis::GENESIS_FOUNDER_QUANTA
+    );
+    assert!(!view.entries.is_empty());
+
+    // 2. GET /api/v1/passbook with limit query
+    let response_limit = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/passbook?address={}&limit=1", founder_address))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_limit.status(), StatusCode::OK);
+    let body_bytes = to_bytes(response_limit.into_body(), 1024 * 1024).await.unwrap();
+    let view_limit: scytale_node::passbook::PassbookView = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(view_limit.entries.len(), 1);
+
+    // 3. GET /api/v1/passbook with invalid address fails
+    let response_bad = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/passbook?address=invalid_bech32")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_bad.status(), StatusCode::BAD_REQUEST);
+
+    // 4. GET /api/v1/passbook/statement?address=<founder>
+    let response_statement = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/v1/passbook/statement?address={}", founder_address))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_statement.status(), StatusCode::OK);
+    let body_bytes = to_bytes(response_statement.into_body(), 1024 * 1024).await.unwrap();
+    let statement: scytale_node::passbook::PassbookStatement = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(
+        statement.account.to_bech32().unwrap(),
+        founder_address
+    );
+    assert_eq!(
+        statement.confirmed_native_balance_quanta,
+        scytale_core::genesis::GENESIS_FOUNDER_QUANTA
+    );
+    assert_eq!(statement.generated_at_height, 0);
+    assert_eq!(statement.active_utxo_proofs.len(), 1);
+    assert!(
+        statement.verify_integrity(),
+        "statement received from HTTP gateway must pass cryptographic integrity verification"
+    );
+
+    // 5. GET /api/v1/passbook/statement with invalid address fails
+    let response_statement_bad = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/passbook/statement?address=bad_address")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response_statement_bad.status(), StatusCode::BAD_REQUEST);
 }

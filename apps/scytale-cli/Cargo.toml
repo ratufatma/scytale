@@ -27,9 +27,10 @@ tokio = { workspace = true }
 bincode = { workspace = true }
 hex = { workspace = true }
 bip39 = { workspace = true }
+ureq = { workspace = true }
+scytale-node = { path = "../scytale-node" }
 
 [dev-dependencies]
 tempfile = "3.10"
-scytale-node = { path = "../scytale-node" }
 scytale-consensus = { path = "../../crates/scytale-consensus" }
 scytale-storage = { path = "../../crates/scytale-storage" }

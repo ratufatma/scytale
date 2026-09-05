@@ -553,6 +553,104 @@ async fn get_mempool(State(node): State<Arc<Node>>) -> Json<MempoolResponse> {
     })
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct PassbookApiQuery {
+    pub address: String,
+    pub from_height: Option<u64>,
+    pub to_height: Option<u64>,
+    pub limit: Option<usize>,
+}
+
+async fn get_passbook_api_view(
+    State(node): State<Arc<Node>>,
+    Query(query): Query<PassbookApiQuery>,
+) -> Result<Json<crate::passbook::PassbookView>, (StatusCode, Json<ErrorResponse>)> {
+    let addr = scytale_core::Address::parse(&query.address).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("Invalid Bech32 address: {e}"),
+            }),
+        )
+    })?;
+
+    let p2pkh_script = scytale_script::builder::ScriptBuilder::new()
+        .push_opcode(scytale_script::opcode::OpCode::OpDup)
+        .push_opcode(scytale_script::opcode::OpCode::OpBlake3)
+        .push_data(addr.hash())
+        .push_opcode(scytale_script::opcode::OpCode::OpEqualVerify)
+        .push_opcode(scytale_script::opcode::OpCode::OpCheckSig)
+        .build();
+
+    let mut passbook = Passbook::from_address(addr);
+    passbook.add_owned_lock(p2pkh_script);
+
+    let mut view = passbook.view(&node).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    if let Some(from) = query.from_height {
+        view.entries
+            .retain(|e| e.block_height.map(|h| h >= from).unwrap_or(true));
+    }
+    if let Some(to) = query.to_height {
+        view.entries
+            .retain(|e| e.block_height.map(|h| h <= to).unwrap_or(true));
+    }
+    let limit = query.limit.unwrap_or(50);
+    if view.entries.len() > limit {
+        view.entries.truncate(limit);
+    }
+
+    Ok(Json(view))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PassbookStatementApiQuery {
+    pub address: String,
+}
+
+async fn get_passbook_api_statement(
+    State(node): State<Arc<Node>>,
+    Query(query): Query<PassbookStatementApiQuery>,
+) -> Result<Json<crate::passbook::PassbookStatement>, (StatusCode, Json<ErrorResponse>)> {
+    let addr = scytale_core::Address::parse(&query.address).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: format!("Invalid Bech32 address: {e}"),
+            }),
+        )
+    })?;
+
+    let p2pkh_script = scytale_script::builder::ScriptBuilder::new()
+        .push_opcode(scytale_script::opcode::OpCode::OpDup)
+        .push_opcode(scytale_script::opcode::OpCode::OpBlake3)
+        .push_data(addr.hash())
+        .push_opcode(scytale_script::opcode::OpCode::OpEqualVerify)
+        .push_opcode(scytale_script::opcode::OpCode::OpCheckSig)
+        .build();
+
+    let mut passbook = Passbook::from_address(addr.clone());
+    passbook.add_owned_lock(p2pkh_script);
+
+    let statement = passbook.generate_statement(&node, &addr).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
+
+    Ok(Json(statement))
+}
+
 async fn get_passbook(
     State(node): State<Arc<Node>>,
     Path(locking_script_or_addr): Path<String>,
@@ -698,6 +796,8 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/api/v1/tx", post(submit_tx))
         .route("/api/v1/tx/:txid", get(get_transaction))
         .route("/api/v1/mempool", get(get_mempool))
+        .route("/api/v1/passbook", get(get_passbook_api_view))
+        .route("/api/v1/passbook/statement", get(get_passbook_api_statement))
         .route("/api/v1/passbook/:locking_script_hex", get(get_passbook))
         .route("/api/v1/provenance/:txid/:index", get(get_provenance))
         .layer(cors)

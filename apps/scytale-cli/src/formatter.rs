@@ -397,3 +397,128 @@ pub fn print_embed_data_success(
     println!("Status            : Admitted to mempool (data carrier will commit on-chain)");
     println!("============================================================");
 }
+
+fn format_unix_timestamp(ts: u64) -> String {
+    if ts == 0 {
+        return "Genesis".to_string();
+    }
+    let sec = ts % 60;
+    let min = (ts / 60) % 60;
+    let hour = (ts / 3600) % 24;
+    let days = ts / 86400;
+    format!("Day {days} {hour:02}:{min:02}:{sec:02}")
+}
+
+/// Prints a classic financial bank passbook table from a `PassbookView`.
+pub fn print_passbook_view_table(address: &str, view: &scytale_node::passbook::PassbookView) {
+    let border = "+--------+---------------------+-----------------------+-------------------+------------------+-----------+-------+";
+    println!("+---------------------------------------------------------------------------------------------------------------------+");
+    println!("|                                        SCYTALE FINANCIAL PASSBOOK STATEMENT                                         |");
+    println!("+---------------------------------------------------------------------------------------------------------------------+");
+    println!("| Account Address   : {:<96}|", address);
+    println!(
+        "| Confirmed Balance : {:<15} SCY ({:<25} quanta)                                  |",
+        format_quanta_to_scy(view.confirmed_native_balance_quanta),
+        format_integer_commas(view.confirmed_native_balance_quanta)
+    );
+    println!(
+        "| Pending Delta     : {:<15} SCY ({:<25} quanta)                                  |",
+        format_quanta_signed_to_scy(view.pending_native_balance_quanta),
+        view.pending_native_balance_quanta
+    );
+    println!("| Total Entries     : {:<96}|", view.entries.len());
+    println!("{}", border);
+    println!(
+        "| {:<6} | {:<19} | {:<21} | {:<17} | {:<16} | {:<9} | {:<5} |",
+        "#ENTRY", "TIMESTAMP (UTC)", "ACTION", "AMOUNT (SCY)", "FEE (SCY)", "STATUS", "CONF"
+    );
+    println!("{}", border);
+
+    if view.entries.is_empty() {
+        println!("| {:<113} |", "(No transaction mutations recorded for this account)");
+    } else {
+        for e in &view.entries {
+            let entry_num = format!("#{:06}", e.entry_number);
+            let time_str = format_unix_timestamp(e.timestamp);
+            let action_str = match &e.action {
+                scytale_node::passbook::PassbookAction::Received => "Received".to_string(),
+                scytale_node::passbook::PassbookAction::Sent => "Sent".to_string(),
+                scytale_node::passbook::PassbookAction::MiningReward => "MiningReward".to_string(),
+                scytale_node::passbook::PassbookAction::Change => "Change".to_string(),
+                scytale_node::passbook::PassbookAction::Scy20Mint => "Scy20Mint".to_string(),
+                scytale_node::passbook::PassbookAction::Scy20Transfer => "Scy20Transfer".to_string(),
+                scytale_node::passbook::PassbookAction::Scy20Burn => "Scy20Burn".to_string(),
+                scytale_node::passbook::PassbookAction::ContractInteraction { .. } => "ContractInteraction".to_string(),
+                scytale_node::passbook::PassbookAction::VaultDeposit { .. } => "VaultDeposit".to_string(),
+                scytale_node::passbook::PassbookAction::VaultWithdrawal => "VaultWithdrawal".to_string(),
+            };
+
+            let amount_str = match &e.asset {
+                scytale_node::passbook::PassbookAsset::Native => {
+                    format!("{} SCY", format_quanta_to_scy(e.amount_quanta))
+                }
+                scytale_node::passbook::PassbookAsset::Scy20 { .. } => {
+                    format!("{} tokens", e.amount_quanta)
+                }
+            };
+            let fee_str = format!("{} SCY", format_quanta_to_scy(e.fee_quanta));
+            let (status_str, conf_str) = match e.status {
+                scytale_node::passbook::EntryStatus::Confirmed { confirmations } => {
+                    ("Confirmed", confirmations.to_string())
+                }
+                scytale_node::passbook::EntryStatus::Pending => ("Pending", "-".to_string()),
+                scytale_node::passbook::EntryStatus::Reorganized => ("Reorg", "-".to_string()),
+            };
+
+            println!(
+                "| {:<6} | {:<19} | {:<21} | {:<17} | {:<16} | {:<9} | {:<5} |",
+                entry_num, time_str, action_str, amount_str, fee_str, status_str, conf_str
+            );
+        }
+    }
+    println!("{}", border);
+
+    if !view.token_balances.is_empty() {
+        println!("| Token Balances (SCY-20):                                                                                            |");
+        for (token_id, balance) in &view.token_balances {
+            let line = format!("  * Token [0x{}]: {} units", token_id, format_integer_commas(*balance));
+            println!("| {:<113} |", line);
+        }
+        println!("+---------------------------------------------------------------------------------------------------------------------+");
+    }
+}
+
+/// Prints the verification result of a cryptographic PassbookStatement.
+pub fn print_statement_verification(
+    statement: &scytale_node::passbook::PassbookStatement,
+    is_valid: bool,
+) {
+    println!("============================================================");
+    println!("       CRYPTOGRAPHIC PASSBOOK STATEMENT VERIFICATION        ");
+    println!("============================================================");
+    println!("Account Address   : {}", statement.account);
+    println!("Chain Tip Height  : {}", statement.generated_at_height);
+    println!("Canonical Block   : 0x{}", statement.block_hash);
+    println!("UTXO Merkle Root  : 0x{}", statement.utxo_root);
+    println!(
+        "Confirmed Balance : {} SCY ({} quanta)",
+        format_quanta_to_scy(statement.confirmed_native_balance_quanta),
+        format_integer_commas(statement.confirmed_native_balance_quanta)
+    );
+    println!("Active UTXO Proofs: {}", statement.active_utxo_proofs.len());
+    println!("------------------------------------------------------------");
+    if is_valid {
+        println!("Verification Status: [PASS] VALID");
+        println!(
+            "Summary           : All {} active UTXO Merkle proofs successfully\n                    verified against block utxo_root, exactly matching\n                    confirmed balance of {} SCY.",
+            statement.active_utxo_proofs.len(),
+            format_quanta_to_scy(statement.confirmed_native_balance_quanta)
+        );
+    } else {
+        println!("Verification Status: [FAIL] INVALID");
+        println!(
+            "Summary           : Cryptographic verification failed! Statement has been\n                    tampered with, active UTXOs do not match utxo_root,\n                    or balance does not reconcile."
+        );
+    }
+    println!("============================================================");
+}
