@@ -171,7 +171,8 @@ impl Node {
         if tip.is_none() {
             let genesis = Self::make_genesis(&self.config);
             let mut chain_tree = self.shared.chain_tree.lock().unwrap();
-            *chain_tree = scytale_consensus::ChainTree::new(genesis.clone());
+            *chain_tree = scytale_consensus::ChainTree::new(genesis.clone())
+                .with_max_reorg_depth(self.config.max_reorg_depth);
             let tip_height = chain_tree.canonical_height();
             let work = chain_tree.canonical_work().0;
             commit_block(
@@ -217,7 +218,8 @@ impl Node {
         }
 
         // Replay blocks into a fresh chain tree, rebuilding the canonical UTXO set.
-        let mut tree = scytale_consensus::ChainTree::new(path_rev[0].clone());
+        let mut tree = scytale_consensus::ChainTree::new(path_rev[0].clone())
+            .with_max_reorg_depth(self.config.max_reorg_depth);
         let mut utxo_set = UtxoSet::new();
         utxo_set
             .apply_coinbase(&path_rev[0].transactions[0], 0)
@@ -291,6 +293,7 @@ impl Node {
     /// Returns a fresh chain tree seeded with a placeholder genesis (used before recovery).
     fn empty_chain(config: &NodeConfig) -> scytale_consensus::ChainTree {
         scytale_consensus::ChainTree::new(Self::make_genesis(config))
+            .with_max_reorg_depth(config.max_reorg_depth)
     }
 
     /// Gracefully shuts the node down, cancelling workers before releasing storage.

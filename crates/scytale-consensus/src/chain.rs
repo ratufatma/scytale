@@ -25,10 +25,14 @@ pub struct ReorgResult {
     pub transactions_for_mempool: Vec<Transaction>,
 }
 
+/// Default maximum allowed reorganization depth (100 blocks).
+pub const DEFAULT_MAX_REORG_DEPTH: u64 = 100;
+
 /// In-memory tree tracking all validated blocks, competing forks, and the active canonical tip.
 pub struct ChainTree {
     nodes: HashMap<Hash256, BlockNode>,
     canonical_tip: Hash256,
+    max_reorg_depth: u64,
 }
 
 impl ChainTree {
@@ -53,7 +57,24 @@ impl ChainTree {
         Self {
             nodes,
             canonical_tip: genesis_hash,
+            max_reorg_depth: DEFAULT_MAX_REORG_DEPTH,
         }
+    }
+
+    /// Sets the maximum reorganization depth allowed during fork resolution.
+    pub fn with_max_reorg_depth(mut self, max_reorg_depth: u64) -> Self {
+        self.max_reorg_depth = max_reorg_depth;
+        self
+    }
+
+    /// Returns the maximum allowed reorganization depth.
+    pub fn max_reorg_depth(&self) -> u64 {
+        self.max_reorg_depth
+    }
+
+    /// Updates the maximum allowed reorganization depth.
+    pub fn set_max_reorg_depth(&mut self, max_reorg_depth: u64) {
+        self.max_reorg_depth = max_reorg_depth;
     }
 
     /// Returns the active canonical tip hash.
@@ -216,6 +237,16 @@ impl ChainTree {
             } else {
                 break;
             }
+        }
+
+        let reorg_depth = disconnected_blocks.len() as u64;
+        if reorg_depth > self.max_reorg_depth {
+            // Retain block in the DAG for archival/audit without switching canonical tip
+            self.nodes.insert(block_hash, new_node);
+            return Err(ChainError::ReorgDepthExceeded {
+                depth: reorg_depth,
+                max: self.max_reorg_depth,
+            });
         }
 
         // Build connected path: from common_ancestor up to candidate block (excluding common_ancestor)

@@ -44,6 +44,7 @@ type Daemon struct {
 	fastSync        bool
 	dnsSeeds        []string
 	noDNSSeeds      bool
+	fallbackSeeds   []string
 
 	bridge            *bridge.SocketConsensusBridge
 	filter            *gossip.Filter
@@ -74,10 +75,16 @@ func main() {
 
 	var dnsSeedsFlag stringList
 	flag.Var(&dnsSeedsFlag, "dns-seed", "DNS seed domain to query on cold start (can be specified multiple times)")
+
+	var fallbackSeedsFlag stringList
+	flag.Var(&fallbackSeedsFlag, "fallback-seed", "Hardcoded fallback seed peer to dial if DNS seeds fail (can be specified multiple times)")
 	flag.Parse()
 
 	if len(dnsSeedsFlag) == 0 {
 		dnsSeedsFlag = []string{"seed.myratu.com"}
+	}
+	if len(fallbackSeedsFlag) == 0 {
+		fallbackSeedsFlag = append([]string(nil), peer.DefaultFallbackSeeds...)
 	}
 
 	if *bridgeSocket == "" {
@@ -98,6 +105,7 @@ func main() {
 		fastSync:          *fastSync,
 		dnsSeeds:          dnsSeedsFlag,
 		noDNSSeeds:        *noDNSSeeds,
+		fallbackSeeds:     fallbackSeedsFlag,
 		peerPool:          make(map[string]*peer.Peer),
 		snapshotAssembler: peer.NewSnapshotAssembler(),
 		triggerDial:       make(chan struct{}, 1),
@@ -131,6 +139,15 @@ func (d *Daemon) Run() error {
 	// Cold-start DNS seed discovery if AddrBook is empty and DNS seeds enabled
 	if !d.noDNSSeeds && len(d.dnsSeeds) > 0 && d.addrBook.Size() == 0 {
 		go d.queryDNSSeedsAsync()
+	} else if d.addrBook.Size() == 0 && len(d.fallbackSeeds) > 0 {
+		log.Printf("[P2P] AddrBook is empty, seeding with %d fallback peers...", len(d.fallbackSeeds))
+		added := d.addrBook.AddAddresses(d.fallbackSeeds, "fallback-seed")
+		if added > 0 {
+			select {
+			case d.triggerDial <- struct{}{}:
+			default:
+			}
+		}
 	}
 
 	log.Printf("[P2P] Consensus bridge established.")
@@ -170,7 +187,17 @@ func (d *Daemon) queryDNSSeedsAsync() {
 	log.Printf("[P2P] Resolving DNS seeds: %s...", strings.Join(d.dnsSeeds, ", "))
 	resolved := peer.ResolveDNSSeeds(d.dnsSeeds, 9001, nil)
 	if len(resolved) == 0 {
-		log.Printf("[P2P] DNS seed resolution returned 0 addresses.")
+		log.Printf("[P2P] DNS seed resolution returned 0 addresses. Registering fallback seed peers...")
+		if len(d.fallbackSeeds) > 0 {
+			added := d.addrBook.AddAddresses(d.fallbackSeeds, "fallback-seed")
+			log.Printf("[P2P] Fallback seed discovery added %d new peers.", added)
+			if added > 0 {
+				select {
+				case d.triggerDial <- struct{}{}:
+				default:
+				}
+			}
+		}
 		return
 	}
 
@@ -199,6 +226,13 @@ func (d *Daemon) autoDialerLoop() {
 		case <-dnsFallbackTicker.C:
 			if !d.noDNSSeeds && len(d.dnsSeeds) > 0 && d.addrBook.Size() == 0 {
 				go d.queryDNSSeedsAsync()
+			} else if d.addrBook.Size() == 0 && len(d.fallbackSeeds) > 0 {
+				log.Printf("[P2P] AddrBook still empty after ticker, re-adding fallback seeds...")
+				d.addrBook.AddAddresses(d.fallbackSeeds, "fallback-seed")
+				select {
+				case d.triggerDial <- struct{}{}:
+				default:
+				}
 			}
 		case <-ticker.C:
 		}

@@ -1,18 +1,31 @@
 use scytale_sdk::TxContext;
 use wasmi::*;
 
-#[derive(Debug)]
+/// Maximum linear memory pages allowed for a smart contract instance (64 pages = 4 MiB).
+pub const MAX_WASM_MEMORY_PAGES: u32 = 64;
+/// Standard WebAssembly memory page size in bytes (64 KiB).
+pub const WASM_PAGE_SIZE: usize = 65536;
+/// Maximum linear memory in bytes allowed for a smart contract instance (4,194,304 bytes).
+pub const MAX_WASM_MEMORY_BYTES: usize = (MAX_WASM_MEMORY_PAGES as usize) * WASM_PAGE_SIZE;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum VmError {
     CompilationFailed,
     InstantiationFailed,
     ExecutionTrapped,
     MemoryAccessViolation,
     OutOfGas,
+    MemoryLimitExceeded { pages: u32, max_pages: u32 },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResult {
     pub is_valid: bool,
     pub gas_consumed: u64,
+}
+
+struct VmState {
+    limits: StoreLimits,
 }
 
 /// Mesin eksekusi ScyVM untuk memvalidasi transaksi berbasis eUTXO
@@ -32,10 +45,16 @@ impl ScyVM {
         let engine = Engine::new(&config);
         let module = Module::new(&engine, wasm_bytecode).map_err(|_| VmError::CompilationFailed)?;
 
-        let mut store = Store::new(&engine, ());
+        let limits = StoreLimitsBuilder::new()
+            .memory_size(MAX_WASM_MEMORY_BYTES)
+            .trap_on_grow_failure(true)
+            .build();
+
+        let mut store = Store::new(&engine, VmState { limits });
+        store.limiter(|state| &mut state.limits);
         store.add_fuel(gas_limit).map_err(|_| VmError::OutOfGas)?;
 
-        let linker = <Linker<()>>::new(&engine);
+        let linker = <Linker<VmState>>::new(&engine);
         let instance = linker
             .instantiate(&mut store, &module)
             .map_err(|_| VmError::InstantiationFailed)?
@@ -45,6 +64,14 @@ impl ScyVM {
         let memory = instance
             .get_memory(&store, "memory")
             .ok_or(VmError::MemoryAccessViolation)?;
+
+        let initial_pages: u32 = u32::from(memory.current_pages(&store));
+        if initial_pages > MAX_WASM_MEMORY_PAGES {
+            return Err(VmError::MemoryLimitExceeded {
+                pages: initial_pages,
+                max_pages: MAX_WASM_MEMORY_PAGES,
+            });
+        }
 
         let ctx_bytes = bincode::serialize(context).map_err(|_| VmError::MemoryAccessViolation)?;
 
@@ -80,6 +107,14 @@ impl ScyVM {
                 ),
             )
             .map_err(|_| VmError::ExecutionTrapped)?;
+
+        let final_pages: u32 = u32::from(memory.current_pages(&store));
+        if final_pages > MAX_WASM_MEMORY_PAGES {
+            return Err(VmError::MemoryLimitExceeded {
+                pages: final_pages,
+                max_pages: MAX_WASM_MEMORY_PAGES,
+            });
+        }
 
         let gas_consumed = store.fuel_consumed().unwrap_or(0);
 

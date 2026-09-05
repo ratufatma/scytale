@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.3.2-devnet] - 2026-09-05
+
+### Milestone: Phase 2 Hardening — Network Resilience & Consensus Security
+
+#### Added
+- **Hardcoded Fallback Seed Peers & DNS Outage Mitigations (`network/`)**:
+  - Registered `DefaultFallbackSeeds` (`45.147.46.122:9001` - official Scytale devnet seeder) in package `peer`.
+  - Added CLI flag `--fallback-seed` in `scytale-p2p` daemon.
+  - Automatic injection of fallback seeds into `AddrBook` on cold-start or when DNS seed queries resolve to 0 addresses, preventing network isolation.
+  - Added unit test `TestDefaultFallbackSeeds_FormatAndValidity`.
+- **Max Reorg Depth Protection (`scytale-consensus` & `scytale-node`)**:
+  - Enforced `DEFAULT_MAX_REORG_DEPTH = 100` block limit in `ChainTree::process_block`.
+  - Competing branches attempting to reorganize deeper than the limit are rejected fail-closed with `ChainError::ReorgDepthExceeded`.
+  - Added CLI flag `--max-reorg-depth <N>` and configuration field in `NodeConfig`.
+  - Added comprehensive unit test `test_max_reorg_depth_protection` verifying branch rejection, canonical tip persistence, and configurable limits.
+- **Wasm Linear Memory Upper Bound (`scytale-vm`)**:
+  - Enforced strict 64-page limit (`MAX_WASM_MEMORY_PAGES = 64`, 4 MiB) per contract validator execution.
+  - Integrated `StoreLimits` with `trap_on_grow_failure(true)` on wasmi `Store`.
+  - Added pre-call and post-call linear memory page verification returning `VmError::MemoryLimitExceeded`.
+  - Added test suite `tests/memory_limits_tests.rs` covering normal memory, excessive initial pages, and out-of-bound `memory.grow` trapping.
+- **Technical Documentation**:
+  - Published [docs/work/47-phase-2-network-resilience-and-consensus-hardening.md](docs/work/47-phase-2-network-resilience-and-consensus-hardening.md).
+
+---
+
 ## [v0.3.1-devnet] - 2026-09-05
 
 ### Milestone: Phase 1 Hardening — Mnemonic BIP-39, Indexer Catch-Up & Codec/Script Fuzzing

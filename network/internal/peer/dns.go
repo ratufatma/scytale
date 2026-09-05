@@ -9,6 +9,12 @@ import (
 // LookupIPFunc abstracts DNS IP address resolution for testability.
 type LookupIPFunc func(host string) ([]net.IP, error)
 
+// DefaultFallbackSeeds provides a resilient list of known stable seed IP addresses
+// to prevent network isolation (eclipse/cold-start failure) when DNS resolution fails.
+var DefaultFallbackSeeds = []string{
+	"45.147.46.122:9001", // Official Scytale Devnet Seeder (seed.myratu.com)
+}
+
 // ResolveDNSSeeds resolves a list of DNS seed hostnames into formatted "host:port" strings.
 // It supports:
 // 1. Bare domain names (e.g. "seed.scytale.org") using defaultPort.

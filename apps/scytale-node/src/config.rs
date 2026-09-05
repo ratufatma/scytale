@@ -21,6 +21,8 @@ pub struct NodeConfig {
     pub explorer_url: Option<String>,
     /// Optional Bearer authorization key for indexer requests.
     pub indexer_key: Option<String>,
+    /// Maximum allowed reorganization depth before rejecting a competing branch.
+    pub max_reorg_depth: u64,
 }
 
 impl Default for NodeConfig {
@@ -34,6 +36,7 @@ impl Default for NodeConfig {
             genesis_difficulty_target: 0x1d00_ffff,
             explorer_url: None,
             indexer_key: None,
+            max_reorg_depth: scytale_consensus::DEFAULT_MAX_REORG_DEPTH,
         }
     }
 }

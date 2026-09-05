@@ -69,3 +69,26 @@ func TestResolveDNSSeeds_FilterUnroutable(t *testing.T) {
 		t.Fatalf("expected only 192.0.2.10:9001, got %v", addrs)
 	}
 }
+
+func TestDefaultFallbackSeeds_FormatAndValidity(t *testing.T) {
+	if len(DefaultFallbackSeeds) == 0 {
+		t.Fatal("DefaultFallbackSeeds must not be empty")
+	}
+
+	for _, seed := range DefaultFallbackSeeds {
+		host, portStr, err := net.SplitHostPort(seed)
+		if err != nil {
+			t.Fatalf("invalid fallback seed format %q: %v", seed, err)
+		}
+		ip := net.ParseIP(host)
+		if ip == nil {
+			t.Fatalf("fallback seed host is not a valid IP: %s", host)
+		}
+		if ip.IsUnspecified() || ip.IsMulticast() {
+			t.Fatalf("fallback seed host is unroutable: %s", host)
+		}
+		if portStr == "" {
+			t.Fatalf("fallback seed has empty port: %s", seed)
+		}
+	}
+}

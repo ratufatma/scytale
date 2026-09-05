@@ -394,3 +394,121 @@ fn test_mempool_reconciliation_list() {
         .iter()
         .any(|tx| tx.is_coinbase()));
 }
+
+#[test]
+fn test_max_reorg_depth_protection() {
+    let (genesis, mut utxo_set) = create_genesis();
+    let genesis_hash = genesis.header.hash();
+    let utxo_genesis = utxo_set.clone();
+
+    // Create tree with max reorg depth = 3
+    let mut tree = ChainTree::new(genesis).with_max_reorg_depth(3);
+    assert_eq!(tree.max_reorg_depth(), 3);
+
+    // Build Branch A: 4 linear blocks on top of genesis (target: 0x1f00ffff)
+    let mut prev_hash = genesis_hash;
+    let mut prev_utxos = utxo_genesis.clone();
+    let mut branch_a_hashes = Vec::new();
+
+    for h in 1..=4 {
+        let cb = Transaction::new_coinbase(h, vec![TxOut::new(10_000_000, vec![h as u8])]);
+        let b = make_test_block(
+            1,
+            prev_hash,
+            1700000000 + h * 60,
+            0x1f00ffff,
+            h,
+            vec![cb],
+            &prev_utxos,
+            h,
+        );
+        prev_hash = b.header.hash();
+        let _ = prev_utxos.apply_block_transactions(&b.transactions[0], &b.transactions[1..], h);
+        branch_a_hashes.push(prev_hash);
+        tree.process_block(b, &mut utxo_set).unwrap();
+    }
+
+    let branch_a_tip = prev_hash;
+    assert_eq!(tree.canonical_tip(), branch_a_tip);
+    assert_eq!(tree.canonical_height(), 4);
+
+    // Build Branch B branching from Genesis:
+    // Candidate blocks with much higher difficulty (target 0x1000ffff -> huge cumulative work)
+    let mut b_prev_hash = genesis_hash;
+    let mut b_prev_utxos = utxo_genesis;
+
+    // Blocks B1, B2, B3 are added (less cumulative work than 4 blocks of Branch A initially)
+    for h in 1..=3 {
+        let cb = Transaction::new_coinbase(h, vec![TxOut::new(10_000_000, vec![0x10 + h as u8])]);
+        let b = make_test_block(
+            1,
+            b_prev_hash,
+            1700000000 + h * 60,
+            0x1f00ffff,
+            100 + h,
+            vec![cb],
+            &b_prev_utxos,
+            h,
+        );
+        b_prev_hash = b.header.hash();
+        let _ = b_prev_utxos.apply_block_transactions(&b.transactions[0], &b.transactions[1..], h);
+        // Branch B still has less cumulative work than Branch A (3 blocks vs 4 blocks)
+        let res = tree.process_block(b, &mut utxo_set).unwrap();
+        assert!(res.is_none());
+        assert_eq!(tree.canonical_tip(), branch_a_tip);
+    }
+
+    // Block B4 has massive work (target 0x1000ffff), so Branch B cumulative work > Branch A
+    // But reorg depth from branch_a_tip (height 4) back to Genesis is 4 blocks (A4, A3, A2, A1).
+    // Max reorg depth is 3 -> this MUST be rejected with ReorgDepthExceeded { depth: 4, max: 3 }!
+    let cb4 = Transaction::new_coinbase(4, vec![TxOut::new(10_000_000, vec![0x14])]);
+    let b4 = make_test_block(
+        1,
+        b_prev_hash,
+        1700000240,
+        0x1000ffff,
+        999,
+        vec![cb4],
+        &b_prev_utxos,
+        4,
+    );
+
+    let err = tree.process_block(b4.clone(), &mut utxo_set).unwrap_err();
+    match err {
+        scytale_consensus::ChainError::ReorgDepthExceeded { depth, max } => {
+            assert_eq!(depth, 4);
+            assert_eq!(max, 3);
+        }
+        other => panic!("expected ReorgDepthExceeded, got: {:?}", other),
+    }
+
+    // Invariant: Canonical tip must NOT have changed
+    assert_eq!(tree.canonical_tip(), branch_a_tip);
+    assert_eq!(tree.canonical_height(), 4);
+
+    // Now raise max_reorg_depth to 10 and verify reorg succeeds
+    tree.set_max_reorg_depth(10);
+    assert_eq!(tree.max_reorg_depth(), 10);
+
+    // Block B5 extending B4
+    let mut b_prev_utxos_4 = b_prev_utxos;
+    let _ = b_prev_utxos_4.apply_block_transactions(&b4.transactions[0], &b4.transactions[1..], 4);
+    let cb5 = Transaction::new_coinbase(5, vec![TxOut::new(10_000_000, vec![0x15])]);
+    let b5 = make_test_block(
+        1,
+        b4.header.hash(),
+        1700000300,
+        0x1000ffff,
+        1000,
+        vec![cb5],
+        &b_prev_utxos_4,
+        5,
+    );
+
+    let reorg_res = tree.process_block(b5.clone(), &mut utxo_set).unwrap();
+    assert!(reorg_res.is_some());
+    let reorg = reorg_res.unwrap();
+    assert_eq!(reorg.disconnected_blocks.len(), 4); // A4, A3, A2, A1
+    assert_eq!(tree.canonical_tip(), b5.header.hash());
+    assert_eq!(tree.canonical_height(), 5);
+}

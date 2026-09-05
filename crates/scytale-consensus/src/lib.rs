@@ -7,7 +7,7 @@ pub mod pow;
 pub mod target;
 pub mod work;
 
-pub use chain::{BlockNode, ChainTree, ReorgResult};
+pub use chain::{BlockNode, ChainTree, ReorgResult, DEFAULT_MAX_REORG_DEPTH};
 pub use difficulty::{
     calculate_next_target, scale_target_by_ratio, validate_block_target, DifficultyConfig,
     CLAMPING_FACTOR, DEFAULT_DIFFICULTY_EPOCH_BLOCKS, TARGET_BLOCK_INTERVAL_SECS,

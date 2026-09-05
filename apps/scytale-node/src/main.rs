@@ -96,6 +96,10 @@ enum Commands {
         /// Disable DNS seed resolution for P2P network discovery
         #[arg(long, default_value_t = false)]
         no_dns_seeds: bool,
+
+        /// Maximum allowed reorganization depth before rejecting a competing branch
+        #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
+        max_reorg_depth: u64,
     },
     /// Inspect blockchain status
     Status,
@@ -116,6 +120,7 @@ struct StartOptions {
     fast_sync: bool,
     dns_seeds: Vec<String>,
     no_dns_seeds: bool,
+    max_reorg_depth: u64,
 }
 
 #[allow(clippy::result_large_err)]
@@ -146,6 +151,7 @@ async fn main() {
             fast_sync,
             dns_seeds,
             no_dns_seeds,
+            max_reorg_depth,
         }) => Some(StartOptions {
             mine: *mine || cli.mine,
             explorer_url: explorer_url.clone().or_else(|| cli.explorer_url.clone()),
@@ -161,6 +167,7 @@ async fn main() {
             fast_sync: *fast_sync,
             dns_seeds: dns_seeds.clone(),
             no_dns_seeds: *no_dns_seeds,
+            max_reorg_depth: *max_reorg_depth,
         }),
         Some(Commands::Status) => {
             println!(
@@ -186,6 +193,7 @@ async fn main() {
                     fast_sync: false,
                     dns_seeds: Vec::new(),
                     no_dns_seeds: false,
+                    max_reorg_depth: scytale_consensus::DEFAULT_MAX_REORG_DEPTH,
                 })
             } else {
                 println!("No subcommand specified. Run with `--help` for available commands.");
@@ -216,6 +224,7 @@ async fn main() {
             genesis_difficulty_target: diff_target.unwrap_or(0x1d00_ffff),
             explorer_url: opts.explorer_url.clone(),
             indexer_key: opts.indexer_key.clone(),
+            max_reorg_depth: opts.max_reorg_depth,
             ..NodeConfig::default()
         };
         tracing::info!(
@@ -227,6 +236,7 @@ async fn main() {
             http_bind = %opts.http_bind,
             http_enabled = !opts.no_http,
             explorer_url = ?opts.explorer_url,
+            max_reorg_depth = config.max_reorg_depth,
             "starting scytale node daemon"
         );
         tracing::info!(
