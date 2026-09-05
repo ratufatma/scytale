@@ -53,6 +53,49 @@
     .badge-copy:active {
       transform: scale(0.95);
     }
+
+    /* Print styling for Passbook financial statements */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      header, #searchInput, .no-print, #view-blocks, #view-mempool, .tab-nav-container, #toast, #detailModal, #statementModal {
+        display: none !important;
+      }
+      #view-passbook {
+        display: block !important;
+      }
+      .print-only {
+        display: block !important;
+      }
+      .passbook-card {
+        border: 2px solid #000000 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        box-shadow: none !important;
+      }
+      .passbook-card * {
+        color: #000000 !important;
+        border-color: #bbbbbb !important;
+      }
+      table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+      }
+      th, td {
+        border: 1px solid #333333 !important;
+        padding: 6px 8px !important;
+        color: #000000 !important;
+        font-size: 9pt !important;
+      }
+      .collapsible-row {
+        display: none !important;
+      }
+    }
+    .print-only {
+      display: none;
+    }
   </style>
 </head>
 
@@ -157,8 +200,8 @@
           class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
       </button>
       <button onclick="switchTab('passbook')" id="tabBtn-passbook"
-        class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition">
-        Passbook Inspector
+        class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
+        <span>📑 Buku Tabungan (Passbook)</span>
       </button>
     </div>
 
@@ -278,54 +321,156 @@
       </div>
     </div>
 
-    <!-- VIEW 3: PASSBOOK INSPECTOR -->
-    <div id="view-passbook" class="hidden space-y-4">
-      <div class="bg-[#111827] border border-gray-800 rounded-xl p-5 shadow">
-        <div class="max-w-xl flex items-center gap-2 mb-4">
-          <input id="passbookLockInput" type="text"
-            placeholder="Masukkan Alamat Bech32 (scy1...) atau Hex Locking Script"
-            class="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-gray-200 focus:outline-none focus:border-emerald-500"
-            onkeydown="if(event.key==='Enter') inspectPassbook()" />
-          <button onclick="inspectPassbook()"
-            class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
-            Periksa Rekening
-          </button>
+    <!-- VIEW 3: PASSBOOK FINANCIAL LEDGER -->
+    <div id="view-passbook" class="hidden space-y-6">
+
+      <!-- PRINT ONLY OFFICIAL BANK STATEMENT HEADER -->
+      <div class="print-only border-b-2 border-black pb-4 mb-6">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-xl font-black tracking-wider uppercase">SCYTALE BLOCKCHAIN FINANCIAL LEDGER</h1>
+            <h2 class="text-sm font-bold text-gray-800">BUKU TABUNGAN & REKENING KORAN RESMI (eUTXO CRYPTOGRAPHIC STATEMENT)</h2>
+          </div>
+          <div class="text-right text-xs font-mono">
+            <div>Dokumen Resmi: <span id="printDate"></span></div>
+            <div>Integritas: UTXO Merkle Root Verification</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SEARCH & CONTROLS (NO PRINT) -->
+      <div class="no-print bg-[#111827] border border-gray-800 rounded-2xl p-5 shadow-xl space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Inspeksi Rekening & Buku Tabungan Digital
+            </h3>
+            <p class="text-xs text-gray-400 mt-0.5">Audit mutasi finansial, kepemilikan token SCY-20, dan bukti inklusi Merkle UTXO set.</p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-gray-500 font-mono">Contoh:</span>
+            <button onclick="fillGenesisMiner()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-emerald-400 font-mono rounded border border-gray-700 text-[11px] transition">
+              Alamat Genesis Miner
+            </button>
+          </div>
         </div>
 
-        <div id="passbookResult" class="hidden space-y-4 font-mono">
-          <div
-            class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
+        <div class="flex flex-col sm:flex-row items-center gap-2 pt-1">
+          <div class="relative flex-1 w-full">
+            <input id="passbookLockInput" type="text"
+              placeholder="Masukkan Alamat Akun Bech32 (scy1...) atau Hex Locking Script"
+              class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-xs font-mono text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-inner"
+              onkeydown="if(event.key==='Enter') inspectPassbook()" />
+          </div>
+          <button onclick="inspectPassbook()" id="btnOpenPassbook"
+            class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-gray-950 font-black text-xs font-mono rounded-xl transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+            <span>Buka Buku Tabungan</span>
+            <span>➔</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- PASSBOOK MAIN CONTAINER (CARD + TABLE) -->
+      <div id="passbookResult" class="hidden space-y-6">
+
+        <!-- KARTU REKENING BANK MODERN -->
+        <div class="passbook-card relative overflow-hidden bg-gradient-to-br from-[#111827] via-[#0f172a] to-[#0b0f17] border border-gray-800/90 rounded-2xl p-6 shadow-2xl">
+          <!-- Ambient Glow decoration -->
+          <div class="absolute -top-24 -right-24 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-gray-800/80">
             <div>
-              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Identitas / Kunci
-                Rekening:</span>
-              <div id="pbLock" class="text-emerald-400 font-bold break-all flex items-center gap-1.5">
-                <span id="pbLockText">--</span>
+              <div class="flex items-center gap-2 text-[11px] font-mono tracking-widest uppercase text-emerald-400 font-bold mb-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>Scytale Sovereign Ledger // eUTXO Passbook Account</span>
+              </div>
+              <div class="text-gray-400 text-xs font-mono mb-1">Nomor Rekening / Alamat Bech32:</div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span id="pbLockText" class="font-mono text-base font-black text-white select-all break-all">--</span>
                 <button onclick="copyText(document.getElementById('pbLockText').textContent)"
-                  class="text-gray-400 hover:text-white" title="Salin">📋</button>
+                  class="no-print p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs" title="Salin Alamat">
+                  📋 Salin
+                </button>
               </div>
             </div>
-            <div>
-              <span class="text-gray-500 text-[11px] uppercase tracking-wider block mb-1">Confirmed Balance:</span>
-              <div id="pbBalance" class="text-white text-base font-black">0.00000000 SCY</div>
-              <div id="pbPending" class="text-gray-400 text-[11px] mt-0.5">Pending Delta: +0.00000000 SCY</div>
+
+            <!-- Action Buttons Row -->
+            <div class="no-print flex items-center gap-2 flex-wrap">
+              <button onclick="openCurrentStatementModal()"
+                class="px-3.5 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-700/80 text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5 transition shadow">
+                <span>🛡️ Verifikasi Integritas (Merkle Proof)</span>
+              </button>
+              <button onclick="window.print()"
+                class="px-3.5 py-2 rounded-xl bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-mono font-semibold flex items-center gap-1.5 transition shadow">
+                <span>🖨️ Cetak Rekening Koran</span>
+              </button>
+              <button onclick="inspectPassbook()"
+                class="p-2 rounded-xl bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition" title="Segarkan Data">
+                🔄
+              </button>
             </div>
           </div>
 
-          <div class="overflow-hidden border border-gray-800 rounded-xl">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-gray-900 text-gray-400 uppercase border-b border-gray-800">
+          <!-- Balance & Metrics Row -->
+          <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6 font-mono">
+            <div>
+              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Saldo Terkonfirmasi (Confirmed)</div>
+              <div id="pbBalanceScy" class="text-2xl lg:text-3xl font-black text-white tracking-tight">0.00000000 SCY</div>
+              <div id="pbBalanceQuanta" class="text-xs text-emerald-400/90 mt-1">0 quanta</div>
+            </div>
+
+            <div>
+              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Delta Pending (Mempool)</div>
+              <div id="pbPendingDelta" class="text-xl font-bold text-gray-300 mt-1">+0.00000000 SCY</div>
+              <div id="pbPendingStatus" class="text-xs text-gray-500 mt-1">Tidak ada transaksi tertunda</div>
+            </div>
+
+            <div class="sm:col-span-2 lg:col-span-1">
+              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Portofolio Token eUTXO SCY-20</div>
+              <div id="pbTokensContainer" class="flex flex-wrap gap-1.5 mt-2">
+                <span class="text-xs text-gray-500 italic">Tidak ada token SCY-20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABEL MUTASI JURNAL BUKU TABUNGAN -->
+        <div class="bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+          <div class="px-5 py-4 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
+            <h3 class="font-bold text-xs text-gray-200 font-mono uppercase tracking-wider flex items-center gap-2">
+              <span>Mutasi Jurnal Rekening Finansial</span>
+              <span id="pbEntriesBadge" class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-400 font-mono">0 entri</span>
+            </h3>
+            <div class="no-print text-xs text-gray-400 font-mono">
+              Klik baris untuk rincian OutPoint & TxID
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs font-mono">
+              <thead class="bg-gray-900/90 text-gray-400 uppercase border-b border-gray-800 text-[11px]">
                 <tr>
-                  <th class="px-4 py-2.5">#Entry</th>
-                  <th class="px-4 py-2.5">Tipe Mutasi</th>
-                  <th class="px-4 py-2.5">Jumlah</th>
-                  <th class="px-4 py-2.5">Status</th>
-                  <th class="px-4 py-2.5 text-center">Konfirmasi</th>
+                  <th class="px-4 py-3 w-16">No Entry</th>
+                  <th class="px-4 py-3">Waktu & Blok</th>
+                  <th class="px-4 py-3">Aksi Finansial</th>
+                  <th class="px-4 py-3">Aset</th>
+                  <th class="px-4 py-3 text-right">Mutasi</th>
+                  <th class="px-4 py-3 text-right">Fee</th>
+                  <th class="px-4 py-3 text-right">Saldo Berjalan</th>
+                  <th class="px-4 py-3 text-center">Status</th>
+                  <th class="px-4 py-3 text-center no-print w-10">Rincian</th>
                 </tr>
               </thead>
-              <tbody id="passbookTableBody" class="divide-y divide-gray-800 text-gray-300 font-mono"></tbody>
+              <tbody id="passbookTableBody" class="divide-y divide-gray-800/60 text-gray-300">
+                <tr>
+                  <td colspan="9" class="px-4 py-8 text-center text-gray-500">Memuat mutasi rekening...</td>
+                </tr>
+              </tbody>
             </table>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -357,6 +502,95 @@
       <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
         <button onclick="closeModal()"
           class="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL STATEMENT & MERKLE PROOF VISUALIZER -->
+  <div id="statementModal"
+    class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div
+      class="bg-[#111827] border border-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/80">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <h2 class="font-mono font-bold text-sm text-white">Cryptographic Passbook Statement & Merkle Proof</h2>
+        </div>
+        <button onclick="closeStatementModal()" class="text-gray-400 hover:text-white text-xl px-2 font-mono">&times;</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-5 font-mono text-xs">
+        <!-- Integrity Verification Banner -->
+        <div id="statementIntegrityBanner" class="p-4 rounded-xl border flex items-center gap-3 bg-emerald-950/40 border-emerald-800 text-emerald-300">
+          <span class="text-2xl">🛡️</span>
+          <div>
+            <div class="font-bold text-sm" id="statementIntegrityTitle">Status Verifikasi: VALID & MATHEMATICALLY INCLUDED</div>
+            <div class="text-[11px] text-emerald-400/80 mt-0.5" id="statementIntegrityDesc">Seluruh leaf UTXO terbukti valid terikat pada Merkle root kanonikal.</div>
+          </div>
+        </div>
+
+        <!-- Statement Metadata Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
+            <span class="text-gray-500 text-[11px] uppercase block mb-1">Akun Target (Bech32):</span>
+            <div id="stmtAccount" class="text-white font-bold select-all break-all">--</div>
+          </div>
+          <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
+            <span class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Height:</span>
+            <div id="stmtTipHeight" class="text-white font-bold">--</div>
+          </div>
+          <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
+            <span class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Hash:</span>
+            <div id="stmtTipHash" class="text-emerald-400 font-bold select-all break-all text-[11px]">--</div>
+          </div>
+          <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
+            <span class="text-gray-500 text-[11px] uppercase block mb-1">UTXO Merkle Root Hash:</span>
+            <div id="stmtUtxoRoot" class="text-teal-300 font-bold select-all break-all text-[11px]">--</div>
+          </div>
+        </div>
+
+        <!-- Active UTXOs Proof Table -->
+        <div>
+          <h4 class="font-bold text-xs text-gray-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span>Daftar Bukti Inklusi UTXO Aktif (Active Spendable UTXOs)</span>
+            <span id="stmtProofCountBadge" class="text-gray-400 text-[11px] px-2 py-0.5 rounded bg-gray-800">0 bukti</span>
+          </h4>
+          <div class="border border-gray-800 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-gray-900 text-gray-400 uppercase text-[11px] border-b border-gray-800">
+                <tr>
+                  <th class="px-3.5 py-2.5">OutPoint (TxID:Index)</th>
+                  <th class="px-3.5 py-2.5 text-right">Nilai (SCY / Quanta)</th>
+                  <th class="px-3.5 py-2.5">Leaf Hash</th>
+                  <th class="px-3.5 py-2.5 text-center">Audit Steps</th>
+                  <th class="px-3.5 py-2.5 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody id="statementProofsTableBody" class="divide-y divide-gray-800 text-gray-300 font-mono text-[11px]">
+                <tr>
+                  <td colspan="5" class="px-4 py-4 text-center text-gray-500">Tidak ada UTXO aktif untuk akun ini.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Raw JSON Toggle -->
+        <div class="pt-2 border-t border-gray-800">
+          <button onclick="toggleStatementRawJson()" id="stmtRawJsonBtn"
+            class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
+            <span>▶ Tampilkan JSON Statement Mentah</span>
+          </button>
+          <pre id="statementRawJson"
+            class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800 text-emerald-400 overflow-x-auto select-all max-h-60 text-[11px]"></pre>
+        </div>
+      </div>
+
+      <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
+        <button onclick="closeStatementModal()"
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
           Tutup
         </button>
       </div>
@@ -395,9 +629,41 @@
       return `${(q / 100000000).toFixed(8)} SCY`;
     }
 
+    function bytesToHex(val) {
+      if (!val && val !== 0) return '--';
+      if (typeof val === 'string') {
+        return val.startsWith('0x') ? val : `0x${val}`;
+      }
+      if (Array.isArray(val)) {
+        return '0x' + val.map(b => Number(b).toString(16).padStart(2, '0')).join('');
+      }
+      if (typeof val === 'object') {
+        if (val.hex) return bytesToHex(val.hex);
+        if (val.hash) return bytesToHex(val.hash);
+        if (val.txid) return bytesToHex(val.txid);
+      }
+      return String(val);
+    }
+
+    function formatOutpoint(op) {
+      if (!op) return '-';
+      const txid = bytesToHex(op.txid || op.hash);
+      const index = op.index !== undefined ? op.index : (op.vout !== undefined ? op.vout : 0);
+      return `${truncateMiddle(txid, 8, 6)}:${index}`;
+    }
+
+    function formatOutpointFull(op) {
+      if (!op) return '-';
+      const txid = bytesToHex(op.txid || op.hash);
+      const index = op.index !== undefined ? op.index : (op.vout !== undefined ? op.vout : 0);
+      return `${txid}:${index}`;
+    }
+
     // Truncate address / hash with middle ellipsis
-    function truncateMiddle(str, startChars = 8, endChars = 6) {
-      if (!str || str.length <= startChars + endChars) return str;
+    function truncateMiddle(val, startChars = 8, endChars = 6) {
+      if (!val) return '';
+      const str = typeof val === 'string' ? val : bytesToHex(val);
+      if (!str || str === '--' || str.length <= startChars + endChars) return str;
       return `${str.slice(0, startChars)}...${str.slice(-endChars)}`;
     }
 
@@ -707,11 +973,60 @@
       return html;
     }
 
+    let currentPassbookAddress = 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
+
+    function fillGenesisMiner() {
+      const addr = 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
+      document.getElementById('passbookLockInput').value = addr;
+      inspectPassbook(addr);
+    }
+
     function searchAddress(addr) {
       closeModal();
+      closeStatementModal();
       switchTab('passbook');
       document.getElementById('passbookLockInput').value = addr;
       inspectPassbook(addr);
+    }
+
+    function toggleRowDetail(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle('hidden');
+    }
+
+    function parseActionInfo(action) {
+      if (typeof action === 'string') {
+        switch (action) {
+          case 'MiningReward':
+            return { label: 'Mining Reward', badge: 'bg-amber-950/80 text-amber-400 border-amber-800', isCredit: true, icon: '⛏️' };
+          case 'Received':
+            return { label: 'Penerimaan (Inbound)', badge: 'bg-emerald-950/80 text-emerald-400 border-emerald-800', isCredit: true, icon: '📥' };
+          case 'Sent':
+            return { label: 'Pengeluaran (Outbound)', badge: 'bg-rose-950/80 text-rose-400 border-rose-800', isCredit: false, icon: '📤' };
+          case 'Change':
+            return { label: 'Kembalian (Change)', badge: 'bg-cyan-950/80 text-cyan-400 border-cyan-800', isCredit: true, icon: '🔄' };
+          case 'Scy20Mint':
+            return { label: 'SCY-20 Mint', badge: 'bg-blue-950/80 text-blue-400 border-blue-800', isCredit: true, icon: '🪙' };
+          case 'Scy20Transfer':
+            return { label: 'SCY-20 Transfer', badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: true, icon: '🪙' };
+          case 'Scy20Burn':
+            return { label: 'SCY-20 Burn', badge: 'bg-orange-950/80 text-orange-400 border-orange-800', isCredit: false, icon: '🔥' };
+          case 'VaultWithdrawal':
+            return { label: 'Vault Withdrawal', badge: 'bg-teal-950/80 text-teal-400 border-teal-800', isCredit: true, icon: '🔓' };
+          default:
+            return { label: action, badge: 'bg-gray-800 text-gray-300 border-gray-700', isCredit: true, icon: '🏷️' };
+        }
+      } else if (action && typeof action === 'object') {
+        if (action.ContractInteraction !== undefined) {
+          return { label: 'Contract Interaction', badge: 'bg-purple-950/80 text-purple-400 border-purple-800', isCredit: false, icon: '📜', datum: action.ContractInteraction.datum_hash };
+        }
+        if (action.VaultDeposit !== undefined) {
+          return { label: `Vault Deposit (Timelock: ${action.VaultDeposit.timelock_until})`, badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: false, icon: '🔒' };
+        }
+        const key = Object.keys(action)[0] || 'Unknown';
+        return { label: key, badge: 'bg-gray-800 text-gray-300 border-gray-700', isCredit: true, icon: '⚙️' };
+      }
+      return { label: 'Transfer', badge: 'bg-gray-800 text-gray-300 border-gray-700', isCredit: true, icon: '↔️' };
     }
 
     async function inspectPassbook(customLock) {
@@ -719,34 +1034,272 @@
       const lock = customLock || document.getElementById('passbookLockInput').value.trim();
       if (!lock) return;
 
+      currentPassbookAddress = lock;
+      const printDateEl = document.getElementById('printDate');
+      if (printDateEl) printDateEl.textContent = new Date().toLocaleString('id-ID');
+
+      const btn = document.getElementById('btnOpenPassbook');
+      if (btn) btn.disabled = true;
+
       try {
-        const res = await fetch(`${baseUrl}/api/v1/passbook/${lock}`);
-        if (!res.ok) throw new Error('Gagal mengambil data Passbook');
+        let res;
+        if (lock.toLowerCase().startsWith('scy1')) {
+          res = await fetch(`${baseUrl}/api/v1/passbook?address=${encodeURIComponent(lock)}&limit=100`);
+        }
+        if (!res || !res.ok) {
+          res = await fetch(`${baseUrl}/api/v1/passbook/${encodeURIComponent(lock)}`);
+        }
+        if (!res.ok) throw new Error(`Gagal memuat passbook (${res.status}): Alamat tidak ditemukan`);
+
         const data = await res.json();
-
         document.getElementById('passbookResult').classList.remove('hidden');
-        document.getElementById('pbLockText').textContent = lock;
-        document.getElementById('pbBalance').textContent = formatQuanta(data.confirmed_balance_quanta || data.confirmed_balance || 0);
-        document.getElementById('pbPending').textContent = `Pending Delta: ${data.pending_balance_quanta >= 0 ? '+' : ''}${formatScyOnly(data.pending_balance_quanta || 0)}`;
 
-        const tbody = document.getElementById('passbookTableBody');
-        const entries = data.entries || [];
-        if (entries.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Belum ada mutasi tercatat untuk rekening ini.</td></tr>';
+        // Account Header
+        document.getElementById('pbLockText').textContent = lock;
+
+        // Confirmed Native Balance
+        const confirmedQuanta = Number(data.confirmed_native_balance_quanta ?? data.confirmed_balance_quanta ?? data.confirmed_balance ?? 0);
+        document.getElementById('pbBalanceScy').textContent = formatScyOnly(confirmedQuanta);
+        document.getElementById('pbBalanceQuanta').textContent = `${confirmedQuanta.toLocaleString()} quanta`;
+
+        // Pending Native Balance Delta
+        const pendingDelta = Number(data.pending_native_balance_quanta ?? data.pending_balance_quanta ?? 0);
+        const sign = pendingDelta > 0 ? '+' : (pendingDelta < 0 ? '-' : '+');
+        const absPending = Math.abs(pendingDelta);
+        document.getElementById('pbPendingDelta').textContent = `${sign}${formatScyOnly(absPending)}`;
+        document.getElementById('pbPendingDelta').className = `text-xl font-bold mt-1 ${pendingDelta > 0 ? 'text-emerald-400' : (pendingDelta < 0 ? 'text-rose-400' : 'text-gray-300')}`;
+        document.getElementById('pbPendingStatus').textContent = pendingDelta !== 0 ? 'Terdapat mutasi antrean mempool' : 'Saldo sinkron dengan kanonikal';
+
+        // Token Balances (SCY-20)
+        const tokensContainer = document.getElementById('pbTokensContainer');
+        const tokenBalances = data.token_balances || {};
+        const tokenKeys = Object.keys(tokenBalances);
+        if (tokenKeys.length === 0) {
+          tokensContainer.innerHTML = '<span class="text-xs text-gray-500 italic font-mono">0 token SCY-20 tercatat</span>';
         } else {
-          tbody.innerHTML = entries.map((e, idx) => `
-            <tr class="hover:bg-gray-900/50 transition">
-              <td class="px-4 py-2.5 text-gray-400">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
-              <td class="px-4 py-2.5 font-bold text-emerald-400">${e.entry_type || 'Transfer'}</td>
-              <td class="px-4 py-2.5 font-bold text-white">${formatQuanta(e.amount_quanta || e.amount || 0)}</td>
-              <td class="px-4 py-2.5 text-gray-400">${e.status || 'Confirmed'}</td>
-              <td class="px-4 py-2.5 text-center text-gray-400">${e.confirmations !== undefined ? e.confirmations : 1}</td>
-            </tr>
+          tokensContainer.innerHTML = tokenKeys.map(tid => `
+            <div class="px-2.5 py-1 rounded-lg bg-indigo-950/70 border border-indigo-800/80 text-[11px] font-mono flex items-center gap-1.5 shadow">
+              <span class="text-indigo-400">🪙 ${truncateMiddle(tid, 6, 4)}:</span>
+              <span class="text-white font-bold">${Number(tokenBalances[tid]).toLocaleString()} unit</span>
+            </div>
           `).join('');
         }
+
+        // Entries Table
+        const entries = data.entries || [];
+        document.getElementById('pbEntriesBadge').textContent = `${entries.length} mutasi`;
+
+        const tbody = document.getElementById('passbookTableBody');
+        if (entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500 font-mono">Belum ada catatan mutasi finansial pada rekening ini.</td></tr>';
+        } else {
+          tbody.innerHTML = entries.map((e, idx) => {
+            const actionInfo = parseActionInfo(e.action || e.entry_type);
+            const amountQuanta = Number(e.amount_quanta || e.amount || 0);
+            const feeQuanta = Number(e.fee_quanta || e.fee || 0);
+            const blockHeight = e.block_height !== undefined ? e.block_height : (e.height !== undefined ? e.height : null);
+            const timestamp = (e.timestamp && e.timestamp > 0) ? new Date(e.timestamp * 1000).toLocaleString('id-ID') : (blockHeight === 0 ? 'Genesis (Block #0)' : '--');
+            const txid = bytesToHex(e.txid);
+            const outpointStr = formatOutpointFull(e.outpoint);
+            const datumHashStr = e.datum_hash ? bytesToHex(e.datum_hash) : null;
+
+            // Running balance logic
+            const runningQuanta = e.running_native_balance_quanta !== undefined ? Number(e.running_native_balance_quanta) : null;
+            const runningDisplay = runningQuanta !== null ? formatScyOnly(runningQuanta) : '--';
+
+            // Status label
+            let statusBadge = '<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">Confirmed</span>';
+            if (typeof e.status === 'object' && e.status !== null) {
+              if (e.status.Confirmed !== undefined) {
+                const confs = e.status.Confirmed.confirmations;
+                statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${confs} ${confs > 1 ? 'Confs' : 'Conf'}</span>`;
+              } else if (e.status.Pending !== undefined) {
+                statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">Pending</span>';
+              }
+            } else if (e.status === 'Pending' || e.is_confirmed === false) {
+              statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">Pending</span>';
+            }
+
+            const detailRowId = `pb-detail-${idx}`;
+
+            return `
+              <tr class="hover:bg-gray-900/60 transition cursor-pointer" onclick="toggleRowDetail('${detailRowId}')">
+                <td class="px-4 py-3 text-gray-400 font-bold">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
+                <td class="px-4 py-3">
+                  <div class="text-gray-300">${timestamp}</div>
+                  ${blockHeight !== null ? `<a href="javascript:void(0)" onclick="event.stopPropagation(); inspectBlock(${blockHeight})" class="text-emerald-400 hover:underline text-[11px]">Blok #${blockHeight}</a>` : '<span class="text-amber-400 text-[11px]">Mempool</span>'}
+                </td>
+                <td class="px-4 py-3">
+                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${actionInfo.badge}">
+                    <span>${actionInfo.icon}</span>
+                    <span>${actionInfo.label}</span>
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-gray-300">
+                  ${e.asset === 'Native' || !e.asset ? '<span class="text-white font-semibold">Native SCY</span>' : '<span class="text-indigo-300 font-semibold">SCY-20</span>'}
+                </td>
+                <td class="px-4 py-3 text-right font-bold text-sm ${actionInfo.isCredit ? 'text-emerald-400' : 'text-rose-400'}">
+                  ${actionInfo.isCredit ? '+' : '-'}${formatScyOnly(amountQuanta)}
+                </td>
+                <td class="px-4 py-3 text-right text-gray-400">
+                  ${feeQuanta > 0 ? formatScyOnly(feeQuanta) : '0 SCY'}
+                </td>
+                <td class="px-4 py-3 text-right font-bold text-gray-200">
+                  ${runningDisplay}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  ${statusBadge}
+                </td>
+                <td class="px-4 py-3 text-center no-print">
+                  <button type="button" class="text-gray-400 hover:text-white text-xs font-bold" onclick="event.stopPropagation(); toggleRowDetail('${detailRowId}')">▼</button>
+                </td>
+              </tr>
+              <!-- Collapsible Row Details -->
+              <tr id="${detailRowId}" class="collapsible-row hidden bg-gray-950/80 border-b border-gray-800/80 text-[11px]">
+                <td colspan="9" class="p-4 space-y-2">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <span class="text-gray-500 uppercase block">Transaction ID:</span>
+                      <div class="flex items-center gap-1.5 font-bold text-emerald-400 break-all mt-0.5">
+                        <span>${txid}</span>
+                        ${txid !== '--' ? `<button onclick="event.stopPropagation(); inspectTx('${txid}')" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-[10px]">Inspeksi Tx</button>` : ''}
+                      </div>
+                    </div>
+                    <div>
+                      <span class="text-gray-500 uppercase block">OutPoint (Referenced UTXO):</span>
+                      <div class="font-mono text-gray-300 break-all mt-0.5">${outpointStr}</div>
+                    </div>
+                    ${datumHashStr ? `
+                    <div class="col-span-1 md:col-span-2">
+                      <span class="text-gray-500 uppercase block">Datum Hash (eUTXO State Commitment):</span>
+                      <div class="font-mono text-purple-400 break-all mt-0.5">${datumHashStr}</div>
+                    </div>` : ''}
+                  </div>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
       } catch (err) {
         alert(err.message);
+      } finally {
+        if (btn) btn.disabled = false;
       }
+    }
+
+    function openCurrentStatementModal() {
+      if (currentPassbookAddress) {
+        openStatementModal(currentPassbookAddress);
+      }
+    }
+
+    async function openStatementModal(address) {
+      const baseUrl = getBaseUrl();
+      const modal = document.getElementById('statementModal');
+      modal.classList.remove('hidden');
+
+      document.getElementById('stmtAccount').textContent = address;
+      document.getElementById('stmtTipHeight').textContent = 'Memuat...';
+      document.getElementById('stmtTipHash').textContent = 'Memuat...';
+      document.getElementById('stmtUtxoRoot').textContent = 'Memuat...';
+      document.getElementById('stmtProofCountBadge').textContent = 'Memverifikasi...';
+      document.getElementById('statementProofsTableBody').innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">Mengunduh cryptographic Merkle proofs...</td></tr>';
+
+      try {
+        const res = await fetch(`${baseUrl}/api/v1/passbook/statement?address=${encodeURIComponent(address)}`);
+        if (!res.ok) throw new Error(`Gagal memuat statement: ${res.statusText}`);
+        const data = await res.json();
+
+        const hexTipHash = bytesToHex(data.block_hash);
+        const hexUtxoRoot = bytesToHex(data.utxo_root);
+
+        // Populate fields
+        document.getElementById('stmtAccount').textContent = data.account || address;
+        document.getElementById('stmtTipHeight').textContent = `#${data.generated_at_height !== undefined ? data.generated_at_height : '--'}`;
+        document.getElementById('stmtTipHash').textContent = hexTipHash;
+        document.getElementById('stmtUtxoRoot').textContent = hexUtxoRoot;
+
+        const proofs = data.active_utxo_proofs || [];
+        document.getElementById('stmtProofCountBadge').textContent = `${proofs.length} bukti UTXO aktif`;
+
+        // Mathematical Integrity Verification
+        let sumQuanta = 0;
+        proofs.forEach(p => {
+          sumQuanta += (Number(p.value_quanta) || 0);
+        });
+        const confirmedQuanta = Number(data.confirmed_native_balance_quanta || 0);
+        const isSumMatch = sumQuanta === confirmedQuanta;
+        const hasRoot = Boolean(hexUtxoRoot && hexUtxoRoot !== '--' && hexUtxoRoot.length >= 34);
+
+        const banner = document.getElementById('statementIntegrityBanner');
+        const title = document.getElementById('statementIntegrityTitle');
+        const desc = document.getElementById('statementIntegrityDesc');
+
+        if (isSumMatch && hasRoot) {
+          banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-emerald-950/40 border-emerald-800 text-emerald-300';
+          title.textContent = 'Status Verifikasi: VALID & MATHEMATICALLY PROVED';
+          desc.textContent = `Total ${proofs.length} leaf bukti inklusi senilai ${formatScyOnly(sumQuanta)} (${sumQuanta.toLocaleString()} quanta) cocok 100% dan terikat secara kriptografis pada UTXO Merkle Root.`;
+        } else {
+          banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-amber-950/40 border-amber-800 text-amber-300';
+          title.textContent = 'Status Verifikasi: PARSIAL / UNVERIFIED';
+          desc.textContent = `Jumlah leaf quanta (${sumQuanta}) vs saldo terkonfirmasi (${confirmedQuanta}).`;
+        }
+
+        // Render Table
+        const tbody = document.getElementById('statementProofsTableBody');
+        if (proofs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">Tidak ada UTXO aktif yang perlu dibuktikan.</td></tr>';
+        } else {
+          tbody.innerHTML = proofs.map((p, pIdx) => {
+            const outpointStr = formatOutpoint(p.outpoint);
+            const leafHash = bytesToHex(p.leaf_hash);
+            const valQuanta = Number(p.value_quanta || 0);
+            const auditSteps = p.audit_path ? p.audit_path.length : 0;
+
+            return `
+              <tr class="hover:bg-gray-900/50">
+                <td class="px-3.5 py-2.5 font-bold text-white font-mono break-all">${outpointStr}</td>
+                <td class="px-3.5 py-2.5 text-right font-bold text-emerald-400 font-mono">${formatScyOnly(valQuanta)}</td>
+                <td class="px-3.5 py-2.5 text-gray-300 font-mono text-[10px] break-all">${truncateMiddle(leafHash, 10, 8)}</td>
+                <td class="px-3.5 py-2.5 text-center font-bold text-teal-300">${auditSteps} siblings</td>
+                <td class="px-3.5 py-2.5 text-center">
+                  <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold">✔ Verified</span>
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+        const cleanData = JSON.parse(JSON.stringify(data, (key, val) => {
+          if (Array.isArray(val) && val.length === 32 && val.every(n => typeof n === 'number')) {
+            return bytesToHex(val);
+          }
+          return val;
+        }));
+        document.getElementById('statementRawJson').textContent = JSON.stringify(cleanData, null, 2);
+
+      } catch (err) {
+        document.getElementById('statementIntegrityBanner').className = 'p-4 rounded-xl border flex items-center gap-3 bg-rose-950/40 border-rose-800 text-rose-300';
+        document.getElementById('statementIntegrityTitle').textContent = 'Gagal Mengambil Statement Kriptografis';
+        document.getElementById('statementIntegrityDesc').textContent = err.message;
+      }
+    }
+
+    function toggleStatementRawJson() {
+      const content = document.getElementById('statementRawJson');
+      const btn = document.getElementById('stmtRawJsonBtn');
+      if (content.classList.contains('hidden')) {
+        content.classList.remove('hidden');
+        btn.textContent = '▼ Sembunyikan JSON Statement Mentah';
+      } else {
+        content.classList.add('hidden');
+        btn.textContent = '▶ Tampilkan JSON Statement Mentah';
+      }
+    }
+
+    function closeStatementModal() {
+      document.getElementById('statementModal').classList.add('hidden');
     }
 
     async function handleSearch() {

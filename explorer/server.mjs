@@ -207,6 +207,8 @@ if (nodeBaseUrl) {
     '/api/v1/blocks/:id',
     '/api/v1/tx/:id',
     '/api/v1/mempool',
+    '/api/v1/passbook',
+    '/api/v1/passbook/statement',
     '/api/v1/passbook/:lock'
   ]) {
     app.get(path, proxyNodeRequest);
