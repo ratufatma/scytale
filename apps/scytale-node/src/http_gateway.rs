@@ -727,6 +727,60 @@ async fn get_provenance(
     }
 }
 
+async fn get_utxos(
+    State(node): State<Arc<Node>>,
+    Path(locking_script_or_addr): Path<String>,
+) -> Result<Json<Vec<scytale_bridge::UtxoDto>>, (StatusCode, Json<ErrorResponse>)> {
+    let lock_bytes = if locking_script_or_addr
+        .to_ascii_lowercase()
+        .starts_with("scy1")
+    {
+        let addr = scytale_core::Address::parse(&locking_script_or_addr).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("Invalid Bech32 address: {e}"),
+                }),
+            )
+        })?;
+        scytale_script::builder::ScriptBuilder::new()
+            .push_opcode(scytale_script::opcode::OpCode::OpDup)
+            .push_opcode(scytale_script::opcode::OpCode::OpBlake3)
+            .push_data(addr.hash())
+            .push_opcode(scytale_script::opcode::OpCode::OpEqualVerify)
+            .push_opcode(scytale_script::opcode::OpCode::OpCheckSig)
+            .build()
+    } else {
+        let hex_clean = clean_hex(&locking_script_or_addr);
+        from_hex(hex_clean).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: format!("Invalid locking script hex: {e}"),
+                }),
+            )
+        })?
+    };
+
+    let utxos = node.query_utxo_set();
+    let dtos: Vec<scytale_bridge::UtxoDto> = utxos
+        .entries()
+        .iter()
+        .filter(|(_, entry)| entry.output.locking_condition == lock_bytes)
+        .map(|(outpoint, entry)| scytale_bridge::UtxoDto {
+            txid_hex: outpoint.txid.to_string(),
+            index: outpoint.index,
+            value_quanta: entry.output.value,
+            locking_script_hex: scytale_primitives::to_hex(&entry.output.locking_condition),
+            block_height: entry.block_height,
+            is_coinbase: entry.is_coinbase,
+        })
+        .collect();
+
+    Ok(Json(dtos))
+}
+
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitTxRequest {
     pub tx_hex: String,
@@ -799,7 +853,9 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/api/v1/passbook", get(get_passbook_api_view))
         .route("/api/v1/passbook/statement", get(get_passbook_api_statement))
         .route("/api/v1/passbook/:locking_script_hex", get(get_passbook))
+        .route("/api/v1/utxos/:locking_script_hex", get(get_utxos))
         .route("/api/v1/provenance/:txid/:index", get(get_provenance))
+
         .layer(cors)
         .with_state(node)
 }
