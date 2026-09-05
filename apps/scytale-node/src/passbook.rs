@@ -3,37 +3,64 @@
 //! The Passbook projects the canonical ledger (UTXO set + confirmed chain +
 //! pending mempool) into a human-friendly bank-passbook view: confirmed and
 //! pending balances derived on demand, sequential entry numbers, transaction
-//! type classification, and value-provenance lineage.
+//! classification, token tracking, and value-provenance lineage.
 //!
 //! Architectural invariants:
 //! - The Passbook *displays* ledger state; it never stores or mutates state.
 //! - Every projection re-derives from the node's query interface on each call.
-//! - All monetary math is strict `u64` quanta; zero floating-point arithmetic.
+//! - All monetary math is strict integer arithmetic (quanta); zero floating-point arithmetic.
 //! - Wallet key management and signing are strictly out of scope.
 
 use crate::error::{NodeError, NodeState};
 use crate::node::Node;
-use scytale_core::{Block, Hash256, OutPoint, Transaction, TxOut, UtxoSet};
+use scytale_core::{Address, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet};
 use scytale_mempool::MempoolEntry;
+use scytale_storage::AddressTxRecord;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Conversion constant: 1 SCY = 100,000,000 quanta.
 pub const QUANTA_PER_SCY: u64 = 100_000_000;
 
-/// Broad classification of a passbook entry's financial direction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EntryType {
+/// Classification of the financial asset tracked by a passbook entry.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum PassbookAsset {
+    /// Native Scytale base currency (SCY / quanta).
+    Native,
+    /// Fungible token adhering to the SCY-20 standard.
+    Scy20 { token_id: Hash256 },
+}
+
+/// Comprehensive classification of financial mutations and smart contract interactions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PassbookAction {
     /// Funds arriving at a user-owned output.
     Received,
-    /// Funds leaving a user-owned output.
+    /// Funds leaving a user-owned output to an external recipient.
     Sent,
     /// Block subsidy / coinbase issuance credited to the user.
     MiningReward,
     /// Residual output returned to the user within a spending transaction.
     Change,
+    /// SCY-20 token minted into user custody.
+    Scy20Mint,
+    /// SCY-20 token transferred between accounts.
+    Scy20Transfer,
+    /// SCY-20 token burned / destroyed from user custody.
+    Scy20Burn,
+    /// Generic smart contract interaction with an optional datum commitment hash.
+    ContractInteraction { datum_hash: Option<Hash256> },
+    /// Deposit into a time-locked vault contract.
+    VaultDeposit { timelock_until: u64 },
+    /// Withdrawal / redemption from a vault contract.
+    VaultWithdrawal,
 }
 
+/// Backward compatibility alias for legacy API callers.
+pub type EntryType = PassbookAction;
+
 /// Confirmation state of a passbook entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntryStatus {
     /// Included in a canonical block.
     Confirmed { confirmations: u64 },
@@ -44,14 +71,17 @@ pub enum EntryStatus {
 }
 
 /// A single human-readable financial journal entry.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PassbookEntry {
     /// Human-readable sequential number (1, 2, 3, ...).
     pub entry_number: u64,
     /// Block timestamp (confirmed) or mempool arrival time (pending), in seconds.
     pub timestamp: u64,
-    pub entry_type: EntryType,
-    /// Value in quanta moved to/from the user.
+    /// Asset type (Native or Scy20).
+    pub asset: PassbookAsset,
+    /// Financial action / mutation type.
+    pub action: PassbookAction,
+    /// Value in quanta or token units moved to/from the user.
     pub amount_quanta: u64,
     /// Transaction fee in quanta attributable to the entry.
     pub fee_quanta: u64,
@@ -61,21 +91,57 @@ pub struct PassbookEntry {
     pub outpoint: Option<OutPoint>,
     /// Canonical block height the entry was confirmed at, if confirmed.
     pub block_height: Option<u64>,
+    /// Optional datum commitment hash for smart contract or eUTXO locks.
+    pub datum_hash: Option<Hash256>,
+}
+
+impl PassbookEntry {
+    /// Backward-compatible getter for entry_type.
+    pub fn entry_type(&self) -> &PassbookAction {
+        &self.action
+    }
+
+    /// Stable ordering key: pending (height = None) sorts last.
+    fn idx(&self) -> (bool, u64) {
+        match self.block_height {
+            Some(h) => (false, h),
+            None => (true, 0),
+        }
+    }
 }
 
 /// The complete projected passbook view for a given user identity.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PassbookView {
-    /// Sum of all spendable user-owned canonical UTXOs (integer quanta).
-    pub confirmed_balance_quanta: u64,
-    /// Net unconfirmed delta: pending inflows minus pending outflows (can be negative).
-    pub pending_balance_quanta: i64,
-    pub total_entries: usize,
+    /// Sum of all spendable user-owned canonical native UTXOs (integer quanta).
+    pub confirmed_native_balance_quanta: u64,
+    /// Map of token balances owned by the user (token_id -> balance).
+    pub token_balances: BTreeMap<Hash256, u64>,
+    /// Net unconfirmed native delta: pending inflows minus pending outflows (can be negative).
+    pub pending_native_balance_quanta: i64,
+    /// Sequential financial journal entries.
     pub entries: Vec<PassbookEntry>,
 }
 
+impl PassbookView {
+    /// Backward-compatible getter for total entries.
+    pub fn total_entries(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Backward-compatible getter for confirmed native balance quanta.
+    pub fn confirmed_balance_quanta(&self) -> u64 {
+        self.confirmed_native_balance_quanta
+    }
+
+    /// Backward-compatible getter for pending native balance quanta.
+    pub fn pending_balance_quanta(&self) -> i64 {
+        self.pending_native_balance_quanta
+    }
+}
+
 /// Category of a step in a value-provenance lineage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProvenanceCategory {
     /// Issued by a Proof-of-Work coinbase subsidy.
     Coinbase,
@@ -86,7 +152,7 @@ pub enum ProvenanceCategory {
 }
 
 /// One hop in a value-provenance lineage path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProvenanceStep {
     pub txid: Hash256,
     pub block_height: u64,
@@ -100,7 +166,9 @@ pub enum PassbookError {
     #[error("node runtime is not ready: state {0:?}")]
     NodeNotReady(NodeState),
     #[error("node subsystem query failed: {0}")]
-    NodeError(#[from] NodeError),
+    NodeError(Box<NodeError>),
+    #[error("storage engine error: {0}")]
+    StorageError(Box<scytale_storage::StorageError>),
     #[error("UTXO lookup failed: {0}")]
     UtxoLookupFailed(String),
     #[error("transaction not found: {txid:?}")]
@@ -111,37 +179,130 @@ pub enum PassbookError {
     StaleLedgerState,
 }
 
+impl From<NodeError> for PassbookError {
+    fn from(err: NodeError) -> Self {
+        PassbookError::NodeError(Box::new(err))
+    }
+}
+
+impl From<scytale_storage::StorageError> for PassbookError {
+    fn from(err: scytale_storage::StorageError) -> Self {
+        PassbookError::StorageError(Box::new(err))
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Contract Payload Deserialization Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Scy20DatumPayload {
+    pub token_id: [u8; 32],
+    pub owner: [u8; 32],
+    pub amount: u128,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VaultDatumPayload {
+    pub owner_pubkey: [u8; 32],
+    pub unlock_time: u64,
+    pub emergency_key: [u8; 32],
+    pub penalty_fee: u64,
+}
+
+pub enum ParsedContractCondition {
+    Scy20(Scy20DatumPayload),
+    Vault(VaultDatumPayload),
+    GenericScript { datum_hash: Option<Hash256> },
+    Standard,
+}
+
+pub fn parse_locking_condition(script: &[u8]) -> ParsedContractCondition {
+    if let Some(lock) = OutputLock::from_locking_condition(script) {
+        match lock {
+            OutputLock::PublicKey(_) => ParsedContractCondition::Standard,
+            OutputLock::Script { script_hash: _, datum } => {
+                if let Ok(scy20) = bincode::deserialize::<Scy20DatumPayload>(&datum) {
+                    return ParsedContractCondition::Scy20(scy20);
+                }
+                if let Ok(vault) = bincode::deserialize::<VaultDatumPayload>(&datum) {
+                    return ParsedContractCondition::Vault(vault);
+                }
+                let datum_hash = if !datum.is_empty() {
+                    Some(Hash256::hash(&datum))
+                } else {
+                    None
+                };
+                ParsedContractCondition::GenericScript { datum_hash }
+            }
+        }
+    } else {
+        ParsedContractCondition::Standard
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Read-only projection engine
+// ─────────────────────────────────────────────────────────────────────────────
+
 /// Read-only projection engine over the node's canonical + pending state.
-///
-/// A `Passbook` is stateless: it holds only the user's locking conditions
-/// (owner scripts) that identify which outputs belong to the presented user.
-/// Every query re-derives the view from the live node, so the passbook never
-/// caches or owns a balance ledger.
 #[derive(Debug, Clone)]
 pub struct Passbook {
     /// Locking-condition scripts owned by this user.
     owned_locks: Vec<Vec<u8>>,
+    /// Derived canonical Addresses.
+    addresses: Vec<Address>,
 }
 
-#[allow(clippy::result_large_err)]
 impl Passbook {
     /// Creates a projection engine for the given user-owned locking conditions.
     pub fn new(owned_locks: Vec<Vec<u8>>) -> Self {
-        Self { owned_locks }
+        let mut addresses = Vec::new();
+        for lock in &owned_locks {
+            if let Some(hash) = scytale_storage::extract_address_from_locking_condition(lock) {
+                let addr = Address::new(hash);
+                if !addresses.contains(&addr) {
+                    addresses.push(addr);
+                }
+            }
+        }
+        Self {
+            owned_locks,
+            addresses,
+        }
+    }
+
+    /// Creates a projection engine from a single Address.
+    pub fn from_address(address: Address) -> Self {
+        let lock = address.hash().to_vec();
+        Self {
+            owned_locks: vec![lock],
+            addresses: vec![address],
+        }
     }
 
     /// Adds an additional owner locking condition.
     pub fn add_owned_lock(&mut self, lock: Vec<u8>) {
         if !self.owned_locks.contains(&lock) {
+            if let Some(hash) = scytale_storage::extract_address_from_locking_condition(&lock) {
+                let addr = Address::new(hash);
+                if !self.addresses.contains(&addr) {
+                    self.addresses.push(addr);
+                }
+            }
             self.owned_locks.push(lock);
         }
     }
 
     /// Returns `true` if the given locking condition belongs to the user.
     pub fn owns(&self, locking_condition: &[u8]) -> bool {
-        self.owned_locks
-            .iter()
-            .any(|l| l.as_slice() == locking_condition)
+        if self.owned_locks.iter().any(|l| l.as_slice() == locking_condition) {
+            return true;
+        }
+        if let Some(h) = scytale_storage::extract_address_from_locking_condition(locking_condition) {
+            return self.addresses.iter().any(|a| a.hash() == &h);
+        }
+        false
     }
 
     /// Asserts the node is in a query-ready state (`Ready` or `Running`).
@@ -152,13 +313,19 @@ impl Passbook {
         }
     }
 
-    /// Derives the confirmed balance by summing all spendable canonical UTXOs
-    /// owned by the user. Zero synthetic balances: only real unspent outputs
-    /// contribute. Returns 0 quanta for a fresh user with no funds.
+    /// Derives the confirmed native balance by summing all spendable canonical native UTXOs
+    /// owned by the user. Zero synthetic balances: only real unspent outputs contribute.
     pub fn confirmed_balance_quanta(&self, node: &Node) -> Result<u64, PassbookError> {
         self.require_ready(node)?;
         let utxos = node.query_utxo_set();
-        sum_owned(&self.owned_locks, &utxos)
+        sum_native_owned(self, &utxos)
+    }
+
+    /// Returns the confirmed balances of all SCY-20 tokens owned by the user.
+    pub fn token_balances(&self, node: &Node) -> Result<BTreeMap<Hash256, u64>, PassbookError> {
+        self.require_ready(node)?;
+        let utxos = node.query_utxo_set();
+        sum_token_owned(self, &utxos)
     }
 
     /// Derives the net unconfirmed balance delta from the mempool:
@@ -168,33 +335,33 @@ impl Passbook {
         self.require_ready(node)?;
         let confirmed_utxos = node.query_utxo_set();
         let pending = node.query_mempool();
-        pending_delta(&self.owned_locks, &confirmed_utxos, &pending)
+        pending_delta(self, &confirmed_utxos, &pending)
     }
 
     /// Projects the full passbook view (confirmed + pending entries and balances)
-    /// for the user. Always re-derives from live node state.
+    /// for the user using the optimized `ADDRESS_TX_INDEX` storage engine index.
     pub fn view(&self, node: &Node) -> Result<PassbookView, PassbookError> {
         self.require_ready(node)?;
 
         let confirmed_utxos = node.query_utxo_set();
-        let confirmed_balance = sum_owned(&self.owned_locks, &confirmed_utxos)?;
+        let confirmed_native = sum_native_owned(self, &confirmed_utxos)?;
+        let token_balances = sum_token_owned(self, &confirmed_utxos)?;
 
-        let chain = node.query_canonical_chain()?;
-        let tip_height = chain.last().map(|(_, h)| *h).unwrap_or(0);
+        let tip_height = node.canonical_height();
         let pending = node.query_mempool();
 
         let mut entries = Vec::new();
-        project_confirmed_history(&self.owned_locks, &chain, tip_height, &mut entries)?;
-        project_pending_entries(&self.owned_locks, &confirmed_utxos, &pending, &mut entries);
+        project_confirmed_history_via_index(self, node, tip_height, &mut entries)?;
+        project_pending_entries(self, &confirmed_utxos, &pending, &mut entries);
 
         assign_entry_numbers(&mut entries);
 
-        let pending_balance = pending_delta(&self.owned_locks, &confirmed_utxos, &pending)?;
+        let pending_native = pending_delta(self, &confirmed_utxos, &pending)?;
 
         Ok(PassbookView {
-            confirmed_balance_quanta: confirmed_balance,
-            pending_balance_quanta: pending_balance,
-            total_entries: entries.len(),
+            confirmed_native_balance_quanta: confirmed_native,
+            token_balances,
+            pending_native_balance_quanta: pending_native,
             entries,
         })
     }
@@ -209,8 +376,7 @@ impl Passbook {
         self.require_ready(node)?;
 
         let chain = node.query_canonical_chain()?;
-        let mut tx_height: std::collections::HashMap<Hash256, u64> =
-            std::collections::HashMap::new();
+        let mut tx_height: HashMap<Hash256, u64> = HashMap::new();
         for (block, height) in &chain {
             for tx in &block.transactions {
                 tx_height.insert(tx.txid(), *height);
@@ -267,40 +433,66 @@ impl Passbook {
             }
         }
 
-        // Reverse to present origin -> current.
         rev.reverse();
         Ok(rev)
     }
 }
 
-/// Sums the value of all user-owned outputs in a UTXO set (integer quanta).
-#[allow(clippy::result_large_err)]
-fn sum_owned(owned_locks: &[Vec<u8>], utxos: &UtxoSet) -> Result<u64, PassbookError> {
-    let owned = &owned_locks;
+// ─────────────────────────────────────────────────────────────────────────────
+// Balance & Projection Calculations
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn sum_native_owned(passbook: &Passbook, utxos: &UtxoSet) -> Result<u64, PassbookError> {
     let mut total: u64 = 0;
     for entry in utxos.entries().values() {
-        if is_owned(owned, &entry.output.locking_condition) {
-            total = total
-                .checked_add(entry.output.value)
-                .ok_or_else(|| PassbookError::UtxoLookupFailed("balance overflow".into()))?;
+        if passbook.owns(&entry.output.locking_condition) {
+            match parse_locking_condition(&entry.output.locking_condition) {
+                ParsedContractCondition::Scy20(_) => {
+                    // SCY-20 token balances tracked in token_balances
+                }
+                _ => {
+                    total = total
+                        .checked_add(entry.output.value)
+                        .ok_or_else(|| PassbookError::UtxoLookupFailed("balance overflow".into()))?;
+                }
+            }
         }
     }
     Ok(total)
 }
 
-/// Computes the net pending delta (inflows minus outflows) as a signed `i64`.
-#[allow(clippy::result_large_err)]
+fn sum_token_owned(
+    passbook: &Passbook,
+    utxos: &UtxoSet,
+) -> Result<BTreeMap<Hash256, u64>, PassbookError> {
+    let mut balances = BTreeMap::new();
+    for entry in utxos.entries().values() {
+        if passbook.owns(&entry.output.locking_condition) {
+            if let ParsedContractCondition::Scy20(scy20) =
+                parse_locking_condition(&entry.output.locking_condition)
+            {
+                let tid = Hash256::new(scy20.token_id);
+                let current = balances.entry(tid).or_insert(0u64);
+                *current = current.checked_add(scy20.amount as u64).unwrap_or(u64::MAX);
+            }
+        }
+    }
+    Ok(balances)
+}
+
 fn pending_delta(
-    owned_locks: &[Vec<u8>],
+    passbook: &Passbook,
     confirmed_utxos: &UtxoSet,
     pending: &[MempoolEntry],
 ) -> Result<i64, PassbookError> {
-    let owned = &owned_locks;
     let mut inflow: u64 = 0;
     let mut outflow: u64 = 0;
     for entry in pending {
         for out in &entry.transaction.outputs {
-            if is_owned(owned, &out.locking_condition) {
+            if passbook.owns(&out.locking_condition) {
+                if let ParsedContractCondition::Scy20(_) = parse_locking_condition(&out.locking_condition) {
+                    continue;
+                }
                 inflow = inflow
                     .checked_add(out.value)
                     .ok_or_else(|| PassbookError::UtxoLookupFailed("inflow overflow".into()))?;
@@ -308,7 +500,12 @@ fn pending_delta(
         }
         for input in &entry.transaction.inputs {
             if let Some(spent) = confirmed_utxos.get(&input.previous_output) {
-                if is_owned(owned, &spent.output.locking_condition) {
+                if passbook.owns(&spent.output.locking_condition) {
+                    if let ParsedContractCondition::Scy20(_) =
+                        parse_locking_condition(&spent.output.locking_condition)
+                    {
+                        continue;
+                    }
                     outflow = outflow.checked_add(spent.output.value).ok_or_else(|| {
                         PassbookError::UtxoLookupFailed("outflow overflow".into())
                     })?;
@@ -326,159 +523,200 @@ fn pending_delta(
     Ok(delta as i64)
 }
 
-/// Returns `true` if the given locking condition matches any owned lock.
-fn is_owned(owned_locks: &[Vec<u8>], locking_condition: &[u8]) -> bool {
-    owned_locks
-        .iter()
-        .any(|l| l.as_slice() == locking_condition)
-}
-
-/// Walks the canonical chain chronologically, projecting confirmed entries and
-/// tracking which outpoints the user currently owns.
-#[allow(clippy::result_large_err)]
-fn project_confirmed_history(
-    owned_locks: &[Vec<u8>],
-    chain: &[(Block, u64)],
+/// Walks the address index in storage to project confirmed transaction history in O(log N + K).
+fn project_confirmed_history_via_index(
+    passbook: &Passbook,
+    node: &Node,
     tip_height: u64,
     out: &mut Vec<PassbookEntry>,
 ) -> Result<(), PassbookError> {
-    // outpoint -> value currently owned by the user (confirmed spendable).
-    let mut owned: std::collections::HashMap<OutPoint, u64> = std::collections::HashMap::new();
+    let storage = node.storage_handle();
 
-    for (block, height) in chain {
-        let timestamp = block.header.timestamp;
-        for tx in &block.transactions {
-            let txid = tx.txid();
+    let chain = node.query_canonical_chain().unwrap_or_default();
+    let block_timestamps: HashMap<u64, u64> = chain
+        .iter()
+        .map(|(b, h)| (*h, b.header.timestamp))
+        .collect();
 
-            if tx.is_coinbase() {
-                for (idx, output) in tx.outputs.iter().enumerate() {
-                    if is_owned(owned_locks, &output.locking_condition) {
-                        let op = OutPoint::new(txid, idx as u32);
-                        owned.insert(op, output.value);
-                        out.push(confirmed_entry(
-                            timestamp,
-                            EntryType::MiningReward,
-                            output.value,
-                            0,
-                            *height,
-                            tip_height,
-                            txid,
-                            Some(op),
-                        ));
+    // Query storage ADDRESS_TX_INDEX for each address owned by this passbook
+    let mut height_records: Vec<(u64, AddressTxRecord)> = Vec::new();
+    for addr in &passbook.addresses {
+        let records = storage.get_address_transactions_with_height(addr, 0, tip_height, usize::MAX)?;
+        height_records.extend(records);
+    }
+
+    // Sort chronologically ascending
+    height_records.sort_by_key(|(h, _)| *h);
+
+    let mut processed_txids: HashSet<Hash256> = HashSet::new();
+
+    for (height, record) in height_records {
+        let txid = record.txid;
+        if !processed_txids.insert(txid) {
+            continue;
+        }
+
+        let tx = match node.lookup_transaction(&txid)? {
+            Some(t) => t,
+            None => continue,
+        };
+
+        let timestamp = block_timestamps.get(&height).copied().unwrap_or(0);
+        let confirmations = tip_height.saturating_sub(height).saturating_add(1);
+        let status = EntryStatus::Confirmed { confirmations };
+
+        // Collect outputs belonging to this user
+        let mut user_outputs: Vec<(usize, &TxOut)> = Vec::new();
+        for (idx, output) in tx.outputs.iter().enumerate() {
+            if passbook.owns(&output.locking_condition) {
+                user_outputs.push((idx, output));
+            }
+        }
+
+        // Determine if user funds any inputs
+        let owns_input = record.is_input || tx.inputs.iter().any(|input| {
+            if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid) {
+                if let Some(prev_out) = prev_tx.outputs.get(input.previous_output.index as usize) {
+                    return passbook.owns(&prev_out.locking_condition);
+                }
+            }
+            false
+        });
+
+        // Fee calculation
+        let total_output = tx.total_output_quanta().unwrap_or(0);
+        let user_input_val: u64 = if owns_input {
+            tx.inputs
+                .iter()
+                .filter_map(|input| {
+                    if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid) {
+                        prev_tx
+                            .outputs
+                            .get(input.previous_output.index as usize)
+                            .and_then(|prev_out| {
+                                if passbook.owns(&prev_out.locking_condition) {
+                                    Some(prev_out.value)
+                                } else {
+                                    None
+                                }
+                            })
+                    } else {
+                        None
                     }
-                }
-                continue;
-            }
+                })
+                .sum()
+        } else {
+            0
+        };
 
-            // Identify user-owned consumed inputs.
-            let mut user_input_value: u64 = 0;
-            let mut consumed_user_inputs: usize = 0;
-            for input in &tx.inputs {
-                if let Some(value) = owned.get(&input.previous_output).copied() {
-                    user_input_value = user_input_value.checked_add(value).ok_or_else(|| {
-                        PassbookError::UtxoLookupFailed("input value overflow".into())
-                    })?;
-                    consumed_user_inputs += 1;
-                }
-            }
-            let owns_input = consumed_user_inputs > 0;
+        let fee = if owns_input {
+            user_input_val.saturating_sub(total_output)
+        } else {
+            0
+        };
 
-            let total_output = tx
-                .total_output_quanta()
-                .map_err(|e| PassbookError::UtxoLookupFailed(e.to_string()))?;
-
-            if owns_input {
-                for input in &tx.inputs {
-                    owned.remove(&input.previous_output);
-                }
-            }
-
-            // Collect user-owned outputs.
-            let mut owned_outputs: Vec<(usize, &TxOut)> = Vec::new();
-            for (idx, output) in tx.outputs.iter().enumerate() {
-                if is_owned(owned_locks, &output.locking_condition) {
-                    owned_outputs.push((idx, output));
-                }
-            }
-
-            if owned_outputs.is_empty() {
-                // No output returned to the user -> Sent (if the user funded it).
-                if owns_input {
-                    let fee = user_input_value.saturating_sub(total_output);
-                    out.push(confirmed_entry(
-                        timestamp,
-                        EntryType::Sent,
-                        user_input_value,
-                        fee,
-                        *height,
-                        tip_height,
-                        txid,
-                        None,
-                    ));
-                }
-                continue;
-            }
-
-            let fee = if owns_input {
-                user_input_value.saturating_sub(total_output)
+        // 2. Outflow with no return output to user -> Sent / Burn / Withdrawal
+        if user_outputs.is_empty() && owns_input {
+            let (asset, action) = if let Some(tok) = record.token_id {
+                (
+                    PassbookAsset::Scy20 {
+                        token_id: Hash256::new(tok),
+                    },
+                    PassbookAction::Scy20Transfer,
+                )
             } else {
-                0
+                (PassbookAsset::Native, PassbookAction::Sent)
             };
-            for (idx, output) in owned_outputs {
-                let op = OutPoint::new(txid, idx as u32);
-                owned.insert(op, output.value);
-                let entry_type = if owns_input {
-                    EntryType::Change
+
+            out.push(PassbookEntry {
+                entry_number: 0,
+                timestamp,
+                asset,
+                action,
+                amount_quanta: if record.value_quanta > 0 {
+                    record.value_quanta
                 } else {
-                    EntryType::Received
-                };
-                out.push(confirmed_entry(
-                    timestamp,
-                    entry_type,
+                    user_input_val
+                },
+                fee_quanta: fee,
+                status,
+                txid,
+                outpoint: None,
+                block_height: Some(height),
+                datum_hash: None,
+            });
+            continue;
+        }
+
+        // 3. User-owned outputs
+        for (idx, output) in user_outputs {
+            let op = OutPoint::new(txid, idx as u32);
+            let parsed = parse_locking_condition(&output.locking_condition);
+
+            let (asset, action, amount, datum_hash) = match parsed {
+                ParsedContractCondition::Scy20(scy20) => {
+                    let tid = Hash256::new(scy20.token_id);
+                    let act = if tx.is_coinbase() {
+                        PassbookAction::Scy20Mint
+                    } else {
+                        PassbookAction::Scy20Transfer
+                    };
+                    (
+                        PassbookAsset::Scy20 { token_id: tid },
+                        act,
+                        scy20.amount as u64,
+                        None,
+                    )
+                }
+                ParsedContractCondition::Vault(vault) => (
+                    PassbookAsset::Native,
+                    PassbookAction::VaultDeposit {
+                        timelock_until: vault.unlock_time,
+                    },
                     output.value,
-                    fee,
-                    *height,
-                    tip_height,
-                    txid,
-                    Some(op),
-                ));
-            }
+                    Some(Hash256::hash(
+                        &bincode::serialize(&vault).unwrap_or_default(),
+                    )),
+                ),
+                ParsedContractCondition::GenericScript { datum_hash } => (
+                    PassbookAsset::Native,
+                    PassbookAction::ContractInteraction { datum_hash },
+                    output.value,
+                    datum_hash,
+                ),
+                ParsedContractCondition::Standard => {
+                    let act = if tx.is_coinbase() {
+                        PassbookAction::MiningReward
+                    } else if owns_input {
+                        PassbookAction::Change
+                    } else {
+                        PassbookAction::Received
+                    };
+                    (PassbookAsset::Native, act, output.value, None)
+                }
+            };
+
+            out.push(PassbookEntry {
+                entry_number: 0,
+                timestamp,
+                asset,
+                action,
+                amount_quanta: amount,
+                fee_quanta: fee,
+                status,
+                txid,
+                outpoint: Some(op),
+                block_height: Some(height),
+                datum_hash,
+            });
         }
     }
 
     Ok(())
 }
 
-/// Constructs a confirmed passbook entry with the given confirmations.
-#[allow(clippy::too_many_arguments)]
-fn confirmed_entry(
-    timestamp: u64,
-    entry_type: EntryType,
-    amount: u64,
-    fee: u64,
-    height: u64,
-    tip_height: u64,
-    txid: Hash256,
-    outpoint: Option<OutPoint>,
-) -> PassbookEntry {
-    PassbookEntry {
-        entry_number: 0,
-        timestamp,
-        entry_type,
-        amount_quanta: amount,
-        fee_quanta: fee,
-        status: EntryStatus::Confirmed {
-            confirmations: tip_height + 1 - height,
-        },
-        txid,
-        outpoint,
-        block_height: Some(height),
-    }
-}
-
-/// Projects pending (unconfirmed) entries from the mempool for the user.
 fn project_pending_entries(
-    owned_locks: &[Vec<u8>],
+    passbook: &Passbook,
     confirmed_utxos: &UtxoSet,
     pending: &[MempoolEntry],
     out: &mut Vec<PassbookEntry>,
@@ -491,30 +729,70 @@ fn project_pending_entries(
         let owns_input = tx.inputs.iter().any(|input| {
             confirmed_utxos
                 .get(&input.previous_output)
-                .map(|spent| is_owned(owned_locks, &spent.output.locking_condition))
+                .map(|spent| passbook.owns(&spent.output.locking_condition))
                 .unwrap_or(false)
         });
 
         let mut has_user_output = false;
         for (idx, output) in tx.outputs.iter().enumerate() {
-            if is_owned(owned_locks, &output.locking_condition) {
+            if passbook.owns(&output.locking_condition) {
                 has_user_output = true;
                 let op = OutPoint::new(txid, idx as u32);
-                let entry_type = if owns_input {
-                    EntryType::Change
-                } else {
-                    EntryType::Received
+                let parsed = parse_locking_condition(&output.locking_condition);
+
+                let (asset, action, amount, datum_hash) = match parsed {
+                    ParsedContractCondition::Scy20(scy20) => {
+                        let tid = Hash256::new(scy20.token_id);
+                        let act = if owns_input {
+                            PassbookAction::Scy20Transfer
+                        } else {
+                            PassbookAction::Scy20Mint
+                        };
+                        (
+                            PassbookAsset::Scy20 { token_id: tid },
+                            act,
+                            scy20.amount as u64,
+                            None,
+                        )
+                    }
+                    ParsedContractCondition::Vault(vault) => (
+                        PassbookAsset::Native,
+                        PassbookAction::VaultDeposit {
+                            timelock_until: vault.unlock_time,
+                        },
+                        output.value,
+                        Some(Hash256::hash(
+                            &bincode::serialize(&vault).unwrap_or_default(),
+                        )),
+                    ),
+                    ParsedContractCondition::GenericScript { datum_hash } => (
+                        PassbookAsset::Native,
+                        PassbookAction::ContractInteraction { datum_hash },
+                        output.value,
+                        datum_hash,
+                    ),
+                    ParsedContractCondition::Standard => {
+                        let act = if owns_input {
+                            PassbookAction::Change
+                        } else {
+                            PassbookAction::Received
+                        };
+                        (PassbookAsset::Native, act, output.value, None)
+                    }
                 };
+
                 out.push(PassbookEntry {
                     entry_number: 0,
                     timestamp,
-                    entry_type,
-                    amount_quanta: output.value,
+                    asset,
+                    action,
+                    amount_quanta: amount,
                     fee_quanta: entry.fee,
                     status: EntryStatus::Pending,
                     txid,
                     outpoint: Some(op),
                     block_height: None,
+                    datum_hash,
                 });
             }
         }
@@ -524,36 +802,24 @@ fn project_pending_entries(
             out.push(PassbookEntry {
                 entry_number: 0,
                 timestamp,
-                entry_type: EntryType::Sent,
+                asset: PassbookAsset::Native,
+                action: PassbookAction::Sent,
                 amount_quanta: entry.fee.saturating_add(total_output),
                 fee_quanta: entry.fee,
                 status: EntryStatus::Pending,
                 txid,
                 outpoint: None,
                 block_height: None,
+                datum_hash: None,
             });
         }
     }
 }
 
-/// Assigns ascending human-readable entry numbers after final ordering.
-///
-/// Entries are ordered chronologically (by canonical height, then insertion
-/// order for same-height rows) and numbered 1..n for easy reference.
 fn assign_entry_numbers(entries: &mut [PassbookEntry]) {
     entries.sort_by_key(|e| (e.block_height, e.idx()));
     for (i, entry) in entries.iter_mut().enumerate() {
         entry.entry_number = (i + 1) as u64;
-    }
-}
-
-impl PassbookEntry {
-    /// Stable ordering key: pending (height = None) sorts last.
-    fn idx(&self) -> (bool, u64) {
-        match self.block_height {
-            Some(h) => (false, h),
-            None => (true, 0),
-        }
     }
 }
 
@@ -578,7 +844,7 @@ mod tests {
     fn zero_balance_initialization() {
         let p = Passbook::new(vec![vec![7, 7, 7]]);
         let utxos = UtxoSet::new();
-        assert_eq!(sum_owned(&p.owned_locks.clone(), &utxos).unwrap(), 0);
+        assert_eq!(sum_native_owned(&p, &utxos).unwrap(), 0);
     }
 
     #[test]
@@ -593,7 +859,7 @@ mod tests {
             );
         }
         let p = Passbook::new(vec![lock]);
-        assert_eq!(sum_owned(&p.owned_locks.clone(), &utxos).unwrap(), 600);
+        assert_eq!(sum_native_owned(&p, &utxos).unwrap(), 600);
     }
 
     #[test]
@@ -611,7 +877,6 @@ mod tests {
             scytale_core::UtxoEntry::new(TxOut::new(1_000_000, lock.clone()), 1, false),
         );
 
-        // Pending tx paying 300k to user and spending 1M from user (change 600k back).
         let input = TxIn::new(fund_op, vec![]);
         let tx = Transaction::new(
             TRANSACTION_VERSION_1,
@@ -623,9 +888,9 @@ mod tests {
             0,
         );
         let pending = vec![MempoolEntry::new(tx, 0, 100)];
+        let p = Passbook::new(vec![lock]);
 
-        let delta = pending_delta(std::slice::from_ref(&lock), &confirmed, &pending).unwrap();
-        // inflow = 600k (change back to user); outflow = 1M (user's confirmed input)
+        let delta = pending_delta(&p, &confirmed, &pending).unwrap();
         assert_eq!(delta, -400_000);
     }
 }

@@ -1,15 +1,19 @@
 //! Passbook presentation-layer integration tests.
 //!
-//! Covers the Task 16 acceptance suites: zero-balance initialization, multi-UTXO
-//! balance summation, sequential entry numbering, confirmed vs pending separation,
-//! mining-reward reflection + provenance, reorganization re-projection, and restart
-//! integrity. All projections go through the node's read-only query interface.
+//! Covers: zero-balance initialization, multi-UTXO balance summation, sequential
+//! entry numbering, confirmed vs pending separation, mining-reward reflection + provenance,
+//! reorganization re-projection, restart integrity, multi-asset SCY-20 token tracking,
+//! contract interaction datum hash resolution, and inbound/outbound/change mutations.
 
 use scytale_consensus::calculate_block_reward;
 use scytale_core::{
-    Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoSet, TRANSACTION_VERSION_1,
+    Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxIn, TxOut, UtxoSet,
+    TRANSACTION_VERSION_1,
 };
-use scytale_node::{EntryStatus, EntryType, Node, NodeConfig, Passbook, ProvenanceCategory};
+use scytale_node::{
+    EntryStatus, Node, NodeConfig, Passbook, PassbookAction, PassbookAsset,
+    ProvenanceCategory,
+};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -92,16 +96,14 @@ fn test_zero_balance_initialization() {
     let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
     node.start().unwrap();
 
-    // The user owns a lock that carries no on-chain value; the node's genesis
-    // payout is a different lock, so the fresh user sees exactly 0 SCY.
     let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
     assert_eq!(passbook.confirmed_balance_quanta(&node).unwrap(), 0);
 
     let view = passbook.view(&node).unwrap();
-    assert_eq!(view.confirmed_balance_quanta, 0);
-    assert_eq!(view.pending_balance_quanta, 0);
+    assert_eq!(view.confirmed_native_balance_quanta, 0);
+    assert_eq!(view.pending_native_balance_quanta, 0);
     assert!(view.entries.is_empty());
-    assert_eq!(view.total_entries, 0);
+    assert_eq!(view.total_entries(), 0);
 
     node.shutdown().unwrap();
 }
@@ -116,7 +118,6 @@ fn test_mining_reward_reflection() {
     let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
     node.start().unwrap();
 
-    // Two externally-injected canonical blocks both pay the user.
     let h1 = inject_canonical_reward_block(&node, 0, USER_LOCK);
     let h2 = inject_canonical_reward_block(&node, 1, USER_LOCK);
     assert_eq!(node.canonical_height(), 2);
@@ -133,7 +134,7 @@ fn test_mining_reward_reflection() {
     let mining_entries: Vec<_> = view
         .entries
         .iter()
-        .filter(|e| e.entry_type == EntryType::MiningReward)
+        .filter(|e| e.action == PassbookAction::MiningReward)
         .collect();
     assert_eq!(
         mining_entries.len(),
@@ -156,7 +157,6 @@ fn test_mining_reward_reflection() {
         );
     }
 
-    // Provenance: trace the height-1 coinbase outpoint back to the coinbase origin.
     let h1_block = node.storage_handle().get_block(&h1).unwrap().unwrap();
     let coinbase = &h1_block.transactions[0];
     let origin = OutPoint::new(coinbase.txid(), 0);
@@ -190,9 +190,8 @@ fn test_passbook_entry_numbering() {
     let mut numbers: Vec<u64> = view.entries.iter().map(|e| e.entry_number).collect();
     numbers.sort_unstable();
     assert_eq!(numbers, vec![1, 2, 3], "sequential entry numbers #1 #2 #3");
-    assert_eq!(view.total_entries, 3);
+    assert_eq!(view.total_entries(), 3);
 
-    // Numerically-named entries reference increasing block heights.
     let mut heights: Vec<u64> = view
         .entries
         .iter()
@@ -214,7 +213,6 @@ fn test_confirmed_vs_pending_separation() {
     let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
     node.start().unwrap();
 
-    // Fund the user with one confirmed mining reward (height 1).
     let h1 = inject_canonical_reward_block(&node, 0, USER_LOCK);
     let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
     let confirmed_before = calculate_block_reward(1);
@@ -223,8 +221,6 @@ fn test_confirmed_vs_pending_separation() {
         confirmed_before
     );
 
-    // Build a pending transaction that spends the user's confirmed coinbase and
-    // sends the proceeds to OTHER_LOCK. This is a net outflow for the user.
     let h1_block = node.storage_handle().get_block(&h1).unwrap().unwrap();
     let coinbase = &h1_block.transactions[0];
     let input_op = OutPoint::new(coinbase.txid(), 0);
@@ -240,14 +236,12 @@ fn test_confirmed_vs_pending_separation() {
     let pending_txid = node.submit_transaction(pending_tx).unwrap();
     assert_eq!(node.mempool_len(), 1);
 
-    // The confirmed balance must be UNCHANGED — pending spends do not touch it.
     assert_eq!(
         passbook.confirmed_balance_quanta(&node).unwrap(),
         confirmed_before,
         "pending transaction must not inflate the confirmed balance"
     );
 
-    // The pending delta reflects the outflow of the yet-unconfirmed spend.
     assert_eq!(
         passbook.pending_balance_delta(&node).unwrap(),
         -(input_value as i64),
@@ -256,11 +250,11 @@ fn test_confirmed_vs_pending_separation() {
 
     let view = passbook.view(&node).unwrap();
     assert_eq!(
-        view.confirmed_balance_quanta, confirmed_before,
+        view.confirmed_native_balance_quanta, confirmed_before,
         "view confirmed balance ignores pending"
     );
     assert_eq!(
-        view.pending_balance_quanta,
+        view.pending_native_balance_quanta,
         -(input_value as i64),
         "view pending delta matches"
     );
@@ -272,7 +266,7 @@ fn test_confirmed_vs_pending_separation() {
     assert!(
         view.entries.iter().any(|e| {
             e.status == EntryStatus::Pending
-                && e.entry_type == EntryType::Sent
+                && e.action == PassbookAction::Sent
                 && e.txid == pending_txid
         }),
         "pending entry classified as Sent with the correct TxID"
@@ -291,7 +285,6 @@ fn test_reorganization_updates_passbook() {
     let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
     node.start().unwrap();
 
-    // Branch A (pays OTHER_LOCK) grows to height 2 and is canonical at first.
     let genesis_tip = node.canonical_tip();
     let genesis_utxos = node.query_utxo_set();
 
@@ -302,14 +295,12 @@ fn test_reorganization_updates_passbook() {
     assert!(node.submit_external_block(a2.clone()).unwrap());
     assert_eq!(node.canonical_height(), 2);
 
-    // The user owns USER_LOCK; branch A pays OTHER_LOCK, so the user sees 0.
     let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
     assert_eq!(passbook.confirmed_balance_quanta(&node).unwrap(), 0);
-    assert_eq!(passbook.view(&node).unwrap().total_entries, 0);
+    assert_eq!(passbook.view(&node).unwrap().total_entries(), 0);
 
-    // Branch B (pays USER_LOCK) forks at height 1 and extends to height 3.
     let b1 = build_reward_block(genesis_tip, 1, 1, USER_LOCK, &genesis_utxos);
-    assert!(!node.submit_external_block(b1.clone()).unwrap()); // side branch
+    assert!(!node.submit_external_block(b1.clone()).unwrap());
 
     let mut b1_utxos = genesis_utxos.clone();
     b1_utxos.insert(
@@ -317,7 +308,7 @@ fn test_reorganization_updates_passbook() {
         scytale_core::UtxoEntry::new(b1.transactions[0].outputs[0].clone(), 1, true),
     );
     let b2 = build_reward_block(b1.header.hash(), 2, 1, USER_LOCK, &b1_utxos);
-    assert!(!node.submit_external_block(b2.clone()).unwrap()); // equal work -> side
+    assert!(!node.submit_external_block(b2.clone()).unwrap());
 
     let mut b2_utxos = b1_utxos.clone();
     b2_utxos.insert(
@@ -325,11 +316,9 @@ fn test_reorganization_updates_passbook() {
         scytale_core::UtxoEntry::new(b2.transactions[0].outputs[0].clone(), 2, true),
     );
     let b3 = build_reward_block(b2.header.hash(), 3, 1, USER_LOCK, &b2_utxos);
-    assert!(node.submit_external_block(b3.clone()).unwrap()); // heavier -> reorg
+    assert!(node.submit_external_block(b3.clone()).unwrap());
     assert_eq!(node.canonical_height(), 3);
 
-    // The passbook auto-re-projects against the new canonical branch: the user
-    // now sees exactly the three USER_LOCK mined rewards, not branch A's.
     let expected =
         calculate_block_reward(1) + calculate_block_reward(2) + calculate_block_reward(3);
     assert_eq!(
@@ -338,10 +327,10 @@ fn test_reorganization_updates_passbook() {
         "passbook re-projects onto the new canonical branch"
     );
     let view = passbook.view(&node).unwrap();
-    assert_eq!(view.total_entries, 3, "three rewards on branch B");
+    assert_eq!(view.total_entries(), 3, "three rewards on branch B");
     let mut heights: Vec<u64> = Vec::new();
     for e in &view.entries {
-        assert_eq!(e.entry_type, EntryType::MiningReward);
+        assert_eq!(e.action, PassbookAction::MiningReward);
         let h = e.block_height.expect("confirmed entry has a block height");
         heights.push(h);
         assert_eq!(
@@ -371,7 +360,6 @@ fn test_restart_preserves_passbook_integrity() {
     let dir = tempfile::TempDir::new().unwrap();
     let path = dir.path().join("db");
     let mut config = test_config(path.clone(), true);
-    // The miner pays the passbook user, so mined rewards project into the book.
     config.miner_payout_script = USER_LOCK.to_vec();
     let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
 
@@ -388,7 +376,6 @@ fn test_restart_preserves_passbook_integrity() {
         node.shutdown().unwrap();
     }
 
-    // Reopen the same data directory: the projection must reproduce identically.
     {
         let mut node2 = Node::open(config).unwrap();
         node2.start().unwrap();
@@ -396,22 +383,216 @@ fn test_restart_preserves_passbook_integrity() {
 
         let restored = passbook.view(&node2).unwrap();
         assert_eq!(
-            restored.confirmed_balance_quanta,
-            saved_view.confirmed_balance_quanta
+            restored.confirmed_native_balance_quanta,
+            saved_view.confirmed_native_balance_quanta
         );
-        assert_eq!(restored.total_entries, saved_view.total_entries);
+        assert_eq!(restored.total_entries(), saved_view.total_entries());
         assert_eq!(
-            restored.pending_balance_quanta,
-            saved_view.pending_balance_quanta
+            restored.pending_native_balance_quanta,
+            saved_view.pending_native_balance_quanta
         );
         let restored_nums: Vec<u64> = restored.entries.iter().map(|e| e.entry_number).collect();
         let saved_nums: Vec<u64> = saved_view.entries.iter().map(|e| e.entry_number).collect();
         assert_eq!(restored_nums, saved_nums, "identical sequential numbering");
-        let restored_types: Vec<EntryType> =
-            restored.entries.iter().map(|e| e.entry_type).collect();
-        let saved_types: Vec<EntryType> = saved_view.entries.iter().map(|e| e.entry_type).collect();
+        let restored_types: Vec<PassbookAction> =
+            restored.entries.iter().map(|e| e.action.clone()).collect();
+        let saved_types: Vec<PassbookAction> =
+            saved_view.entries.iter().map(|e| e.action.clone()).collect();
         assert_eq!(restored_types, saved_types, "identical entry types");
 
         node2.shutdown().unwrap();
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. Multi-Asset & Contract Mutation Tests (Stage 2 Hardening)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_passbook_native_inbound_outbound_change() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    let user_lock = vec![0xaa, 0xbb, 0xcc];
+    let other_lock = vec![0xdd, 0xee, 0xff];
+
+    // Block 1: Fund user with coinbase
+    let h1 = inject_canonical_reward_block(&node, 0, &user_lock);
+    let h1_block = node.storage_handle().get_block(&h1).unwrap().unwrap();
+    let cb_tx = &h1_block.transactions[0];
+    let cb_val = cb_tx.outputs[0].value;
+
+    let passbook = Passbook::new(vec![user_lock.clone()]);
+    assert_eq!(passbook.confirmed_balance_quanta(&node).unwrap(), cb_val);
+
+    // Build transfer transaction with change output back to user
+    let spend_amount = 5_000_000u64;
+    let fee = 10_000u64;
+    let change_amount = cb_val - spend_amount - fee;
+    let tx = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(OutPoint::new(cb_tx.txid(), 0), user_lock.clone())],
+        vec![
+            TxOut::new(spend_amount, other_lock.clone()),
+            TxOut::new(change_amount, user_lock.clone()),
+        ],
+        0,
+    );
+
+    let submitted_txid = node.submit_transaction(tx).unwrap();
+    assert_eq!(node.mempool_len(), 1);
+
+    // Check pending state before mining
+    let view_pending = passbook.view(&node).unwrap();
+    assert_eq!(view_pending.confirmed_native_balance_quanta, cb_val);
+    assert_eq!(
+        view_pending.pending_native_balance_quanta,
+        -((spend_amount + fee) as i64)
+    );
+
+    // Mine block 2 with the template containing the mempool transaction
+    let template = node.build_mining_template(other_lock.clone()).unwrap();
+    assert_eq!(template.transactions.len(), 2);
+    assert_eq!(template.transactions[1].txid(), submitted_txid);
+
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let solved = scytale_mining::run_pow_search(&template, 0, 100_000, &cancel).unwrap();
+    let b2 = template.assemble_block(solved);
+    assert!(node.submit_external_block(b2).unwrap());
+    assert_eq!(node.canonical_height(), 2);
+    assert_eq!(node.mempool_len(), 0);
+
+    // Check confirmed state after block 2 confirmation
+    let view = passbook.view(&node).unwrap();
+    assert_eq!(view.confirmed_native_balance_quanta, change_amount);
+    assert_eq!(view.pending_native_balance_quanta, 0);
+
+    let has_reward = view
+        .entries
+        .iter()
+        .any(|e| e.action == PassbookAction::MiningReward && e.amount_quanta == cb_val);
+    let has_change = view
+        .entries
+        .iter()
+        .any(|e| e.action == PassbookAction::Change && e.amount_quanta == change_amount);
+    assert!(has_reward, "must reflect mining reward");
+    assert!(has_change, "must reflect confirmed change output");
+
+    node.shutdown().unwrap();
+}
+
+#[test]
+fn test_passbook_scy20_token_tracking() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    let user_lock_bytes = vec![0x77; 32];
+    let token_id = Hash256::new([0x88; 32]);
+
+    let scy20_payload = scytale_node::passbook::Scy20DatumPayload {
+        token_id: *token_id.as_bytes(),
+        owner: [0x77; 32],
+        amount: 25_000,
+    };
+    let datum_bytes = bincode::serialize(&scy20_payload).unwrap();
+    let script_lock = OutputLock::Script {
+        script_hash: [0x33; 32],
+        datum: datum_bytes,
+    };
+    let condition = script_lock.to_locking_condition();
+
+    // Inject block paying to the SCY-20 script condition
+    inject_canonical_reward_block(&node, 0, &condition);
+    assert_eq!(node.canonical_height(), 1);
+
+    let mut passbook = Passbook::new(vec![user_lock_bytes]);
+    passbook.add_owned_lock(condition);
+
+    let view = passbook.view(&node).unwrap();
+    assert_eq!(view.token_balances.get(&token_id), Some(&25_000));
+
+    let scy20_entry = view
+        .entries
+        .iter()
+        .find(|e| matches!(e.asset, PassbookAsset::Scy20 { .. }));
+    assert!(scy20_entry.is_some(), "must record SCY-20 entry");
+    assert_eq!(scy20_entry.unwrap().amount_quanta, 25_000);
+    assert_eq!(scy20_entry.unwrap().action, PassbookAction::Scy20Mint);
+
+    node.shutdown().unwrap();
+}
+
+#[test]
+fn test_passbook_contract_interaction_with_datum_hash() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    let datum = b"scytale-smart-contract-state-payload".to_vec();
+    let expected_datum_hash = Hash256::hash(&datum);
+    let contract_lock = OutputLock::Script {
+        script_hash: [0x55; 32],
+        datum,
+    };
+    let condition = contract_lock.to_locking_condition();
+
+    // Inject block paying to the contract condition
+    inject_canonical_reward_block(&node, 0, &condition);
+    assert_eq!(node.canonical_height(), 1);
+
+    let passbook = Passbook::new(vec![condition]);
+    let view = passbook.view(&node).unwrap();
+
+    let entry = view
+        .entries
+        .iter()
+        .find(|e| matches!(e.action, PassbookAction::ContractInteraction { .. }));
+    assert!(entry.is_some(), "must record ContractInteraction action");
+    assert_eq!(entry.unwrap().datum_hash, Some(expected_datum_hash));
+
+    node.shutdown().unwrap();
+}
+
+#[test]
+fn test_passbook_confirmed_vs_pending_balances() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    let h1 = inject_canonical_reward_block(&node, 0, USER_LOCK);
+    let h1_block = node.storage_handle().get_block(&h1).unwrap().unwrap();
+    let cb_tx = &h1_block.transactions[0];
+    let cb_val = cb_tx.outputs[0].value;
+
+    let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
+
+    let initial_view = passbook.view(&node).unwrap();
+    assert_eq!(initial_view.confirmed_native_balance_quanta, cb_val);
+    assert_eq!(initial_view.pending_native_balance_quanta, 0);
+
+    let fee = 5_000u64;
+    let send_val = 1_000_000u64;
+    let tx = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(OutPoint::new(cb_tx.txid(), 0), USER_LOCK.to_vec())],
+        vec![
+            TxOut::new(send_val, OTHER_LOCK.to_vec()),
+            TxOut::new(cb_val - send_val - fee, USER_LOCK.to_vec()),
+        ],
+        0,
+    );
+    node.submit_transaction(tx).unwrap();
+
+    let pending_view = passbook.view(&node).unwrap();
+    // Confirmed balance must remain strictly unmutated
+    assert_eq!(pending_view.confirmed_native_balance_quanta, cb_val);
+    // Net pending outflow: - (send_val + fee)
+    assert_eq!(
+        pending_view.pending_native_balance_quanta,
+        -((send_val + fee) as i64)
+    );
+
+    node.shutdown().unwrap();
 }

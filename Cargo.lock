@@ -1286,6 +1286,7 @@ dependencies = [
 name = "scytale-storage"
 version = "0.3.0"
 dependencies = [
+ "blake3",
  "redb",
  "scytale-core",
  "scytale-primitives",

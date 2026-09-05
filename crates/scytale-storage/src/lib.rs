@@ -13,7 +13,11 @@ pub mod tables;
 
 pub use engine::{outpoint_to_key, StorageEngine, UtxoSnapshotDto};
 pub use error::StorageError;
-pub use tables::{BlockMeta, BLOCKS, BLOCK_INDEX, CHAIN_STATE, TRANSACTIONS, UTXOS};
+pub use tables::{
+    deserialize_address_tx_records, extract_address_from_locking_condition, make_address_tx_key,
+    serialize_address_tx_records, AddressTxRecord, BlockMeta, ADDRESS_TX_INDEX, BLOCKS,
+    BLOCK_INDEX, CHAIN_STATE, TRANSACTIONS, UTXOS,
+};
 
 // ── Legacy compatibility re-exports ──────────────────────────────────────────
 pub use tables::{BLOCKS_TABLE, META_TABLE, UTXO_TABLE};

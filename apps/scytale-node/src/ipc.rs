@@ -9,7 +9,7 @@ use tracing::{error, info, warn};
 
 use crate::node::Node;
 use crate::passbook::{
-    EntryStatus, EntryType, Passbook, PassbookView, ProvenanceCategory, ProvenanceStep,
+    EntryStatus, Passbook, PassbookAction, PassbookView, ProvenanceCategory, ProvenanceStep,
 };
 use scytale_bridge::{
     read_ipc_message, write_ipc_message, EntryStatusDto, EntryTypeDto, NodeRequest, NodeResponse,
@@ -297,17 +297,21 @@ async fn process_request(
 }
 
 pub(crate) fn map_passbook_view(lock_hex: String, view: PassbookView) -> PassbookViewDto {
-    let entries = view
+    let entries: Vec<PassbookEntryDto> = view
         .entries
         .into_iter()
         .map(|e| PassbookEntryDto {
             entry_number: e.entry_number,
             timestamp: e.timestamp,
-            entry_type: match e.entry_type {
-                EntryType::Received => EntryTypeDto::Received,
-                EntryType::Sent => EntryTypeDto::Sent,
-                EntryType::MiningReward => EntryTypeDto::MiningReward,
-                EntryType::Change => EntryTypeDto::Change,
+            entry_type: match e.action {
+                PassbookAction::Received => EntryTypeDto::Received,
+                PassbookAction::Sent => EntryTypeDto::Sent,
+                PassbookAction::MiningReward => EntryTypeDto::MiningReward,
+                PassbookAction::Change => EntryTypeDto::Change,
+                PassbookAction::Scy20Mint | PassbookAction::Scy20Transfer => EntryTypeDto::Received,
+                PassbookAction::Scy20Burn | PassbookAction::VaultWithdrawal => EntryTypeDto::Sent,
+                PassbookAction::VaultDeposit { .. } => EntryTypeDto::Sent,
+                PassbookAction::ContractInteraction { .. } => EntryTypeDto::Received,
             },
             amount_quanta: e.amount_quanta,
             fee_quanta: e.fee_quanta,
@@ -324,11 +328,12 @@ pub(crate) fn map_passbook_view(lock_hex: String, view: PassbookView) -> Passboo
         })
         .collect();
 
+    let total_entries = entries.len();
     PassbookViewDto {
         account_lock_hex: lock_hex,
-        confirmed_balance_quanta: view.confirmed_balance_quanta,
-        pending_balance_quanta: view.pending_balance_quanta,
-        total_entries: view.total_entries,
+        confirmed_balance_quanta: view.confirmed_native_balance_quanta,
+        pending_balance_quanta: view.pending_native_balance_quanta,
+        total_entries,
         entries,
     }
 }

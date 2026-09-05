@@ -1,11 +1,16 @@
 use crate::error::StorageError;
-use crate::tables::{self, BlockMeta, KEY_TIP_HASH, KEY_TIP_HEIGHT};
+use crate::tables::{
+    self, deserialize_address_tx_records, extract_address_from_locking_condition,
+    make_address_tx_key, serialize_address_tx_records, AddressTxRecord, BlockMeta, KEY_TIP_HASH,
+    KEY_TIP_HEIGHT,
+};
 use redb::{Database, ReadableTable};
 use scytale_core::{
-    Block, CanonicalDeserialize, CanonicalSerialize, Hash256, OutPoint, Transaction, UtxoEntry,
-    UtxoSet,
+    Address, Block, CanonicalDeserialize, CanonicalSerialize, Hash256, OutPoint, Transaction,
+    UtxoEntry, UtxoSet,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 /// Authenticated snapshot of the active unspent UTXO set at a specific block height.
@@ -69,6 +74,7 @@ impl StorageEngine {
         write_tx.open_table(tables::UTXOS)?;
         write_tx.open_table(tables::BLOCK_INDEX)?;
         write_tx.open_table(tables::CHAIN_STATE)?;
+        write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
         write_tx.commit()?;
         Ok(())
     }
@@ -299,10 +305,13 @@ impl StorageEngine {
             tbl.insert(block_hash.as_bytes(), block_bytes.as_slice())?;
         }
 
-        // ── Step 2 & 3: Store transactions and mutate UTXOs ──────────────
+        // ── Step 2 & 3: Store transactions, mutate UTXOs, and update ADDRESS_TX_INDEX ──
         {
             let mut tx_tbl = write_tx.open_table(tables::TRANSACTIONS)?;
             let mut utxo_tbl = write_tx.open_table(tables::UTXOS)?;
+            let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+
+            let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> = HashMap::new();
 
             for tx in &block.transactions {
                 let txid = tx.txid();
@@ -315,12 +324,49 @@ impl StorageEngine {
                 if !tx.is_coinbase() {
                     for input in &tx.inputs {
                         let key = outpoint_to_key(&input.previous_output);
+
+                        // Lookup spent UTXO to record address index before removal
+                        let spent_output = if let Some(guard) = utxo_tbl.get(&key)? {
+                            let entry = UtxoEntry::from_canonical_bytes(guard.value())
+                                .map_err(|e| StorageError::serialization(e.to_string()))?;
+                            Some(entry.output)
+                        } else if let Some(tx_bytes) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
+                            let prev_tx = Transaction::from_canonical_bytes(tx_bytes.value())
+                                .map_err(|e| StorageError::serialization(e.to_string()))?;
+                            prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                        } else {
+                            None
+                        };
+
+                        if let Some(spent_out) = spent_output {
+                            if let Some(addr) = extract_address_from_locking_condition(&spent_out.locking_condition) {
+                                block_addr_records.entry(addr).or_default().push(AddressTxRecord {
+                                    txid,
+                                    is_input: true,
+                                    is_output: false,
+                                    value_quanta: spent_out.value,
+                                    token_id: None,
+                                });
+                            }
+                        }
+
                         utxo_tbl.remove(&key)?;
                     }
                 }
 
-                // Create new UTXOs for all non-OP_RETURN outputs
+                // Create new UTXOs for all non-OP_RETURN outputs and record address index
                 for (idx, output) in tx.outputs.iter().enumerate() {
+                    // Record output in ADDRESS_TX_INDEX if address is resolvable
+                    if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
+                        block_addr_records.entry(addr).or_default().push(AddressTxRecord {
+                            txid,
+                            is_input: false,
+                            is_output: true,
+                            value_quanta: output.value,
+                            token_id: None,
+                        });
+                    }
+
                     // Consensus rule: OP_RETURN outputs (0x6a) are data carriers and omitted from UTXOS table
                     if output.locking_condition.first() == Some(&0x6a) {
                         continue;
@@ -333,6 +379,22 @@ impl StorageEngine {
                         .map_err(|e| StorageError::serialization(e.to_string()))?;
                     utxo_tbl.insert(&key, entry_bytes.as_slice())?;
                 }
+            }
+
+            // Write all accumulated address records for this block
+            for (addr, new_records) in block_addr_records {
+                let key = make_address_tx_key(&addr, height);
+                let merged_records = if let Some(guard) = addr_idx_tbl.get(&key)? {
+                    let mut records = deserialize_address_tx_records(guard.value())
+                        .map_err(|e| StorageError::serialization(e.to_string()))?;
+                    records.extend(new_records);
+                    records
+                } else {
+                    new_records
+                };
+                let payload = serialize_address_tx_records(&merged_records)
+                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                addr_idx_tbl.insert(&key, payload.as_slice())?;
             }
         }
 
@@ -361,8 +423,106 @@ impl StorageEngine {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    // Atomic Reorganization
+    // Atomic Reorganization & Unwind
     // ─────────────────────────────────────────────────────────────────────
+
+    /// Helper to remove all address index records created by a block at the given height.
+    fn remove_block_address_records_internal(
+        addr_idx_tbl: &mut redb::Table<&[u8; 40], &[u8]>,
+        tx_tbl: &redb::Table<&[u8; 32], &[u8]>,
+        block: &Block,
+        height: u64,
+    ) -> Result<(), StorageError> {
+        let mut touched_addrs = HashSet::new();
+
+        let block_tx_map: HashMap<Hash256, &Transaction> =
+            block.transactions.iter().map(|tx| (tx.txid(), tx)).collect();
+
+        for tx in &block.transactions {
+            for output in &tx.outputs {
+                if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
+                    touched_addrs.insert(addr);
+                }
+            }
+
+            if !tx.is_coinbase() {
+                for input in &tx.inputs {
+                    let prev_output = if let Some(local_tx) = block_tx_map.get(&input.previous_output.txid) {
+                        local_tx.outputs.get(input.previous_output.index as usize).cloned()
+                    } else if let Some(tx_guard) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
+                        if let Ok(prev_tx) = Transaction::from_canonical_bytes(tx_guard.value()) {
+                            prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
+                    if let Some(out) = prev_output {
+                        if let Some(addr) = extract_address_from_locking_condition(&out.locking_condition) {
+                            touched_addrs.insert(addr);
+                        }
+                    }
+                }
+            }
+        }
+
+        for addr in touched_addrs {
+            let key = make_address_tx_key(&addr, height);
+            addr_idx_tbl.remove(&key)?;
+        }
+
+        Ok(())
+    }
+
+    /// Atomically rolls back a single block: removes its transactions, UTXOs,
+    /// address index entries, and block index metadata.
+    pub fn unwind_block(&self, block: &Block, height: u64) -> Result<(), StorageError> {
+        let write_tx = self.db.begin_write()?;
+        {
+            let mut utxo_tbl = write_tx.open_table(tables::UTXOS)?;
+            let mut tx_tbl = write_tx.open_table(tables::TRANSACTIONS)?;
+            let mut blk_tbl = write_tx.open_table(tables::BLOCKS)?;
+            let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
+            let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+
+            Self::remove_block_address_records_internal(
+                &mut addr_idx_tbl,
+                &tx_tbl,
+                block,
+                height,
+            )?;
+
+            for tx in &block.transactions {
+                let txid = tx.txid();
+                for (idx, _) in tx.outputs.iter().enumerate() {
+                    let op = OutPoint::new(txid, idx as u32);
+                    utxo_tbl.remove(&outpoint_to_key(&op))?;
+                }
+                tx_tbl.remove(txid.as_bytes())?;
+            }
+            let bh = block.header.hash();
+            blk_tbl.remove(bh.as_bytes())?;
+            idx_tbl.remove(bh.as_bytes())?;
+
+            // If tip matches this block, revert tip to parent
+            let mut state_tbl = write_tx.open_table(tables::CHAIN_STATE)?;
+            let is_tip = state_tbl
+                .get(KEY_TIP_HASH)?
+                .is_some_and(|guard| guard.value() == bh.as_bytes());
+            if is_tip {
+                state_tbl.insert(
+                    KEY_TIP_HASH,
+                    block.header.previous_block_hash.as_bytes().as_slice(),
+                )?;
+                let new_height = height.saturating_sub(1);
+                state_tbl.insert(KEY_TIP_HEIGHT, new_height.to_le_bytes().as_slice())?;
+            }
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
 
     /// Atomically rolls back disconnected blocks and applies connected blocks.
     ///
@@ -380,25 +540,34 @@ impl StorageEngine {
             let mut tx_tbl = write_tx.open_table(tables::TRANSACTIONS)?;
             let mut blk_tbl = write_tx.open_table(tables::BLOCKS)?;
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
+            let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
 
-            // Rollback disconnected blocks (newest-first is convention but either order works
-            // for UTXO key removal since we only remove/insert without ordering constraint)
+            // Rollback disconnected blocks
             for block in disconnected_blocks {
+                let bh = block.header.hash();
+                let height = if let Some(guard) = idx_tbl.get(bh.as_bytes())? {
+                    BlockMeta::from_bytes(guard.value()).map(|m| m.height)
+                } else {
+                    None
+                };
+
+                if let Some(h) = height {
+                    Self::remove_block_address_records_internal(
+                        &mut addr_idx_tbl,
+                        &tx_tbl,
+                        block,
+                        h,
+                    )?;
+                }
+
                 for tx in &block.transactions {
                     let txid = tx.txid();
-                    // Remove UTXOs created by this tx
                     for (idx, _) in tx.outputs.iter().enumerate() {
                         let op = OutPoint::new(txid, idx as u32);
                         utxo_tbl.remove(&outpoint_to_key(&op))?;
                     }
-                    // We do NOT re-insert spent inputs here because the on-disk UTXO set
-                    // was already mutated when those transactions were committed. A full
-                    // production implementation would need to store undo data. This method
-                    // is correct for the test scenarios in which the reorg applies a
-                    // fully-prepared canonical set passed in by the caller.
                     tx_tbl.remove(txid.as_bytes())?;
                 }
-                let bh = block.header.hash();
                 blk_tbl.remove(bh.as_bytes())?;
                 idx_tbl.remove(bh.as_bytes())?;
             }
@@ -411,6 +580,8 @@ impl StorageEngine {
                     .map_err(|e| StorageError::serialization(e.to_string()))?;
                 blk_tbl.insert(block_hash.as_bytes(), block_bytes.as_slice())?;
 
+                let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> = HashMap::new();
+
                 for tx in &block.transactions {
                     let txid = tx.txid();
                     let tx_bytes = tx
@@ -419,10 +590,45 @@ impl StorageEngine {
                     tx_tbl.insert(txid.as_bytes(), tx_bytes.as_slice())?;
                     if !tx.is_coinbase() {
                         for input in &tx.inputs {
-                            utxo_tbl.remove(&outpoint_to_key(&input.previous_output))?;
+                            let key = outpoint_to_key(&input.previous_output);
+                            let spent_output = if let Some(guard) = utxo_tbl.get(&key)? {
+                                let entry = UtxoEntry::from_canonical_bytes(guard.value())
+                                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                                Some(entry.output)
+                            } else if let Some(tx_bytes) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
+                                let prev_tx = Transaction::from_canonical_bytes(tx_bytes.value())
+                                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                                prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                            } else {
+                                None
+                            };
+
+                            if let Some(spent_out) = spent_output {
+                                if let Some(addr) = extract_address_from_locking_condition(&spent_out.locking_condition) {
+                                    block_addr_records.entry(addr).or_default().push(AddressTxRecord {
+                                        txid,
+                                        is_input: true,
+                                        is_output: false,
+                                        value_quanta: spent_out.value,
+                                        token_id: None,
+                                    });
+                                }
+                            }
+
+                            utxo_tbl.remove(&key)?;
                         }
                     }
                     for (idx, output) in tx.outputs.iter().enumerate() {
+                        if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
+                            block_addr_records.entry(addr).or_default().push(AddressTxRecord {
+                                txid,
+                                is_input: false,
+                                is_output: true,
+                                value_quanta: output.value,
+                                token_id: None,
+                            });
+                        }
+
                         if output.locking_condition.first() == Some(&0x6a) {
                             continue;
                         }
@@ -433,6 +639,22 @@ impl StorageEngine {
                             .map_err(|e| StorageError::serialization(e.to_string()))?;
                         utxo_tbl.insert(&outpoint_to_key(&op), entry_bytes.as_slice())?;
                     }
+                }
+
+                // Write address records for connected block
+                for (addr, new_records) in block_addr_records {
+                    let key = make_address_tx_key(&addr, *height);
+                    let merged_records = if let Some(guard) = addr_idx_tbl.get(&key)? {
+                        let mut records = deserialize_address_tx_records(guard.value())
+                            .map_err(|e| StorageError::serialization(e.to_string()))?;
+                        records.extend(new_records);
+                        records
+                    } else {
+                        new_records
+                    };
+                    let payload = serialize_address_tx_records(&merged_records)
+                        .map_err(|e| StorageError::serialization(e.to_string()))?;
+                    addr_idx_tbl.insert(&key, payload.as_slice())?;
                 }
 
                 let meta = BlockMeta {
@@ -454,6 +676,68 @@ impl StorageEngine {
 
         write_tx.commit()?;
         Ok(())
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Address Index Queries (Passbook)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// Queries transaction records paired with their confirmed block height associated
+    /// with `address` between `from_height` and `to_height` (inclusive), up to `limit` records.
+    ///
+    /// Traverses the canonical `ADDRESS_TX_INDEX` in ascending block height order.
+    pub fn get_address_transactions_with_height(
+        &self,
+        address: &Address,
+        from_height: u64,
+        to_height: u64,
+        limit: usize,
+    ) -> Result<Vec<(u64, AddressTxRecord)>, StorageError> {
+        if limit == 0 || from_height > to_height {
+            return Ok(Vec::new());
+        }
+
+        let addr_bytes = address.hash();
+        let start_key = make_address_tx_key(addr_bytes, from_height);
+        let end_key = make_address_tx_key(addr_bytes, to_height);
+
+        let read_tx = self.db.begin_read()?;
+        let table = read_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+
+        let mut results = Vec::new();
+        for item in table.range::<&[u8; 40]>(&start_key..=&end_key)? {
+            let (key_guard, val_guard) = item?;
+            let key = key_guard.value();
+            let height = u64::from_be_bytes(key[32..40].try_into().unwrap());
+            let records = deserialize_address_tx_records(val_guard.value())
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            for record in records {
+                results.push((height, record));
+                if results.len() >= limit {
+                    return Ok(results);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Queries transaction records associated with `address` between `from_height`
+    /// and `to_height` (inclusive), up to `limit` records.
+    ///
+    /// Traverses the canonical `ADDRESS_TX_INDEX` in ascending block height order.
+    pub fn get_address_transactions(
+        &self,
+        address: &Address,
+        from_height: u64,
+        to_height: u64,
+        limit: usize,
+    ) -> Result<Vec<AddressTxRecord>, StorageError> {
+        Ok(self
+            .get_address_transactions_with_height(address, from_height, to_height, limit)?
+            .into_iter()
+            .map(|(_, rec)| rec)
+            .collect())
     }
 
     // ─────────────────────────────────────────────────────────────────────
