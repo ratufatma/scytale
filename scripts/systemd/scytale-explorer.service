@@ -1,0 +1,42 @@
+[Unit]
+Description=Scytale Web Explorer Service
+Documentation=https://github.com/scytale-lab/scytale
+After=network-online.target scytale-node.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scytale
+Group=scytale
+WorkingDirectory=/var/www/scytale-explorer
+
+# Default runtime environments
+Environment=NODE_ENV=production
+Environment=NODE_URL=http://127.0.0.1:8332
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=EXPLORER_DB_PATH=/var/lib/scytale/explorer.db
+
+# Optional override environment file (e.g. INDEXER_KEY)
+EnvironmentFile=-/etc/scytale/explorer.env
+
+ExecStart=/usr/bin/node server.mjs
+
+Restart=always
+RestartSec=5s
+
+# File descriptor limits
+LimitNOFILE=65535
+
+# Basic sandboxing and security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scytale-explorer
+
+[Install]
+WantedBy=multi-user.target

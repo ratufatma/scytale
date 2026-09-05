@@ -1,0 +1,48 @@
+[Unit]
+Description=Scytale Full Node Daemon
+Documentation=https://github.com/scytale-lab/scytale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scytale
+Group=scytale
+WorkingDirectory=/var/lib/scytale
+RuntimeDirectory=scytale
+RuntimeDirectoryMode=0755
+
+# Optional environment variables (e.g. INDEXER_KEY, NODE_EXTRA_ARGS)
+EnvironmentFile=-/etc/scytale/node.env
+
+ExecStart=/usr/local/bin/scytale-node \
+    --data-dir /var/lib/scytale/data \
+    --socket /run/scytale/node.sock \
+    start \
+    --http-bind 127.0.0.1:8332 \
+    --p2p-bind 0.0.0.0:9001 \
+    --explorer-url http://127.0.0.1:3000/api/ingest \
+    $NODE_EXTRA_ARGS
+
+Restart=on-failure
+RestartSec=5s
+
+# Process and file descriptor limits
+LimitNOFILE=65535
+LimitNPROC=32768
+
+# Basic sandboxing and security hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=scytale-node
+
+[Install]
+WantedBy=multi-user.target

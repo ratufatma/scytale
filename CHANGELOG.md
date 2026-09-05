@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.3.3-devnet] - 2026-09-05
+
+### Milestone: Passbook Financial Ledger, Merkle Proofs & Production VPS Tooling
+
+#### Added
+- **Secondary Address Transaction Index (`scytale-storage`)**:
+  - Defined `ADDRESS_TX_INDEX` table storing composite keys `[u8; 40]` (`address (32B) || height_be (8B)`).
+  - Integrated atomic index recording in `StorageEngine::commit_block` for all inputs and outputs.
+  - Added deterministic cleanup in `apply_reorganization` and `unwind_block` for orphaned blocks.
+  - Implemented `get_address_txs` with forward and reverse range queries ($O(K)$ lookup efficiency).
+- **Multi-Asset eUTXO Passbook Tracking (`scytale-node`)**:
+  - Added `PassbookAsset` enum supporting `Native` and `Scy20` custom tokens.
+  - Added `PassbookAction` financial classification (`Received`, `Sent`, `MiningReward`, `Change`, `Scy20Mint`, `Scy20Transfer`, `Scy20Burn`, `ContractInteraction`, `VaultDeposit`, `VaultWithdrawal`).
+  - Added real-time mempool pending delta balance tracking in `PassbookView`.
+- **Cryptographic Passbook Statements & Merkle Inclusion Proofs (`scytale-core`)**:
+  - Implemented deterministic UTXO set Merkle tree builder and audit path generator (`generate_utxo_merkle_proof`).
+  - Added mathematical proof verifier (`verify_utxo_inclusion`).
+  - Implemented self-contained `PassbookStatement` generation and offline verification against canonical `utxo_root`.
+- **REST HTTP Gateway Endpoints (`scytale-node`)**:
+  - Exposed `GET /api/v1/passbook` with address, block range, and limit query parameters.
+  - Exposed `GET /api/v1/passbook/statement` for cryptographic statement retrieval.
+- **CLI ASCII Passbook Presentation & Verifier (`scytale-cli`)**:
+  - Added `scytale-cli passbook show` rendering structured pure-integer ASCII bank passbook tables.
+  - Added `scytale-cli passbook statement` with offline Merkle proof verification (`--verify`).
+- **Production VPS Systemd Tooling & Provisioning (`scripts/`)**:
+  - Added template `scripts/systemd/scytale-node.service` with optimal file descriptor limits (`LimitNOFILE=65535`) and Linux security sandboxing.
+  - Added template `scripts/systemd/scytale-explorer.service` with auto-restart and SQLite WAL integration.
+  - Created automated provisioning script `scripts/setup_vps_env.sh` configuring user `scytale`, storage permissions (`0700`), shared ingest auth tokens, and UFW firewall rules.
+- **Technical Documentation**:
+  - Published [docs/work/48-passbook-enhancement-multiasset-merkle-proofs.md](docs/work/48-passbook-enhancement-multiasset-merkle-proofs.md).
+
+---
+
 ## [v0.3.2-devnet] - 2026-09-05
 
 ### Milestone: Phase 2 Hardening — Network Resilience & Consensus Security
