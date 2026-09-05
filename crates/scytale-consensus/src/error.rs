@@ -52,7 +52,7 @@ pub enum ChainError {
     UtxoError(#[from] scytale_core::UtxoError),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 pub enum ConsensusError {
     #[error("Proof of work error: {0}")]
     Pow(#[from] PowError),
@@ -66,4 +66,7 @@ pub enum ConsensusError {
     BlockPoWInvalid,
     #[error("Invalid block reward")]
     InvalidReward,
+    #[error("Transaction verification failed: {0}")]
+    TransactionVerification(String),
 }
+

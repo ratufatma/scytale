@@ -309,57 +309,51 @@ impl Node {
     /// Returns `Ok(true)` if the block became the canonical tip (and any stale mining
     /// template is therefore invalidated), `Ok(false)` if it was a side branch or
     /// duplicate, and propagates consensus errors for invalid blocks.
+    ///
+    /// # Fail-Closed Reorg Security Guarantee
+    ///
+    /// When a block triggers a chain reorganization (i.e., an alternative fork with more
+    /// cumulative PoW), this function validates **every transaction in every connected block**
+    /// of the challenger branch against both the native P2PKH `ScriptEngine` and the
+    /// `ScyVm` Wasm executor before allowing the canonical tip to shift. If any block in the
+    /// fork fails script or eUTXO validation, the reorg is unconditionally rejected and the
+    /// canonical tip remains unchanged.
     pub fn submit_external_block(&self, block: Block) -> Result<bool, NodeError> {
         let canonical_after = {
             let mut chain = self.shared.chain_tree.lock().unwrap();
             let mut utxos = self.shared.utxo_set.lock().unwrap();
 
-            // Verify non-coinbase transaction scripts against current UTXO set if extending canonical tip
-            if block.header.previous_block_hash == chain.canonical_tip() {
+            let block_hash = block.header.hash();
+            let parent_hash = block.header.previous_block_hash;
+
+            if chain.is_block_invalid(&block_hash) || chain.is_block_invalid(&parent_hash) {
+                return Err(NodeError::Consensus(
+                    scytale_consensus::ChainError::InvalidBranchBlock {
+                        hash: block_hash,
+                        reason: "Block or ancestor is marked as invalid".to_string(),
+                    },
+                ));
+            }
+
+            // ── Path A: direct canonical-tip extension ─────────────────────────
+            // Validate scripts and ScyVM for a block that directly extends the
+            // current canonical tip. The staged UTXO already matches the tip state.
+            if parent_hash == chain.canonical_tip() {
                 let height = chain.canonical_height() + 1;
                 let block_time = block.header.timestamp;
                 let mut staging_utxos = utxos.clone();
-                let mut block_gas_consumed: u64 = 0;
-                for tx in &block.transactions {
-                    if !tx.is_coinbase() {
-                        Self::verify_transaction_scripts(tx, height, &staging_utxos)?;
-                        // eUTXO ScyVM validation
-                        let tx_gas = verify_transaction_eutxo(
-                            tx,
-                            block_time,
-                            &staging_utxos,
-                            MAX_TX_GAS,
-                        ).map_err(NodeError::EutxoValidation)?;
-                        block_gas_consumed = block_gas_consumed.saturating_add(tx_gas);
-                        if block_gas_consumed > MAX_BLOCK_GAS {
-                            return Err(NodeError::EutxoValidation(
-                                EutxoValidationError::BlockGasLimitExceeded {
-                                    consumed: block_gas_consumed,
-                                    limit: MAX_BLOCK_GAS,
-                                },
-                            ));
-                        }
-                        for input in &tx.inputs {
-                            staging_utxos.remove(&input.previous_output);
-                        }
-                    }
-                    let txid = tx.txid();
-                    for (idx, output) in tx.outputs.iter().enumerate() {
-                        if output.locking_condition.first() != Some(&0x6a) {
-                            let op = OutPoint::new(txid, idx as u32);
-                            staging_utxos.insert(
-                                op,
-                                scytale_core::UtxoEntry::new(
-                                    output.clone(),
-                                    height,
-                                    tx.is_coinbase(),
-                                ),
-                            );
-                        }
-                    }
+                if let Err(e) = Self::validate_block_transactions(
+                    &block,
+                    height,
+                    block_time,
+                    &mut staging_utxos,
+                ) {
+                    chain.mark_block_invalid(block_hash);
+                    return Err(e);
                 }
                 let calculated_root = staging_utxos.compute_utxo_root();
                 if block.header.utxo_root != calculated_root {
+                    chain.mark_block_invalid(block_hash);
                     return Err(NodeError::Consensus(
                         scytale_consensus::ChainError::BlockError(
                             scytale_core::BlockError::InvalidUtxoRoot {
@@ -369,9 +363,21 @@ impl Node {
                         ),
                     ));
                 }
+            } else {
+                // ── Path B: fork / reorg candidate ────────────────────────────
+                // Before letting process_block commit any state change, we pre-validate
+                // the entire challenger branch (from common ancestor to candidate block)
+                // in a staged UTXO simulation.  If validation fails the node returns Err
+                // immediately; process_block is never called, so the canonical tip is
+                // guaranteed to remain unchanged (fail-closed).
+                if let Err(e) = Self::pre_validate_reorg_branch(&chain, &utxos, &block) {
+                    chain.mark_block_invalid(block_hash);
+                    return Err(e);
+                }
             }
 
-            match chain.process_block(block.clone(), &mut utxos) {
+            match chain.process_block_with_verifier(block.clone(), &mut utxos, &NodeBlockVerifier) {
+
                 Ok(Some(reorg)) => {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
@@ -423,6 +429,170 @@ impl Node {
             }
         };
         Ok(canonical_after)
+    }
+
+    /// Validates all non-coinbase transactions in `block` against both the native
+    /// P2PKH `ScriptEngine` and the `ScyVm` Wasm executor, advancing `staged_utxos`
+    /// in-place as each transaction is accepted.
+    ///
+    /// Inputs must be present in `staged_utxos` before this call.  On success the
+    /// staged set reflects the post-block state (spent inputs removed, new outputs
+    /// added).  On error the staged set is left in an intermediate state and must
+    /// be discarded by the caller.
+    fn validate_block_transactions(
+        block: &Block,
+        height: u64,
+        block_time: u64,
+        staged_utxos: &mut UtxoSet,
+    ) -> Result<(), NodeError> {
+        let mut block_gas_consumed: u64 = 0;
+        for tx in &block.transactions {
+            if !tx.is_coinbase() {
+                Self::verify_transaction_scripts(tx, height, staged_utxos)?;
+                let tx_gas = verify_transaction_eutxo(
+                    tx,
+                    block_time,
+                    staged_utxos,
+                    MAX_TX_GAS,
+                )
+                .map_err(NodeError::EutxoValidation)?;
+                block_gas_consumed = block_gas_consumed.saturating_add(tx_gas);
+                if block_gas_consumed > MAX_BLOCK_GAS {
+                    return Err(NodeError::EutxoValidation(
+                        EutxoValidationError::BlockGasLimitExceeded {
+                            consumed: block_gas_consumed,
+                            limit: MAX_BLOCK_GAS,
+                        },
+                    ));
+                }
+                for input in &tx.inputs {
+                    staged_utxos.remove(&input.previous_output);
+                }
+            }
+            let txid = tx.txid();
+            for (idx, output) in tx.outputs.iter().enumerate() {
+                if output.locking_condition.first() != Some(&0x6a) {
+                    let op = OutPoint::new(txid, idx as u32);
+                    staged_utxos.insert(
+                        op,
+                        scytale_core::UtxoEntry::new(
+                            output.clone(),
+                            height,
+                            tx.is_coinbase(),
+                        ),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Pre-validates the entire fork branch (from common ancestor to `candidate`) before
+    /// any state mutation occurs.
+    ///
+    /// This implements the **fail-closed** reorg security guarantee:
+    /// - Reconstructs the staged UTXO set at the common ancestor.
+    /// - Applies and script/ScyVM-validates every block in the challenger branch in order.
+    /// - If **any** block fails validation, returns `Err` immediately.
+    /// - The live `utxo_set` and `chain_tree` are never mutated; `process_block` is only
+    ///   called after this function returns `Ok`.
+    fn pre_validate_reorg_branch(
+        chain: &scytale_consensus::ChainTree,
+        canonical_utxos: &UtxoSet,
+        candidate: &Block,
+    ) -> Result<(), NodeError> {
+        let parent_hash = candidate.header.previous_block_hash;
+        let canonical_tip = chain.canonical_tip();
+
+        // Walk backwards through the fork to collect blocks since the common ancestor.
+        let common_ancestor = chain
+            .find_common_ancestor(&canonical_tip, &parent_hash)
+            .map_err(NodeError::Consensus)?;
+
+        // Collect the fork blocks from common_ancestor (exclusive) up to parent (inclusive),
+        // then append the candidate itself.
+        let mut fork_path: Vec<scytale_consensus::BlockNode> = Vec::new();
+        let mut cur = parent_hash;
+        while cur != common_ancestor {
+            match chain.get_node(&cur) {
+                Some(node) => {
+                    fork_path.push(node.clone());
+                    cur = node.parent_hash;
+                }
+                None => break,
+            }
+        }
+        fork_path.reverse();
+
+        // Build a staged UTXO set at the common ancestor.
+        // If the common ancestor IS the canonical tip, we can start from the live UTXO set.
+        // Otherwise we replay from genesis (mirrors the logic inside process_block).
+        let mut staged: UtxoSet = if common_ancestor == canonical_tip {
+            canonical_utxos.clone()
+        } else {
+            let genesis_to_ancestor = chain
+                .get_path_from_genesis(&common_ancestor)
+                .map_err(NodeError::Consensus)?;
+            let mut s = UtxoSet::new();
+            for node in &genesis_to_ancestor {
+                s.apply_block_transactions(
+                    &node.block.transactions[0],
+                    &node.block.transactions[1..],
+                    node.height,
+                )
+                .map_err(|e| {
+                    NodeError::InconsistentState(format!(
+                        "reorg ancestor replay failed at {:?}: {}",
+                        node.hash, e
+                    ))
+                })?;
+            }
+            s
+        };
+
+        // Validate every block on the fork path (already-known nodes).
+        for node in &fork_path {
+            let height = node.height;
+            let block_time = node.block.header.timestamp;
+            Self::validate_block_transactions(&node.block, height, block_time, &mut staged)?;
+            let calculated_root = staged.compute_utxo_root();
+            if node.block.header.utxo_root != calculated_root {
+                return Err(NodeError::Consensus(
+                    scytale_consensus::ChainError::BlockError(
+                        scytale_core::BlockError::InvalidUtxoRoot {
+                            expected: node.block.header.utxo_root,
+                            actual: calculated_root,
+                        },
+                    ),
+                ));
+            }
+        }
+
+        // Validate the candidate block itself (not yet in the chain tree).
+        let candidate_height = chain
+            .get_node(&parent_hash)
+            .map(|n| n.height + 1)
+            .unwrap_or(1);
+        Self::validate_block_transactions(
+            candidate,
+            candidate_height,
+            candidate.header.timestamp,
+            &mut staged,
+        )?;
+        let calculated_root = staged.compute_utxo_root();
+        if candidate.header.utxo_root != calculated_root {
+            return Err(NodeError::Consensus(
+                scytale_consensus::ChainError::BlockError(
+                    scytale_core::BlockError::InvalidUtxoRoot {
+                        expected: candidate.header.utxo_root,
+                        actual: calculated_root,
+                    },
+                ),
+            ));
+        }
+
+        Ok(())
+
     }
 
     /// Returns a shared handle to the embedded storage for downstream inspection.
@@ -893,6 +1063,31 @@ impl Node {
 
         let tx = Transaction::new(1, inputs, outputs, 0);
         self.submit_transaction(tx)
+    }
+}
+
+/// Consensus block transaction verifier integrating `ScriptEngine` and `ScyVm` Wasm contract validation.
+pub struct NodeBlockVerifier;
+
+impl scytale_consensus::BlockTransactionVerifier for NodeBlockVerifier {
+    fn verify_block_transactions(
+        &self,
+        block: &Block,
+        utxo_set: &UtxoSet,
+    ) -> Result<(), scytale_consensus::ConsensusError> {
+        let height = if let Some(cb) = block.transactions.first() {
+            if cb.is_coinbase() && !cb.inputs.is_empty() && cb.inputs[0].authorization.len() >= 8 {
+                u64::from_le_bytes(cb.inputs[0].authorization[..8].try_into().unwrap_or([0; 8]))
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        let block_time = block.header.timestamp;
+        let mut staged = utxo_set.clone();
+        Node::validate_block_transactions(block, height, block_time, &mut staged)
+            .map_err(|e| scytale_consensus::ConsensusError::TransactionVerification(e.to_string()))
     }
 }
 

@@ -1,8 +1,44 @@
-use crate::error::ChainError;
+use crate::error::{ChainError, ConsensusError};
 use crate::target::Target;
 use crate::work::{block_work, CumulativeWork};
 use scytale_core::{Block, Hash256, Transaction, UtxoSet};
 use std::collections::{HashMap, HashSet};
+
+/// Contextual transaction verifier interface for validating block transactions against a staged UTXO set.
+pub trait BlockTransactionVerifier {
+    fn verify_block_transactions(
+        &self,
+        block: &Block,
+        utxo_set: &UtxoSet,
+    ) -> Result<(), ConsensusError>;
+}
+
+impl<F> BlockTransactionVerifier for F
+where
+    F: Fn(&Block, &UtxoSet) -> Result<(), ConsensusError>,
+{
+    fn verify_block_transactions(
+        &self,
+        block: &Block,
+        utxo_set: &UtxoSet,
+    ) -> Result<(), ConsensusError> {
+        self(block, utxo_set)
+    }
+}
+
+/// A default verifier that accepts all block transactions unconditionally (used when transaction scripts/ScyVM are validated externally).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoOpTransactionVerifier;
+
+impl BlockTransactionVerifier for NoOpTransactionVerifier {
+    fn verify_block_transactions(
+        &self,
+        _block: &Block,
+        _utxo_set: &UtxoSet,
+    ) -> Result<(), ConsensusError> {
+        Ok(())
+    }
+}
 
 /// Metadata representation of a block node in the chain tree.
 #[derive(Debug, Clone)]
@@ -33,6 +69,7 @@ pub struct ChainTree {
     nodes: HashMap<Hash256, BlockNode>,
     canonical_tip: Hash256,
     max_reorg_depth: u64,
+    invalid_blocks: HashSet<Hash256>,
 }
 
 impl ChainTree {
@@ -58,11 +95,13 @@ impl ChainTree {
             nodes,
             canonical_tip: genesis_hash,
             max_reorg_depth: DEFAULT_MAX_REORG_DEPTH,
+            invalid_blocks: HashSet::new(),
         }
     }
 
     /// Sets the maximum reorganization depth allowed during fork resolution.
     pub fn with_max_reorg_depth(mut self, max_reorg_depth: u64) -> Self {
+
         self.max_reorg_depth = max_reorg_depth;
         self
     }
@@ -111,6 +150,21 @@ impl ChainTree {
     /// Returns true if the chain tree is empty.
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
+    }
+
+    /// Returns the set of block hashes marked as invalid by consensus verifiers.
+    pub fn invalid_blocks(&self) -> &HashSet<Hash256> {
+        &self.invalid_blocks
+    }
+
+    /// Returns true if a given block hash has been flagged as invalid.
+    pub fn is_block_invalid(&self, hash: &Hash256) -> bool {
+        self.invalid_blocks.contains(hash)
+    }
+
+    /// Marks a block hash as invalid to prevent future connection or reorganization onto it.
+    pub fn mark_block_invalid(&mut self, hash: Hash256) {
+        self.invalid_blocks.insert(hash);
     }
 
     /// Traverses backwards from both tips to find their latest common ancestor.
@@ -174,16 +228,47 @@ impl ChainTree {
         block: Block,
         utxo_set: &mut UtxoSet,
     ) -> Result<Option<ReorgResult>, ChainError> {
+        self.process_block_with_verifier(block, utxo_set, &NoOpTransactionVerifier)
+    }
+
+    /// Evaluates a candidate block using a contextual transaction verifier.
+    ///
+    /// When a candidate block or fork branch has greater cumulative work than the active tip,
+    /// every block in the candidate branch is validated via `verifier.verify_block_transactions`
+    /// against the staged UTXO state before the reorganization is committed. If verification
+    /// fails, the failing block is recorded into `invalid_blocks` and the reorg is atomically
+    /// rejected without altering the canonical tip or UTXO set (fail-closed).
+    pub fn process_block_with_verifier<V: BlockTransactionVerifier>(
+        &mut self,
+        block: Block,
+        utxo_set: &mut UtxoSet,
+        verifier: &V,
+    ) -> Result<Option<ReorgResult>, ChainError> {
+        let block_hash = block.header.hash();
+        if self.invalid_blocks.contains(&block_hash) {
+            return Err(ChainError::InvalidBranchBlock {
+                hash: block_hash,
+                reason: "Block is marked as invalid".to_string(),
+            });
+        }
+
+        let parent_hash = block.header.previous_block_hash;
+        if self.invalid_blocks.contains(&parent_hash) {
+            self.invalid_blocks.insert(block_hash);
+            return Err(ChainError::InvalidBranchBlock {
+                hash: block_hash,
+                reason: "Parent block is marked as invalid".to_string(),
+            });
+        }
+
         // 1. Stateless structural validation
         block.validate_structure().map_err(ChainError::BlockError)?;
 
-        let block_hash = block.header.hash();
         if self.nodes.contains_key(&block_hash) {
             return Ok(None);
         }
 
         // 2. Parent linkage
-        let parent_hash = block.header.previous_block_hash;
         let parent_node = self
             .nodes
             .get(&parent_hash)
@@ -289,18 +374,32 @@ impl ChainTree {
         // Apply all blocks in connected_nodes
         let mut connected_blocks = Vec::new();
         for node in &connected_nodes {
+            if let Err(err) = verifier.verify_block_transactions(&node.block, &staged_utxo) {
+                self.invalid_blocks.insert(node.hash);
+                self.invalid_blocks.insert(block_hash);
+                return Err(ChainError::ReorgFailed {
+                    hash: node.hash,
+                    error: format!("Block transaction verification failed: {err}"),
+                });
+            }
             staged_utxo
                 .apply_block_transactions(
                     &node.block.transactions[0],
                     &node.block.transactions[1..],
                     node.height,
                 )
-                .map_err(|e| ChainError::ReorgFailed {
-                    hash: node.hash,
-                    error: e.to_string(),
+                .map_err(|e| {
+                    self.invalid_blocks.insert(node.hash);
+                    self.invalid_blocks.insert(block_hash);
+                    ChainError::ReorgFailed {
+                        hash: node.hash,
+                        error: e.to_string(),
+                    }
                 })?;
             let calculated_root = staged_utxo.compute_utxo_root();
             if node.block.header.utxo_root != calculated_root {
+                self.invalid_blocks.insert(node.hash);
+                self.invalid_blocks.insert(block_hash);
                 return Err(ChainError::ReorgFailed {
                     hash: node.hash,
                     error: format!(
