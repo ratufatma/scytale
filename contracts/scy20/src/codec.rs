@@ -1,25 +1,29 @@
+extern crate alloc;
+use alloc::vec::Vec;
 use crate::error::Scy20Error;
 use crate::types::{Scy20Datum, Scy20Redeemer};
+use scytale_sdk::{decode_payload, encode_payload};
 
 pub fn serialize_datum(datum: &Scy20Datum) -> Result<Vec<u8>, Scy20Error> {
-    bincode::serialize(datum).map_err(|_| Scy20Error::DeserializationFailed)
+    encode_payload(datum).map_err(|_| Scy20Error::DeserializationFailed)
 }
 
 pub fn deserialize_datum(bytes: &[u8]) -> Result<Scy20Datum, Scy20Error> {
-    bincode::deserialize(bytes).map_err(|_| Scy20Error::DeserializationFailed)
+    decode_payload(bytes).map_err(|_| Scy20Error::DeserializationFailed)
 }
 
 pub fn serialize_redeemer(redeemer: &Scy20Redeemer) -> Result<Vec<u8>, Scy20Error> {
-    bincode::serialize(redeemer).map_err(|_| Scy20Error::DeserializationFailed)
+    encode_payload(redeemer).map_err(|_| Scy20Error::DeserializationFailed)
 }
 
 pub fn deserialize_redeemer(bytes: &[u8]) -> Result<Scy20Redeemer, Scy20Error> {
-    bincode::deserialize(bytes).map_err(|_| Scy20Error::DeserializationFailed)
+    decode_payload(bytes).map_err(|_| Scy20Error::DeserializationFailed)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
     use crate::types::{Address, TokenId};
 
     const TOKEN_ID: TokenId = [1; 32];
@@ -42,9 +46,31 @@ mod tests {
     #[test]
     fn test_redeemer_codec_roundtrip() {
         let redeemers = [
-            Scy20Redeemer::Transfer,
-            Scy20Redeemer::Mint { amount: 123 },
-            Scy20Redeemer::Burn { amount: 45 },
+            Scy20Redeemer::Transfer {
+                signature: [0x55; 64],
+                outputs: vec![Scy20Datum {
+                    token_id: TOKEN_ID,
+                    owner: OWNER,
+                    amount: 100,
+                }],
+                fee: 0,
+            },
+            Scy20Redeemer::Mint {
+                amount: 123,
+                signature: [0x77; 64],
+                outputs: vec![Scy20Datum {
+                    token_id: TOKEN_ID,
+                    owner: OWNER,
+                    amount: 123,
+                }],
+                metadata: None,
+                current_supply: 0,
+            },
+            Scy20Redeemer::Burn {
+                amount: 45,
+                signature: [0x99; 64],
+                outputs: Vec::new(),
+            },
         ];
 
         for redeemer in redeemers {

@@ -1,22 +1,34 @@
-use thiserror::Error;
+use core::fmt;
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Scy20Error {
-    #[error("Jumlah token input ({input}) tidak seimbang dengan output ({output})")]
     SupplyMismatch { input: u128, output: u128 },
-
-    #[error("Token ID tidak cocok dengan datum yang terkunci")]
     InvalidTokenId,
-
-    #[error("Tanda tangan pemilik ({0:?}) tidak valid atau tidak disertakan")]
     MissingSignature([u8; 32]),
-
-    #[error("Jumlah minting melebihi batas suplai maksimum")]
     MaxSupplyExceeded,
-
-    #[error("Jumlah transfer harus lebih besar dari 0")]
     ZeroAmount,
-
-    #[error("Gagal melakukan deserialisasi Datum atau Redeemer")]
     DeserializationFailed,
+}
+
+impl fmt::Display for Scy20Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SupplyMismatch { input, output } => {
+                write!(
+                    f,
+                    "Jumlah token input ({input}) tidak seimbang dengan output ({output})"
+                )
+            }
+            Self::InvalidTokenId => write!(f, "Token ID tidak cocok dengan datum yang terkunci"),
+            Self::MissingSignature(addr) => write!(
+                f,
+                "Tanda tangan pemilik ({addr:?}) tidak valid atau tidak disertakan"
+            ),
+            Self::MaxSupplyExceeded => write!(f, "Jumlah minting melebihi batas suplai maksimum"),
+            Self::ZeroAmount => write!(f, "Jumlah transfer harus lebih besar dari 0"),
+            Self::DeserializationFailed => {
+                write!(f, "Gagal melakukan deserialisasi Datum atau Redeemer")
+            }
+        }
+    }
 }

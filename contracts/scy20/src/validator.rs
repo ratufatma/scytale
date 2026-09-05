@@ -1,43 +1,51 @@
 use crate::error::Scy20Error;
-use crate::types::{Address, Scy20Datum, Scy20Redeemer, ScriptContext, TokenId, TokenMetadata};
+use crate::types::{Scy20Datum, Scy20Redeemer, TokenId, TokenMetadata};
+use scytale_sdk::{verify_ed25519, TxContext};
 
-/// Validasi state transition eUTXO untuk transfer token Scy-20
+/// Validasi state transition eUTXO untuk transfer token Scy-20.
 pub fn validate_transfer(
-    inputs: &[Scy20Datum],
+    datum: &Scy20Datum,
+    signature: &[u8; 64],
     outputs: &[Scy20Datum],
-    signers: &[Address],
+    fee: u128,
+    tx_hash: &[u8; 32],
 ) -> Result<(), Scy20Error> {
-    if inputs.is_empty() {
+    if datum.amount == 0 {
         return Err(Scy20Error::ZeroAmount);
     }
 
-    let token_id = inputs[0].token_id;
-
-    // 1. Verifikasi tanda tangan pemilik input
-    for input in inputs {
-        if input.token_id != token_id {
-            return Err(Scy20Error::InvalidTokenId);
-        }
-        if !signers.contains(&input.owner) {
-            return Err(Scy20Error::MissingSignature(input.owner));
-        }
+    // 1. Verifikasi tanda tangan kriptografis Ed25519 pemilik UTXO atas tx_hash
+    if !verify_ed25519(&datum.owner, signature, tx_hash) {
+        return Err(Scy20Error::MissingSignature(datum.owner));
     }
 
-    // 2. Verifikasi keseragaman token ID pada output
+    if outputs.is_empty() {
+        return Err(Scy20Error::ZeroAmount);
+    }
+
+    // 2. Verifikasi keseragaman token ID dan non-zero amount pada output
     for output in outputs {
-        if output.token_id != token_id {
+        if output.token_id != datum.token_id {
             return Err(Scy20Error::InvalidTokenId);
+        }
+        if output.amount == 0 {
+            return Err(Scy20Error::ZeroAmount);
         }
     }
 
-    // 3. Verifikasi hukum konservasi nilai (Total Input == Total Output)
-    let total_in: u128 = inputs.iter().map(|d| d.amount).sum();
+    // 3. Verifikasi hukum konservasi nilai: Input == Total Output + Fee
     let total_out: u128 = outputs.iter().map(|d| d.amount).sum();
-
-    if total_in != total_out {
-        return Err(Scy20Error::SupplyMismatch {
-            input: total_in,
+    let expected_in = total_out
+        .checked_add(fee)
+        .ok_or(Scy20Error::SupplyMismatch {
+            input: datum.amount,
             output: total_out,
+        })?;
+
+    if datum.amount != expected_in {
+        return Err(Scy20Error::SupplyMismatch {
+            input: datum.amount,
+            output: expected_in,
         });
     }
 
@@ -45,17 +53,36 @@ pub fn validate_transfer(
 }
 
 /// Validasi pembuatan token Scy-20.
+#[allow(clippy::too_many_arguments)]
 pub fn validate_mint(
     token_id: &TokenId,
+    minter_authority: &[u8; 32],
+    signature: &[u8; 64],
     outputs: &[Scy20Datum],
     mint_amount: u128,
     current_supply: u128,
-    metadata: &TokenMetadata,
-    policy_signers: &[Address],
+    metadata: Option<&TokenMetadata>,
+    tx_hash: &[u8; 32],
 ) -> Result<(), Scy20Error> {
+    if mint_amount == 0 {
+        return Err(Scy20Error::ZeroAmount);
+    }
+
+    // 1. Verifikasi tanda tangan minter resmi
+    if !verify_ed25519(minter_authority, signature, tx_hash) {
+        return Err(Scy20Error::MissingSignature(*minter_authority));
+    }
+
+    if outputs.is_empty() {
+        return Err(Scy20Error::ZeroAmount);
+    }
+
     for output in outputs {
         if output.token_id != *token_id {
             return Err(Scy20Error::InvalidTokenId);
+        }
+        if output.amount == 0 {
+            return Err(Scy20Error::ZeroAmount);
         }
     }
 
@@ -67,17 +94,15 @@ pub fn validate_mint(
         });
     }
 
-    if let Some(max_supply) = metadata.max_supply {
-        let resulting_supply = current_supply
-            .checked_add(mint_amount)
-            .ok_or(Scy20Error::MaxSupplyExceeded)?;
-        if resulting_supply > max_supply {
-            return Err(Scy20Error::MaxSupplyExceeded);
+    if let Some(meta) = metadata {
+        if let Some(max_supply) = meta.max_supply {
+            let resulting_supply = current_supply
+                .checked_add(mint_amount)
+                .ok_or(Scy20Error::MaxSupplyExceeded)?;
+            if resulting_supply > max_supply {
+                return Err(Scy20Error::MaxSupplyExceeded);
+            }
         }
-    }
-
-    if policy_signers.is_empty() {
-        return Err(Scy20Error::MissingSignature([0; 32]));
     }
 
     Ok(())
@@ -85,34 +110,41 @@ pub fn validate_mint(
 
 /// Validasi pembakaran token Scy-20.
 pub fn validate_burn(
-    token_id: &TokenId,
-    inputs: &[Scy20Datum],
-    outputs: &[Scy20Datum],
+    datum: &Scy20Datum,
+    signature: &[u8; 64],
     burn_amount: u128,
-    signers: &[Address],
+    outputs: &[Scy20Datum],
+    tx_hash: &[u8; 32],
 ) -> Result<(), Scy20Error> {
-    for input in inputs {
-        if input.token_id != *token_id {
-            return Err(Scy20Error::InvalidTokenId);
-        }
-        if !signers.contains(&input.owner) {
-            return Err(Scy20Error::MissingSignature(input.owner));
-        }
+    if burn_amount == 0 || burn_amount > datum.amount {
+        return Err(Scy20Error::ZeroAmount);
+    }
+
+    // 1. Verifikasi tanda tangan pemilik UTXO yang dibakar
+    if !verify_ed25519(&datum.owner, signature, tx_hash) {
+        return Err(Scy20Error::MissingSignature(datum.owner));
     }
 
     for output in outputs {
-        if output.token_id != *token_id {
+        if output.token_id != datum.token_id {
             return Err(Scy20Error::InvalidTokenId);
+        }
+        if output.amount == 0 {
+            return Err(Scy20Error::ZeroAmount);
         }
     }
 
-    let total_in: u128 = inputs.iter().map(|datum| datum.amount).sum();
     let total_out: u128 = outputs.iter().map(|datum| datum.amount).sum();
-    let expected_in = total_out.saturating_add(burn_amount);
+    let expected_in = total_out
+        .checked_add(burn_amount)
+        .ok_or(Scy20Error::SupplyMismatch {
+            input: datum.amount,
+            output: total_out,
+        })?;
 
-    if total_in != expected_in {
+    if datum.amount != expected_in {
         return Err(Scy20Error::SupplyMismatch {
-            input: total_in,
+            input: datum.amount,
             output: expected_in,
         });
     }
@@ -122,93 +154,127 @@ pub fn validate_burn(
 
 /// Entrypoint validasi eksekusi kontrak Scy-20.
 pub fn validate_scy20_execution(
-    context: &ScriptContext,
+    datum: &Scy20Datum,
     redeemer: &Scy20Redeemer,
+    ctx: &TxContext,
 ) -> Result<(), Scy20Error> {
     match redeemer {
-        Scy20Redeemer::Transfer => {
-            validate_transfer(&context.inputs, &context.outputs, &context.signers)
-        }
-        Scy20Redeemer::Mint { amount } => {
-            let metadata = context
-                .metadata
-                .as_ref()
-                .ok_or(Scy20Error::DeserializationFailed)?;
-            validate_mint(
-                &context.token_id,
-                &context.outputs,
-                *amount,
-                context.current_supply,
-                metadata,
-                &context.signers,
-            )
-        }
-        Scy20Redeemer::Burn { amount } => validate_burn(
-            &context.token_id,
-            &context.inputs,
-            &context.outputs,
+        Scy20Redeemer::Transfer {
+            signature,
+            outputs,
+            fee,
+        } => validate_transfer(datum, signature, outputs, *fee, &ctx.tx_hash),
+        Scy20Redeemer::Mint {
+            amount,
+            signature,
+            outputs,
+            metadata,
+            current_supply,
+        } => validate_mint(
+            &datum.token_id,
+            &datum.owner,
+            signature,
+            outputs,
             *amount,
-            &context.signers,
+            *current_supply,
+            metadata.as_ref(),
+            &ctx.tx_hash,
         ),
+        Scy20Redeemer::Burn {
+            amount,
+            signature,
+            outputs,
+        } => validate_burn(datum, signature, *amount, outputs, &ctx.tx_hash),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::{string::ToString, vec};
+    use crate::types::Address;
+    use ed25519_dalek::{Signer, SigningKey};
 
     const TOKEN_ID: TokenId = [1; 32];
     const OTHER_TOKEN_ID: TokenId = [2; 32];
-    const OWNER: Address = [3; 32];
 
-    fn datum(token_id: TokenId, owner: Address, amount: u128) -> Scy20Datum {
-        Scy20Datum {
-            token_id,
-            owner,
-            amount,
+    fn test_ctx(tx_hash: [u8; 32]) -> TxContext {
+        TxContext {
+            tx_hash,
+            block_time: 1_700_000_000,
+            input_amount: 10_000,
+            fee_burned: 100,
         }
     }
 
-    fn metadata(max_supply: Option<u128>) -> TokenMetadata {
-        TokenMetadata {
-            name: "Test Token".to_owned(),
-            symbol: "TST".to_owned(),
-            decimals: 0,
-            max_supply,
-        }
-    }
-
-    fn context(
-        inputs: Vec<Scy20Datum>,
-        outputs: Vec<Scy20Datum>,
-        signers: Vec<Address>,
-        metadata: Option<TokenMetadata>,
-    ) -> ScriptContext {
-        ScriptContext {
-            token_id: TOKEN_ID,
-            inputs,
-            outputs,
-            signers,
-            current_supply: 0,
-            metadata,
-        }
+    fn make_keypair(seed: u8) -> (SigningKey, Address) {
+        let key = SigningKey::from_bytes(&[seed; 32]);
+        let addr = key.verifying_key().to_bytes();
+        (key, addr)
     }
 
     #[test]
     fn test_transfer_success() {
-        let inputs = [datum(TOKEN_ID, OWNER, 100)];
-        let outputs = [datum(TOKEN_ID, [4; 32], 70), datum(TOKEN_ID, OWNER, 30)];
+        let (alice_key, alice_addr) = make_keypair(1);
+        let (_, bob_addr) = make_keypair(2);
 
-        assert_eq!(validate_transfer(&inputs, &outputs, &[OWNER]), Ok(()));
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        };
+
+        let outputs = vec![
+            Scy20Datum {
+                token_id: TOKEN_ID,
+                owner: bob_addr,
+                amount: 70,
+            },
+            Scy20Datum {
+                token_id: TOKEN_ID,
+                owner: alice_addr,
+                amount: 30,
+            },
+        ];
+
+        let signature = alice_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Transfer {
+            signature,
+            outputs,
+            fee: 0,
+        };
+
+        assert_eq!(validate_scy20_execution(&datum, &redeemer, &ctx), Ok(()));
     }
 
     #[test]
     fn test_transfer_supply_mismatch() {
-        let inputs = [datum(TOKEN_ID, OWNER, 100)];
-        let outputs = [datum(TOKEN_ID, [4; 32], 110)];
+        let (alice_key, alice_addr) = make_keypair(1);
+        let (_, bob_addr) = make_keypair(2);
+
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        };
+
+        let outputs = vec![Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: bob_addr,
+            amount: 110, // Trying to duplicate balance
+        }];
+
+        let signature = alice_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Transfer {
+            signature,
+            outputs,
+            fee: 0,
+        };
 
         assert_eq!(
-            validate_transfer(&inputs, &outputs, &[OWNER]),
+            validate_scy20_execution(&datum, &redeemer, &ctx),
             Err(Scy20Error::SupplyMismatch {
                 input: 100,
                 output: 110,
@@ -218,84 +284,129 @@ mod tests {
 
     #[test]
     fn test_transfer_unauthorized() {
-        let inputs = [datum(TOKEN_ID, OWNER, 100)];
-        let outputs = [datum(TOKEN_ID, [4; 32], 100)];
+        let (_alice_key, alice_addr) = make_keypair(1);
+        let (mallory_key, _mallory_addr) = make_keypair(99);
+
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        };
+
+        let outputs = vec![Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        }];
+
+        // Mallory signs instead of Alice
+        let signature = mallory_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Transfer {
+            signature,
+            outputs,
+            fee: 0,
+        };
 
         assert_eq!(
-            validate_transfer(&inputs, &outputs, &[]),
-            Err(Scy20Error::MissingSignature(OWNER))
+            validate_scy20_execution(&datum, &redeemer, &ctx),
+            Err(Scy20Error::MissingSignature(alice_addr))
         );
     }
 
     #[test]
     fn test_transfer_mixed_token_id() {
-        let inputs = [datum(TOKEN_ID, OWNER, 100), datum(OTHER_TOKEN_ID, OWNER, 10)];
-        let outputs = [datum(TOKEN_ID, [4; 32], 110)];
+        let (alice_key, alice_addr) = make_keypair(1);
+
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        };
+
+        let outputs = vec![Scy20Datum {
+            token_id: OTHER_TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        }];
+
+        let signature = alice_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Transfer {
+            signature,
+            outputs,
+            fee: 0,
+        };
 
         assert_eq!(
-            validate_transfer(&inputs, &outputs, &[OWNER]),
+            validate_scy20_execution(&datum, &redeemer, &ctx),
             Err(Scy20Error::InvalidTokenId)
         );
     }
 
     #[test]
     fn test_mint_max_supply_cap() {
-        let outputs = [datum(TOKEN_ID, OWNER, 51)];
+        let (minter_key, minter_addr) = make_keypair(1);
+
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: minter_addr,
+            amount: 0, // Minter anchor UTXO
+        };
+
+        let metadata = TokenMetadata {
+            name: "Test Token".to_string(),
+            symbol: "TST".to_string(),
+            decimals: 6,
+            max_supply: Some(100),
+        };
+
+        let outputs = vec![Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: minter_addr,
+            amount: 51,
+        }];
+
+        let signature = minter_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Mint {
+            amount: 51,
+            signature,
+            outputs,
+            metadata: Some(metadata),
+            current_supply: 50, // 50 + 51 = 101 > 100 max
+        };
 
         assert_eq!(
-            validate_mint(
-                &TOKEN_ID,
-                &outputs,
-                51,
-                50,
-                &metadata(Some(100)),
-                &[OWNER],
-            ),
+            validate_scy20_execution(&datum, &redeemer, &ctx),
             Err(Scy20Error::MaxSupplyExceeded)
         );
     }
 
     #[test]
     fn test_burn_success() {
-        let inputs = [datum(TOKEN_ID, OWNER, 100)];
-        let outputs = [datum(TOKEN_ID, [4; 32], 60)];
+        let (alice_key, alice_addr) = make_keypair(1);
 
-        assert_eq!(
-            validate_burn(&TOKEN_ID, &inputs, &outputs, 40, &[OWNER]),
-            Ok(())
-        );
-    }
+        let ctx = test_ctx([0x42; 32]);
+        let datum = Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 100,
+        };
 
-    #[test]
-    fn test_dispatcher_transfer_route() {
-        let execution_context = context(
-            vec![datum(TOKEN_ID, OWNER, 100)],
-            vec![datum(TOKEN_ID, [4; 32], 70), datum(TOKEN_ID, OWNER, 30)],
-            vec![OWNER],
-            None,
-        );
+        let outputs = vec![Scy20Datum {
+            token_id: TOKEN_ID,
+            owner: alice_addr,
+            amount: 60,
+        }];
 
-        assert_eq!(
-            validate_scy20_execution(&execution_context, &Scy20Redeemer::Transfer),
-            Ok(())
-        );
-    }
+        let signature = alice_key.sign(&ctx.tx_hash).to_bytes();
+        let redeemer = Scy20Redeemer::Burn {
+            amount: 40,
+            signature,
+            outputs,
+        };
 
-    #[test]
-    fn test_dispatcher_mint_missing_metadata() {
-        let execution_context = context(
-            Vec::new(),
-            vec![datum(TOKEN_ID, OWNER, 100)],
-            vec![OWNER],
-            None,
-        );
-
-        assert_eq!(
-            validate_scy20_execution(
-                &execution_context,
-                &Scy20Redeemer::Mint { amount: 100 },
-            ),
-            Err(Scy20Error::DeserializationFailed)
-        );
+        assert_eq!(validate_scy20_execution(&datum, &redeemer, &ctx), Ok(()));
     }
 }

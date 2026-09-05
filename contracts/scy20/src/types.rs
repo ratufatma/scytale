@@ -1,3 +1,9 @@
+extern crate alloc;
+use alloc::string::String;
+use alloc::vec::Vec;
+use scytale_sdk::serde_signature;
+pub use scytale_sdk::TxContext;
+pub use scytale_sdk::TxContext as ScriptContext;
 use serde::{Deserialize, Serialize};
 
 pub type TokenId = [u8; 32];
@@ -19,18 +25,25 @@ pub struct Scy20Datum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScriptContext {
-    pub token_id: TokenId,
-    pub inputs: Vec<Scy20Datum>,
-    pub outputs: Vec<Scy20Datum>,
-    pub signers: Vec<Address>,
-    pub current_supply: u128,
-    pub metadata: Option<TokenMetadata>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Scy20Redeemer {
-    Transfer,
-    Mint { amount: u128 },
-    Burn { amount: u128 },
+    Transfer {
+        #[serde(with = "serde_signature")]
+        signature: [u8; 64],
+        outputs: Vec<Scy20Datum>,
+        fee: u128,
+    },
+    Mint {
+        amount: u128,
+        #[serde(with = "serde_signature")]
+        signature: [u8; 64],
+        outputs: Vec<Scy20Datum>,
+        metadata: Option<TokenMetadata>,
+        current_supply: u128,
+    },
+    Burn {
+        amount: u128,
+        #[serde(with = "serde_signature")]
+        signature: [u8; 64],
+        outputs: Vec<Scy20Datum>,
+    },
 }
