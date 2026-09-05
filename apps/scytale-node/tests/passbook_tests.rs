@@ -7,7 +7,7 @@
 
 use scytale_consensus::calculate_block_reward;
 use scytale_core::{
-    Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxIn, TxOut, UtxoSet,
+    Address, Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxIn, TxOut, UtxoSet,
     TRANSACTION_VERSION_1,
 };
 use scytale_node::{
@@ -592,6 +592,110 @@ fn test_passbook_confirmed_vs_pending_balances() {
     assert_eq!(
         pending_view.pending_native_balance_quanta,
         -((send_val + fee) as i64)
+    );
+
+    node.shutdown().unwrap();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. Cryptographic Passbook Statement & Merkle Proof Integrity (Stage 3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_passbook_cryptographic_statement_generation_and_verification() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    // Mine 3 canonical blocks to user lock
+    inject_canonical_reward_block(&node, 0, USER_LOCK);
+    inject_canonical_reward_block(&node, 1, USER_LOCK);
+    inject_canonical_reward_block(&node, 2, USER_LOCK);
+    assert_eq!(node.canonical_height(), 3);
+
+    let user_addr_hash =
+        scytale_storage::extract_address_from_locking_condition(USER_LOCK).unwrap();
+    let user_address = Address::new(user_addr_hash);
+
+    let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
+    let statement = passbook.generate_statement(&node, &user_address).unwrap();
+
+    assert_eq!(statement.account, user_address);
+    assert_eq!(statement.generated_at_height, 3);
+    assert_eq!(statement.block_hash, node.canonical_tip());
+    assert_eq!(statement.active_utxo_proofs.len(), 3);
+
+    let expected_balance =
+        calculate_block_reward(1) + calculate_block_reward(2) + calculate_block_reward(3);
+    assert_eq!(
+        statement.confirmed_native_balance_quanta,
+        expected_balance
+    );
+
+    // Cryptographic offline verification
+    assert!(
+        statement.verify_integrity(),
+        "cryptographic passbook statement must pass offline integrity verification"
+    );
+
+    node.shutdown().unwrap();
+}
+
+#[test]
+fn test_passbook_statement_tamper_detection() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
+    node.start().unwrap();
+
+    inject_canonical_reward_block(&node, 0, USER_LOCK);
+    inject_canonical_reward_block(&node, 1, USER_LOCK);
+
+    let user_addr_hash =
+        scytale_storage::extract_address_from_locking_condition(USER_LOCK).unwrap();
+    let user_address = Address::new(user_addr_hash);
+
+    let passbook = Passbook::new(vec![USER_LOCK.to_vec()]);
+    let valid_statement = passbook.generate_statement(&node, &user_address).unwrap();
+    assert!(valid_statement.verify_integrity());
+
+    // 1. Tamper: balance amount inflated
+    let mut tampered_balance = valid_statement.clone();
+    tampered_balance.confirmed_native_balance_quanta += 100_000;
+    assert!(
+        !tampered_balance.verify_integrity(),
+        "statement with inflated confirmed balance must be rejected"
+    );
+
+    // 2. Tamper: UTXO root swapped
+    let mut tampered_root = valid_statement.clone();
+    tampered_root.utxo_root = Hash256::new([0xee; 32]);
+    assert!(
+        !tampered_root.verify_integrity(),
+        "statement with forged utxo_root must be rejected"
+    );
+
+    // 3. Tamper: proof quanta modified
+    let mut tampered_proof_val = valid_statement.clone();
+    tampered_proof_val.active_utxo_proofs[0].value_quanta += 1;
+    assert!(
+        !tampered_proof_val.verify_integrity(),
+        "statement with tampered proof value must be rejected"
+    );
+
+    // 4. Tamper: proof leaf hash modified
+    let mut tampered_leaf = valid_statement.clone();
+    tampered_leaf.active_utxo_proofs[0].leaf_hash = Hash256::new([0x11; 32]);
+    assert!(
+        !tampered_leaf.verify_integrity(),
+        "statement with tampered proof leaf hash must be rejected"
+    );
+
+    // 5. Tamper: omitted active UTXO proof
+    let mut tampered_omission = valid_statement.clone();
+    tampered_omission.active_utxo_proofs.pop();
+    assert!(
+        !tampered_omission.verify_integrity(),
+        "statement with missing active UTXO proof must fail balance reconciliation"
     );
 
     node.shutdown().unwrap();

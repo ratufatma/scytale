@@ -13,7 +13,9 @@
 
 use crate::error::{NodeError, NodeState};
 use crate::node::Node;
-use scytale_core::{Address, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet};
+use scytale_core::{
+    Address, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoMerkleProof, UtxoSet,
+};
 use scytale_mempool::MempoolEntry;
 use scytale_storage::AddressTxRecord;
 use serde::{Deserialize, Serialize};
@@ -137,6 +139,48 @@ impl PassbookView {
     /// Backward-compatible getter for pending native balance quanta.
     pub fn pending_balance_quanta(&self) -> i64 {
         self.pending_native_balance_quanta
+    }
+}
+
+/// A cryptographically verifiable snapshot of an account's passbook statement,
+/// complete with balanced binary Merkle inclusion proofs for all active spendable native UTXOs
+/// against the canonical tip block's `utxo_root`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PassbookStatement {
+    /// Account address for which this statement was generated.
+    pub account: Address,
+    /// Canonical chain height at which this statement was projected.
+    pub generated_at_height: u64,
+    /// Canonical tip block hash corresponding to this statement.
+    pub block_hash: Hash256,
+    /// Merkle root of the active UTXO set committed in the block header.
+    pub utxo_root: Hash256,
+    /// Sum of all confirmed spendable native quanta owned by this account.
+    pub confirmed_native_balance_quanta: u64,
+    /// Balances of all SCY-20 tokens owned by this account.
+    pub token_balances: BTreeMap<Hash256, u64>,
+    /// Chronological list of confirmed and pending journal entries.
+    pub entries: Vec<PassbookEntry>,
+    /// Cryptographic Merkle proofs proving inclusion of each active native UTXO in `utxo_root`.
+    pub active_utxo_proofs: Vec<UtxoMerkleProof>,
+}
+
+impl PassbookStatement {
+    /// Verifies the cryptographic integrity of this statement offline:
+    /// 1. Validates that every active UTXO Merkle proof hashes up to `self.utxo_root`.
+    /// 2. Ensures the sum of `value_quanta` across all proofs exactly matches `self.confirmed_native_balance_quanta`.
+    pub fn verify_integrity(&self) -> bool {
+        let mut sum: u64 = 0;
+        for proof in &self.active_utxo_proofs {
+            if !proof.verify(&self.utxo_root) {
+                return false;
+            }
+            sum = match sum.checked_add(proof.value_quanta) {
+                Some(v) => v,
+                None => return false,
+            };
+        }
+        sum == self.confirmed_native_balance_quanta
     }
 }
 
@@ -363,6 +407,76 @@ impl Passbook {
             token_balances,
             pending_native_balance_quanta: pending_native,
             entries,
+        })
+    }
+
+    /// Generates a cryptographically verifiable PassbookStatement for the specified address.
+    ///
+    /// Identifies all active native UTXOs owned by `address`, generates balanced
+    /// binary Merkle inclusion proofs for each UTXO against the canonical tip block's `utxo_root`,
+    /// and bundles them with the complete financial journal entries.
+    pub fn generate_statement(
+        &self,
+        node: &Node,
+        address: &Address,
+    ) -> Result<PassbookStatement, PassbookError> {
+        self.require_ready(node)?;
+
+        let height = node.canonical_height();
+        let tip_hash = node.canonical_tip();
+        let block = node
+            .storage_handle()
+            .get_block(&tip_hash)?
+            .ok_or_else(|| PassbookError::StaleLedgerState)?;
+
+        let block_hash = block.header.hash();
+        let utxo_root = block.header.utxo_root;
+
+        let all_utxos = node.query_utxo_set();
+        let utxo_entries_with_outpoints = all_utxos.to_entries_with_outpoints();
+
+        // Identify all active native UTXOs belonging to this address
+        let mut user_outpoints = Vec::new();
+        for (op, entry) in all_utxos.entries() {
+            if let ParsedContractCondition::Scy20(_) =
+                parse_locking_condition(&entry.output.locking_condition)
+            {
+                continue;
+            }
+            if let Some(h) = scytale_storage::extract_address_from_locking_condition(
+                &entry.output.locking_condition,
+            ) {
+                if Address::new(h) == *address {
+                    user_outpoints.push(*op);
+                }
+            } else if self.owns(&entry.output.locking_condition) && self.addresses.contains(address) {
+                user_outpoints.push(*op);
+            }
+        }
+
+        // Sort outpoints deterministically (txid ASC, index ASC)
+        user_outpoints.sort_by(|a, b| a.txid.cmp(&b.txid).then_with(|| a.index.cmp(&b.index)));
+
+        // Generate Merkle proofs for all active user native UTXOs
+        let mut active_utxo_proofs = Vec::with_capacity(user_outpoints.len());
+        for op in user_outpoints {
+            let proof =
+                scytale_core::generate_utxo_merkle_proof(&utxo_entries_with_outpoints, &op)
+                    .map_err(|e| PassbookError::UtxoLookupFailed(e.to_string()))?;
+            active_utxo_proofs.push(proof);
+        }
+
+        let view = self.view(node)?;
+
+        Ok(PassbookStatement {
+            account: address.clone(),
+            generated_at_height: height,
+            block_hash,
+            utxo_root,
+            confirmed_native_balance_quanta: view.confirmed_native_balance_quanta,
+            token_balances: view.token_balances,
+            entries: view.entries,
+            active_utxo_proofs,
         })
     }
 

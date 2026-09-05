@@ -18,7 +18,7 @@ pub use node::{commit_block, Node, PermissiveVerifier};
 pub use p2p_supervisor::P2pSupervisor;
 pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookAction, PassbookAsset, PassbookEntry, PassbookError,
-    PassbookView, ProvenanceCategory, ProvenanceStep,
+    PassbookStatement, PassbookView, ProvenanceCategory, ProvenanceStep,
 };
 pub use scytale_bridge as bridge;
 pub use scytale_consensus as consensus;

@@ -207,6 +207,23 @@ impl UtxoSet {
             .collect();
         compute_utxo_merkle_root(leaves)
     }
+
+    /// Converts all UTXO entries in this set into a vector of `UtxoEntryWithOutpoint`.
+    pub fn to_entries_with_outpoints(&self) -> Vec<UtxoEntryWithOutpoint> {
+        self.entries
+            .iter()
+            .map(|(op, entry)| UtxoEntryWithOutpoint::new(*op, entry.clone()))
+            .collect()
+    }
+
+    /// Generates a cryptographic Merkle proof for a target outpoint in this set.
+    pub fn generate_merkle_proof(
+        &self,
+        target_outpoint: &OutPoint,
+    ) -> Result<UtxoMerkleProof, crate::error::CoreError> {
+        let entries = self.to_entries_with_outpoints();
+        generate_utxo_merkle_proof(&entries, target_outpoint)
+    }
 }
 
 /// Computes the 32-byte BLAKE3 canonical leaf hash for an active UTXO entry:
@@ -244,6 +261,141 @@ pub fn compute_utxo_merkle_root(mut leaves: Vec<Hash256>) -> Hash256 {
         leaves = next_level;
     }
     leaves[0]
+}
+
+/// Pairs an unspent transaction output entry with its canonical OutPoint identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct UtxoEntryWithOutpoint {
+    pub outpoint: OutPoint,
+    pub entry: UtxoEntry,
+}
+
+impl UtxoEntryWithOutpoint {
+    pub fn new(outpoint: OutPoint, entry: UtxoEntry) -> Self {
+        Self { outpoint, entry }
+    }
+}
+
+/// Cryptographic Merkle inclusion proof for a single unspent transaction output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UtxoMerkleProof {
+    pub outpoint: OutPoint,
+    pub value_quanta: u64,
+    #[serde(default)]
+    pub locking_condition: Vec<u8>,
+    pub leaf_hash: Hash256,
+    pub audit_path: Vec<(Hash256, bool)>, // (sibling_hash, is_right_sibling)
+    pub leaf_index: usize,
+}
+
+impl UtxoMerkleProof {
+    /// Verifies the Merkle inclusion proof against an expected canonical UTXO set root.
+    ///
+    /// Validates both the leaf hash against (outpoint, value_quanta, locking_condition)
+    /// and the audit path up to the expected root.
+    pub fn verify(&self, expected_root: &Hash256) -> bool {
+        if !self.locking_condition.is_empty() {
+            let computed_leaf = compute_utxo_leaf(
+                &self.outpoint,
+                &TxOut::new(self.value_quanta, self.locking_condition.clone()),
+            );
+            if computed_leaf != self.leaf_hash {
+                return false;
+            }
+        }
+
+        let mut current_hash = self.leaf_hash;
+        for (sibling_hash, is_right_sibling) in &self.audit_path {
+            let mut hasher = blake3::Hasher::new();
+            if *is_right_sibling {
+                hasher.update(current_hash.as_bytes());
+                hasher.update(sibling_hash.as_bytes());
+            } else {
+                hasher.update(sibling_hash.as_bytes());
+                hasher.update(current_hash.as_bytes());
+            }
+            current_hash = Hash256::new(*hasher.finalize().as_bytes());
+        }
+
+        current_hash == *expected_root
+    }
+}
+
+/// Generates a canonical balanced binary Merkle proof for a target UTXO outpoint.
+///
+/// Elements are sorted lexicographically by (txid ASC, index ASC) to match the canonical
+/// UTXO root hashing algorithm.
+pub fn generate_utxo_merkle_proof(
+    utxos: &[UtxoEntryWithOutpoint],
+    target_outpoint: &OutPoint,
+) -> Result<UtxoMerkleProof, crate::error::CoreError> {
+    if utxos.is_empty() {
+        return Err(crate::error::CoreError::Utxo(UtxoError::MissingUtxo(
+            *target_outpoint,
+        )));
+    }
+
+    let mut sorted: Vec<&UtxoEntryWithOutpoint> = utxos.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.outpoint
+            .txid
+            .cmp(&b.outpoint.txid)
+            .then_with(|| a.outpoint.index.cmp(&b.outpoint.index))
+    });
+
+    let target_idx = sorted
+        .iter()
+        .position(|item| item.outpoint == *target_outpoint)
+        .ok_or(crate::error::CoreError::Utxo(UtxoError::MissingUtxo(
+            *target_outpoint,
+        )))?;
+
+    let target_item = sorted[target_idx];
+    let target_value = target_item.entry.output.value;
+    let target_locking_condition = target_item.entry.output.locking_condition.clone();
+
+    let mut leaves: Vec<Hash256> = sorted
+        .iter()
+        .map(|item| compute_utxo_leaf(&item.outpoint, &item.entry.output))
+        .collect();
+    let target_leaf_hash = leaves[target_idx];
+
+    let mut audit_path = Vec::new();
+    let mut current_idx = target_idx;
+
+    while leaves.len() > 1 {
+        if leaves.len() % 2 == 1 {
+            let last = *leaves.last().unwrap();
+            leaves.push(last);
+        }
+
+        let is_right_sibling = current_idx % 2 == 0;
+        let sibling_idx = if is_right_sibling {
+            current_idx + 1
+        } else {
+            current_idx - 1
+        };
+        audit_path.push((leaves[sibling_idx], is_right_sibling));
+
+        let mut next_level = Vec::with_capacity(leaves.len() / 2);
+        for chunk in leaves.chunks_exact(2) {
+            let mut hasher = blake3::Hasher::new();
+            hasher.update(chunk[0].as_bytes());
+            hasher.update(chunk[1].as_bytes());
+            next_level.push(Hash256::new(*hasher.finalize().as_bytes()));
+        }
+        leaves = next_level;
+        current_idx /= 2;
+    }
+
+    Ok(UtxoMerkleProof {
+        outpoint: *target_outpoint,
+        value_quanta: target_value,
+        locking_condition: target_locking_condition,
+        leaf_hash: target_leaf_hash,
+        audit_path,
+        leaf_index: target_idx,
+    })
 }
 
 #[cfg(test)]

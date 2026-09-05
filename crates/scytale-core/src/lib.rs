@@ -26,7 +26,10 @@ pub use transaction::{
     calculate_fee, EutxoWitness, OutputLock, Transaction, TxIn, TxInput, TxOutput,
     TRANSACTION_VERSION_1,
 };
-pub use utxo::{compute_utxo_leaf, compute_utxo_merkle_root, UtxoEntry, UtxoSet};
+pub use utxo::{
+    compute_utxo_leaf, compute_utxo_merkle_root, generate_utxo_merkle_proof, UtxoEntry,
+    UtxoEntryWithOutpoint, UtxoMerkleProof, UtxoSet,
+};
 pub use vm_adapter::{
     create_tx_context, verify_transaction_eutxo, EutxoValidationError, MAX_BLOCK_GAS, MAX_TX_GAS,
 };
