@@ -30,7 +30,7 @@ use scytale_core::codec::CanonicalSerialize;
 use tokio::sync::broadcast;
 
 /// Upper bound on the nonce space searched per template before refresh.
-const MAX_NONCE_ITERATIONS: u64 = 1_000_000;
+const MAX_NONCE_ITERATIONS: u64 = 20_000_000;
 
 /// Permissionless verifier used during mempool reconciliation.
 ///
@@ -1102,6 +1102,7 @@ fn mining_worker_loop(
     indexer: Option<Arc<IndexerHandle>>,
 ) {
     let mut compact_target = initial_target;
+    let mut current_nonce: u64 = 0;
     loop {
         if cancel.load(Ordering::Relaxed) {
             return;
@@ -1142,15 +1143,32 @@ fn mining_worker_loop(
 
         // Search for a solution without holding any subsystem lock (must not block
         // block-arrival or shutdown while hashing).
-        let solved = match run_pow_search(&template, 0, MAX_NONCE_ITERATIONS, &cancel) {
-            Ok(h) => h,
-            Err(_) => continue, // cancelled or exhausted -> rebuild a fresh template
+        let solved = match run_pow_search(&template, current_nonce, MAX_NONCE_ITERATIONS, &cancel) {
+            Ok(h) => {
+                current_nonce = 0;
+                h
+            }
+            Err(_) => {
+                current_nonce = current_nonce.wrapping_add(MAX_NONCE_ITERATIONS);
+                tracing::info!(
+                    height = template.height,
+                    searched = current_nonce,
+                    "mining cycle progress"
+                );
+                continue; // cancelled or exhausted -> rebuild a fresh template with advanced nonce
+            }
         };
         if cancel.load(Ordering::Relaxed) {
             return;
         }
 
         let block = template.assemble_block(solved);
+        tracing::info!(
+            height = template.height,
+            nonce = block.header.nonce,
+            hash = %block.header.hash(),
+            "found valid PoW solution, attempting process_block"
+        );
 
         // Re-acquire locks and confirm the tip is still the template's parent before
         // committing; otherwise the candidate is stale and superseded by an arriving block.
@@ -1158,6 +1176,7 @@ fn mining_worker_loop(
             let mut chain = shared.chain_tree.lock().unwrap();
             let mut utxos = shared.utxo_set.lock().unwrap();
             if chain.canonical_tip() != template.previous_block_hash {
+                tracing::warn!("tip changed during PoW search; discarding solved candidate");
                 continue;
             }
 
@@ -1165,6 +1184,12 @@ fn mining_worker_loop(
                 Ok(Some(reorg)) => {
                     let height = template.height;
                     let work = chain.canonical_work().0;
+                    tracing::info!(
+                        height = height,
+                        hash = %block.header.hash(),
+                        tx_count = block.transactions.len(),
+                        "mined new block successfully committed"
+                    );
                     if reorg.disconnected_blocks.is_empty() {
                         let _ = commit_block(
                             &storage,
@@ -1216,10 +1241,10 @@ fn mining_worker_loop(
                     }
                 }
                 Ok(None) => {
-                    // Side branch or duplicate: retained in the in-memory tree only.
+                    tracing::warn!("process_block returned Ok(None) - side branch");
                 }
-                Err(_e) => {
-                    // Consensus rejected the locally mined block; keep mining.
+                Err(e) => {
+                    tracing::error!(error = ?e, "consensus rejected locally mined block");
                 }
             }
         }

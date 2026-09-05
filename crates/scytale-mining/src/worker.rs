@@ -1,5 +1,6 @@
 use crate::error::MiningError;
-use scytale_consensus::{calculate_block_reward, verify_pow, ChainTree, Target};
+use scytale_consensus::{calculate_block_reward, ChainTree, Target};
+use scytale_core::codec::CanonicalSerialize;
 use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut, UtxoSet};
 use scytale_mempool::Mempool;
 use std::collections::HashSet;
@@ -169,20 +170,34 @@ pub fn run_pow_search(
     cancel: &Arc<AtomicBool>,
 ) -> Result<BlockHeader, MiningError> {
     let target = template.target();
+    let initial_header = template.build_header(start_nonce);
+    let mut header_bytes = initial_header
+        .to_canonical_bytes()
+        .map_err(|_| MiningError::ExhaustedNonce {
+            height: template.height,
+            searched: 0,
+        })?;
 
     for i in 0..max_iterations {
-        // Poll cancellation token on every iteration
-        if cancel.load(Ordering::Relaxed) {
+        // Poll cancellation token every 4096 iterations for high throughput
+        if (i & 4095) == 0 && cancel.load(Ordering::Relaxed) {
             return Err(MiningError::Cancelled {
                 height: template.height,
             });
         }
 
         let nonce = start_nonce.wrapping_add(i);
-        let header = template.build_header(nonce);
+        let nonce_bytes = nonce.to_le_bytes();
+        let len = header_bytes.len();
+        if len >= 8 {
+            header_bytes[len - 8..len].copy_from_slice(&nonce_bytes);
+        }
 
-        if verify_pow(&header, &target).is_ok() {
-            return Ok(header);
+        let hash = Hash256::hash(&header_bytes);
+        if target.is_met_by(&hash) {
+            let mut solved = initial_header;
+            solved.nonce = nonce;
+            return Ok(solved);
         }
     }
 
