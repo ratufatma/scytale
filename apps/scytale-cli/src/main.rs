@@ -170,9 +170,10 @@ pub struct WalletArgs {
 #[derive(Subcommand, Debug, PartialEq, Eq)]
 pub enum WalletSubcommands {
     /// Generate a new Ed25519 keypair and save POSIX 0600 wallet file
+    #[command(alias = "create")]
     New {
         /// Path to save wallet JSON file (defaults to ~/.scytale/wallet.json)
-        #[arg(short, long)]
+        #[arg(short, long, alias = "path")]
         file: Option<PathBuf>,
 
         /// Overwrite existing file if it already exists

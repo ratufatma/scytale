@@ -72,7 +72,7 @@ pub struct DeployArgs {
     pub amount: u64,
 
     /// Datum bytes as hex string (e.g. the bincode-encoded VaultDatum)
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "")]
     pub datum: String,
 
     /// Sender wallet file path to fund the deployment
