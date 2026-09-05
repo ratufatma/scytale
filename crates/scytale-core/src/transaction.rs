@@ -72,9 +72,24 @@ impl Transaction {
         Hash256::hash(&bytes)
     }
 
-    /// Computes the raw 32-byte BLAKE3 transaction hash digest.
+    /// Computes the deterministic 32-byte BLAKE3 transaction hash digest of the transaction body
+    /// (excluding witness/authorization data to enable signing and contract verification).
     pub fn compute_hash(&self) -> [u8; 32] {
-        *self.txid().as_bytes()
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"SCYTALE_TX_BODY_V1");
+        hasher.update(&self.version.to_le_bytes());
+        hasher.update(&self.lock_time.to_le_bytes());
+        hasher.update(&(self.inputs.len() as u32).to_le_bytes());
+        for input in &self.inputs {
+            hasher.update(input.previous_output.txid.as_bytes());
+            hasher.update(&input.previous_output.index.to_le_bytes());
+        }
+        hasher.update(&(self.outputs.len() as u32).to_le_bytes());
+        for output in &self.outputs {
+            hasher.update(&output.value.to_le_bytes());
+            hasher.update(&output.locking_condition);
+        }
+        *hasher.finalize().as_bytes()
     }
 
     /// Helper constructor to instantiate a transaction from eUTXO input/output models.

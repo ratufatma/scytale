@@ -1301,6 +1301,8 @@ name = "scytale-vm"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "blake3",
+ "ed25519-dalek",
  "hex",
  "scytale-sdk",
  "serde",

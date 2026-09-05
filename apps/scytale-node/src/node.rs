@@ -10,7 +10,7 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_core::{
-    AuthorizationError, AuthorizationVerifier, Block, Hash256, OutPoint, Transaction,
+    AuthorizationError, AuthorizationVerifier, Block, Hash256, OutPoint, OutputLock, Transaction,
     TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
@@ -742,6 +742,16 @@ impl Node {
                     input.previous_output.txid, input.previous_output.index
                 ))
             })?;
+
+            // Skip ScriptEngine evaluation if the locking condition is an eUTXO smart contract (OutputLock::Script).
+            // These inputs are validated deterministically by ScyVM via verify_transaction_eutxo.
+            if utxo.output.locking_condition.starts_with(&OutputLock::MAGIC_PREFIX) {
+                if let Some(OutputLock::Script { .. }) =
+                    OutputLock::from_locking_condition(&utxo.output.locking_condition)
+                {
+                    continue;
+                }
+            }
 
             let sighash = tx.compute_sighash(input_idx, &utxo.output.locking_condition);
             let ctx = scytale_script::ScriptContext::new(&sighash, block_height);
