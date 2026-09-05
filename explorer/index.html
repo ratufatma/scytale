@@ -114,12 +114,26 @@
         </div>
       </div>
 
-      <!-- Node Endpoint Config & Status -->
-      <div class="flex items-center gap-3 text-xs font-mono">
-        <div class="flex items-center bg-gray-900/90 border border-gray-800 rounded-lg px-3 py-1.5 shadow-inner">
+      <!-- Language Switcher & Node Endpoint Config & Status -->
+      <div class="flex items-center gap-2.5 text-xs font-mono">
+        <!-- Language Switcher Toggle -->
+        <div class="flex items-center bg-gray-900/90 border border-gray-800 rounded-lg p-0.5 shadow-inner">
+          <button id="langBtn-id" onclick="setLanguage('id')" title="Bahasa Indonesia"
+            class="px-2 py-1 rounded-md text-gray-400 hover:text-white transition flex items-center gap-1">
+            <span>🇮🇩</span>
+            <span class="font-bold">ID</span>
+          </button>
+          <button id="langBtn-en" onclick="setLanguage('en')" title="English"
+            class="px-2 py-1 rounded-md text-gray-400 hover:text-white transition flex items-center gap-1">
+            <span>🇬🇧</span>
+            <span class="font-bold">EN</span>
+          </button>
+        </div>
+
+        <div class="hidden sm:flex items-center bg-gray-900/90 border border-gray-800 rounded-lg px-3 py-1.5 shadow-inner">
           <span class="text-gray-500 mr-2 select-none">API:</span>
-          <input id="nodeUrl" type="text" value="" placeholder="/rpc atau URL node"
-            class="bg-transparent text-gray-200 focus:outline-none w-44" />
+          <input id="nodeUrl" type="text" value="" placeholder="/rpc atau URL node" data-i18n-placeholder="api_placeholder"
+            class="bg-transparent text-gray-200 focus:outline-none w-40" />
         </div>
         <div id="connBadge"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-950/60 text-rose-400 border border-rose-800/80 transition-all">
@@ -137,6 +151,7 @@
     <div class="relative">
       <div class="relative flex items-center">
         <input id="searchInput" type="text"
+          data-i18n-placeholder="search_placeholder"
           placeholder="Cari Height (#23), Block Hash (0x...), TxID, atau Alamat Bech32 (scy1...)..."
           class="w-full bg-[#111827] border border-gray-800 rounded-xl px-4 py-3.5 pl-11 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500/80 focus:ring-1 focus:ring-emerald-500 font-mono shadow-lg transition"
           onkeydown="if(event.key==='Enter') handleSearch()" />
@@ -147,7 +162,7 @@
         </svg>
         <button onclick="handleSearch()"
           class="absolute right-2 px-4 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-gray-950 font-bold text-xs rounded-lg transition shadow">
-          Cari
+          <span data-i18n="search_btn">Cari</span>
         </button>
       </div>
     </div>
@@ -155,35 +170,35 @@
     <!-- METRICS OVERVIEW CARDS -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
-        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Height</div>
+        <div data-i18n="metric_canonical_height" class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Height</div>
         <div id="metricHeight" class="text-2xl font-black font-mono text-white mt-1">--</div>
-        <div class="text-xs text-gray-500 mt-1">Blok Kanonikal Terkonfirmasi</div>
+        <div data-i18n="metric_canonical_height_sub" class="text-xs text-gray-500 mt-1">Blok Kanonikal Terkonfirmasi</div>
       </div>
 
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
-        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Tip Hash</div>
+        <div data-i18n="metric_canonical_tip" class="text-xs text-gray-400 uppercase tracking-wider font-medium">Canonical Tip Hash</div>
         <div id="metricTip"
           class="text-xs font-mono text-emerald-400 mt-2 truncate select-all cursor-pointer hover:underline"
           onclick="copyText(this.title)" title="--">--</div>
-        <div class="text-xs text-gray-500 mt-1">Puncak Rantai Terberat</div>
+        <div data-i18n="metric_canonical_tip_sub" class="text-xs text-gray-500 mt-1">Puncak Rantai Terberat</div>
       </div>
 
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
-        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mempool Transactions</div>
+        <div data-i18n="metric_mempool_txs" class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mempool Transactions</div>
         <div class="flex items-baseline gap-2 mt-1">
           <span id="metricMempool" class="text-2xl font-black font-mono text-white">0</span>
           <span id="metricMempoolBytes" class="text-xs font-mono text-gray-400">0 B</span>
         </div>
-        <div class="text-xs text-gray-500 mt-1">Antrean Prioritas Pending</div>
+        <div data-i18n="metric_mempool_txs_sub" class="text-xs text-gray-500 mt-1">Antrean Prioritas Pending</div>
       </div>
 
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
-        <div class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mining Engine</div>
+        <div data-i18n="metric_mining_engine" class="text-xs text-gray-400 uppercase tracking-wider font-medium">Mining Engine</div>
         <div id="metricMining" class="flex items-center gap-2 mt-2">
           <span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
           <span class="font-mono text-xs text-gray-400 font-bold">STANDBY</span>
         </div>
-        <div class="text-xs text-gray-500 mt-1">Proof-of-Work Autonomous</div>
+        <div data-i18n="metric_mining_engine_sub" class="text-xs text-gray-500 mt-1">Proof-of-Work Autonomous</div>
       </div>
     </div>
 
@@ -191,17 +206,17 @@
     <div class="flex border-b border-gray-800 text-sm font-medium gap-6">
       <button onclick="switchTab('blocks')" id="tabBtn-blocks"
         class="pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition">
-        Recent Blocks
+        <span data-i18n="tab_blocks">Recent Blocks</span>
       </button>
       <button onclick="switchTab('mempool')" id="tabBtn-mempool"
         class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
-        <span>Mempool & Fee Market</span>
+        <span data-i18n="tab_mempool">Mempool & Fee Market</span>
         <span id="mempoolTabBadge"
           class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-300 font-mono">0</span>
       </button>
       <button onclick="switchTab('passbook')" id="tabBtn-passbook"
         class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
-        <span>📑 Buku Tabungan (Passbook)</span>
+        <span data-i18n="tab_passbook">📑 Buku Tabungan (Passbook)</span>
       </button>
     </div>
 
@@ -209,26 +224,26 @@
     <div id="view-blocks" class="space-y-4">
       <div class="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden shadow">
         <div class="px-4 py-3 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
-          <h3 class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider">Daftar Blok Terakhir</h3>
-          <button onclick="fetchRecentBlocks()"
+          <h3 data-i18n="blocks_title" class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider">Daftar Blok Terakhir</h3>
+          <button onclick="fetchRecentBlocks()" data-i18n="btn_refresh"
             class="text-xs text-emerald-400 hover:text-emerald-300 font-mono">Segarkan</button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs font-mono">
             <thead class="bg-gray-900/80 text-gray-400 uppercase border-b border-gray-800">
               <tr>
-                <th class="px-4 py-3">Height</th>
-                <th class="px-4 py-3">Block Hash</th>
-                <th class="px-4 py-3 text-center">Txs</th>
-                <th class="px-4 py-3">Total (SCY)</th>
-                <th class="px-4 py-3">Nonce</th>
-                <th class="px-4 py-3">Timestamp</th>
-                <th class="px-4 py-3 text-right">Aksi</th>
+                <th data-i18n="th_height" class="px-4 py-3">Height</th>
+                <th data-i18n="th_block_hash" class="px-4 py-3">Block Hash</th>
+                <th data-i18n="th_txs" class="px-4 py-3 text-center">Txs</th>
+                <th data-i18n="th_total_scy" class="px-4 py-3">Total (SCY)</th>
+                <th data-i18n="th_nonce" class="px-4 py-3">Nonce</th>
+                <th data-i18n="th_timestamp" class="px-4 py-3">Timestamp</th>
+                <th data-i18n="th_action" class="px-4 py-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody id="blocksTableBody" class="divide-y divide-gray-800/60 text-gray-300">
               <tr>
-                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Memuat blok dari node...</td>
+                <td colspan="7" data-i18n="blocks_loading" class="px-4 py-8 text-center text-gray-500">Memuat blok dari node...</td>
               </tr>
             </tbody>
           </table>
@@ -243,7 +258,7 @@
         <!-- Slots Capacity -->
         <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
           <div class="flex justify-between items-center text-xs text-gray-400 font-mono">
-            <span class="font-semibold">TX SLOTS</span>
+            <span data-i18n="mempool_slots" class="font-semibold">TX SLOTS</span>
             <span id="mempoolSlotsText" class="text-white font-bold">0 / 5,000</span>
           </div>
           <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
@@ -252,14 +267,14 @@
           </div>
           <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
             <span id="mempoolSlotsPercent">0.0% Terpakai</span>
-            <span>Max: 5,000 txs</span>
+            <span data-i18n="mempool_slots_max">Max: 5,000 txs</span>
           </div>
         </div>
 
         <!-- Memory Capacity -->
         <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
           <div class="flex justify-between items-center text-xs text-gray-400 font-mono">
-            <span class="font-semibold">MEMPOOL MEMORY</span>
+            <span data-i18n="mempool_memory" class="font-semibold">MEMPOOL MEMORY</span>
             <span id="mempoolMemoryText" class="text-white font-bold">0 KB / 5,000 KB</span>
           </div>
           <div class="w-full bg-gray-950 rounded-full h-2.5 mt-2.5 overflow-hidden border border-gray-800">
@@ -268,22 +283,22 @@
           </div>
           <div class="flex justify-between items-center text-[11px] text-gray-500 font-mono mt-1.5">
             <span id="mempoolMemoryPercent">0.0% Terpakai</span>
-            <span>Max: 5.0 MB</span>
+            <span data-i18n="mempool_memory_max">Max: 5.0 MB</span>
           </div>
         </div>
 
         <!-- Fee Market Summary -->
         <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
-          <div class="text-xs text-gray-400 font-mono uppercase font-semibold">Total Pending Fees</div>
+          <div data-i18n="mempool_total_fees" class="text-xs text-gray-400 font-mono uppercase font-semibold">Total Pending Fees</div>
           <div id="mempoolTotalFees" class="text-lg font-bold font-mono text-emerald-400 mt-1">0.00000000 SCY</div>
           <div id="mempoolTotalFeesQuanta" class="text-[11px] text-gray-500 font-mono">0 quanta</div>
         </div>
 
         <!-- Min Relay Fee Floor -->
         <div class="bg-[#111827] border border-gray-800 rounded-xl p-4 shadow">
-          <div class="text-xs text-gray-400 font-mono uppercase font-semibold">Min Relay Floor</div>
+          <div data-i18n="mempool_min_relay" class="text-xs text-gray-400 font-mono uppercase font-semibold">Min Relay Floor</div>
           <div class="text-lg font-bold font-mono text-teal-300 mt-1">1.00 q/B</div>
-          <div class="text-[11px] text-gray-500 font-mono">1,000 milli-quanta/byte</div>
+          <div data-i18n="mempool_min_relay_sub" class="text-[11px] text-gray-500 font-mono">1,000 milli-quanta/byte</div>
         </div>
       </div>
 
@@ -292,7 +307,7 @@
         <div class="px-4 py-3 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
           <h3 class="font-semibold text-xs text-gray-300 font-mono uppercase tracking-wider flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Antrean Transaksi Prioritas (Block-Space Auction)
+            <span data-i18n="mempool_queue_title">Antrean Transaksi Prioritas (Block-Space Auction)</span>
           </h3>
           <span id="mempoolTableCountBadge" class="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-400">0
             transaksi</span>
@@ -301,18 +316,18 @@
           <table class="w-full text-left text-xs font-mono">
             <thead class="bg-gray-900/80 text-gray-400 uppercase border-b border-gray-800">
               <tr>
-                <th class="px-4 py-2.5">#Rank</th>
-                <th class="px-4 py-2.5">Transaction ID</th>
-                <th class="px-4 py-2.5 text-right">Size</th>
-                <th class="px-4 py-2.5 text-right">Fee (quanta)</th>
-                <th class="px-4 py-2.5 text-right">Density (q/B)</th>
-                <th class="px-4 py-2.5 text-center">Status Prioritas</th>
-                <th class="px-4 py-2.5 text-right">Aksi</th>
+                <th data-i18n="th_rank" class="px-4 py-2.5">#Rank</th>
+                <th data-i18n="th_txid" class="px-4 py-2.5">Transaction ID</th>
+                <th data-i18n="th_size" class="px-4 py-2.5 text-right">Size</th>
+                <th data-i18n="th_fee_quanta" class="px-4 py-2.5 text-right">Fee (quanta)</th>
+                <th data-i18n="th_density" class="px-4 py-2.5 text-right">Density (q/B)</th>
+                <th data-i18n="th_priority_status" class="px-4 py-2.5 text-center">Status Prioritas</th>
+                <th data-i18n="th_action" class="px-4 py-2.5 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody id="mempoolTableBody" class="divide-y divide-gray-800/60 text-gray-300">
               <tr>
-                <td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang
+                <td colspan="7" data-i18n="mempool_empty" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang
                   menunggu.</td>
               </tr>
             </tbody>
@@ -328,12 +343,12 @@
       <div class="print-only border-b-2 border-black pb-4 mb-6">
         <div class="flex justify-between items-center">
           <div>
-            <h1 class="text-xl font-black tracking-wider uppercase">SCYTALE BLOCKCHAIN FINANCIAL LEDGER</h1>
-            <h2 class="text-sm font-bold text-gray-800">BUKU TABUNGAN & REKENING KORAN RESMI (eUTXO CRYPTOGRAPHIC STATEMENT)</h2>
+            <h1 data-i18n="print_title" class="text-xl font-black tracking-wider uppercase">SCYTALE BLOCKCHAIN FINANCIAL LEDGER</h1>
+            <h2 data-i18n="print_subtitle" class="text-sm font-bold text-gray-800">BUKU TABUNGAN & REKENING KORAN RESMI (eUTXO CRYPTOGRAPHIC STATEMENT)</h2>
           </div>
           <div class="text-right text-xs font-mono">
-            <div>Dokumen Resmi: <span id="printDate"></span></div>
-            <div>Integritas: UTXO Merkle Root Verification</div>
+            <div><span data-i18n="print_official_doc">Dokumen Resmi: </span><span id="printDate"></span></div>
+            <div data-i18n="print_integrity">Integritas: UTXO Merkle Root Verification</div>
           </div>
         </div>
       </div>
@@ -344,14 +359,14 @@
           <div>
             <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Inspeksi Rekening & Buku Tabungan Digital
+              <span data-i18n="pb_search_title">Inspeksi Rekening & Buku Tabungan Digital</span>
             </h3>
-            <p class="text-xs text-gray-400 mt-0.5">Audit mutasi finansial, kepemilikan token SCY-20, dan bukti inklusi Merkle UTXO set.</p>
+            <p data-i18n="pb_search_desc" class="text-xs text-gray-400 mt-0.5">Audit mutasi finansial, kepemilikan token SCY-20, dan bukti inklusi Merkle UTXO set.</p>
           </div>
           <div class="flex items-center gap-2 text-xs">
-            <span class="text-gray-500 font-mono">Contoh:</span>
+            <span data-i18n="pb_example_label" class="text-gray-500 font-mono">Contoh:</span>
             <button onclick="fillGenesisMiner()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-emerald-400 font-mono rounded border border-gray-700 text-[11px] transition">
-              Alamat Genesis Miner
+              <span data-i18n="pb_example_genesis">Alamat Genesis Miner</span>
             </button>
           </div>
         </div>
@@ -359,13 +374,14 @@
         <div class="flex flex-col sm:flex-row items-center gap-2 pt-1">
           <div class="relative flex-1 w-full">
             <input id="passbookLockInput" type="text"
+              data-i18n-placeholder="pb_input_placeholder"
               placeholder="Masukkan Alamat Akun Bech32 (scy1...) atau Hex Locking Script"
               class="w-full bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-xs font-mono text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition shadow-inner"
               onkeydown="if(event.key==='Enter') inspectPassbook()" />
           </div>
           <button onclick="inspectPassbook()" id="btnOpenPassbook"
             class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-gray-950 font-black text-xs font-mono rounded-xl transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
-            <span>Buka Buku Tabungan</span>
+            <span data-i18n="pb_btn_open">Buka Buku Tabungan</span>
             <span>➔</span>
           </button>
         </div>
@@ -383,14 +399,14 @@
             <div>
               <div class="flex items-center gap-2 text-[11px] font-mono tracking-widest uppercase text-emerald-400 font-bold mb-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <span>Scytale Sovereign Ledger // eUTXO Passbook Account</span>
+                <span data-i18n="pb_account_badge">Scytale Sovereign Ledger // eUTXO Passbook Account</span>
               </div>
-              <div class="text-gray-400 text-xs font-mono mb-1">Nomor Rekening / Alamat Bech32:</div>
+              <div data-i18n="pb_account_label" class="text-gray-400 text-xs font-mono mb-1">Nomor Rekening / Alamat Bech32:</div>
               <div class="flex items-center gap-2 flex-wrap">
                 <span id="pbLockText" class="font-mono text-base font-black text-white select-all break-all">--</span>
                 <button onclick="copyText(document.getElementById('pbLockText').textContent)"
                   class="no-print p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs" title="Salin Alamat">
-                  📋 Salin
+                  <span data-i18n="btn_copy">📋 Salin</span>
                 </button>
               </div>
             </div>
@@ -399,11 +415,11 @@
             <div class="no-print flex items-center gap-2 flex-wrap">
               <button onclick="openCurrentStatementModal()"
                 class="px-3.5 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-700/80 text-emerald-300 text-xs font-mono font-bold flex items-center gap-1.5 transition shadow">
-                <span>🛡️ Verifikasi Integritas (Merkle Proof)</span>
+                <span data-i18n="btn_verify_integrity">🛡️ Verifikasi Integritas (Merkle Proof)</span>
               </button>
               <button onclick="window.print()"
                 class="px-3.5 py-2 rounded-xl bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-mono font-semibold flex items-center gap-1.5 transition shadow">
-                <span>🖨️ Cetak Rekening Koran</span>
+                <span data-i18n="btn_print_statement">🖨️ Cetak Rekening Koran</span>
               </button>
               <button onclick="inspectPassbook()"
                 class="p-2 rounded-xl bg-gray-800/90 hover:bg-gray-700 border border-gray-700 text-gray-300 hover:text-white transition" title="Segarkan Data">
@@ -415,19 +431,19 @@
           <!-- Balance & Metrics Row -->
           <div class="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6 font-mono">
             <div>
-              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Saldo Terkonfirmasi (Confirmed)</div>
+              <div data-i18n="pb_confirmed_balance" class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Saldo Terkonfirmasi (Confirmed)</div>
               <div id="pbBalanceScy" class="text-2xl lg:text-3xl font-black text-white tracking-tight">0.00000000 SCY</div>
               <div id="pbBalanceQuanta" class="text-xs text-emerald-400/90 mt-1">0 quanta</div>
             </div>
 
             <div>
-              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Delta Pending (Mempool)</div>
+              <div data-i18n="pb_pending_delta" class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Delta Pending (Mempool)</div>
               <div id="pbPendingDelta" class="text-xl font-bold text-gray-300 mt-1">+0.00000000 SCY</div>
               <div id="pbPendingStatus" class="text-xs text-gray-500 mt-1">Tidak ada transaksi tertunda</div>
             </div>
 
             <div class="sm:col-span-2 lg:col-span-1">
-              <div class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Portofolio Token eUTXO SCY-20</div>
+              <div data-i18n="pb_token_portfolio" class="text-gray-400 text-xs uppercase tracking-wider font-semibold mb-1">Portofolio Token eUTXO SCY-20</div>
               <div id="pbTokensContainer" class="flex flex-wrap gap-1.5 mt-2">
                 <span class="text-xs text-gray-500 italic">Tidak ada token SCY-20</span>
               </div>
@@ -439,10 +455,10 @@
         <div class="bg-[#111827] border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
           <div class="px-5 py-4 border-b border-gray-800 bg-gray-900/60 flex justify-between items-center">
             <h3 class="font-bold text-xs text-gray-200 font-mono uppercase tracking-wider flex items-center gap-2">
-              <span>Mutasi Jurnal Rekening Finansial</span>
+              <span data-i18n="pb_table_title">Mutasi Jurnal Rekening Finansial</span>
               <span id="pbEntriesBadge" class="px-2 py-0.5 rounded-full text-[11px] bg-gray-800 text-gray-400 font-mono">0 entri</span>
             </h3>
-            <div class="no-print text-xs text-gray-400 font-mono">
+            <div data-i18n="pb_table_hint" class="no-print text-xs text-gray-400 font-mono">
               Klik baris untuk rincian OutPoint & TxID
             </div>
           </div>
@@ -451,20 +467,20 @@
             <table class="w-full text-left text-xs font-mono">
               <thead class="bg-gray-900/90 text-gray-400 uppercase border-b border-gray-800 text-[11px]">
                 <tr>
-                  <th class="px-4 py-3 w-16">No Entry</th>
-                  <th class="px-4 py-3">Waktu & Blok</th>
-                  <th class="px-4 py-3">Aksi Finansial</th>
-                  <th class="px-4 py-3">Aset</th>
-                  <th class="px-4 py-3 text-right">Mutasi</th>
-                  <th class="px-4 py-3 text-right">Fee</th>
-                  <th class="px-4 py-3 text-right">Saldo Berjalan</th>
-                  <th class="px-4 py-3 text-center">Status</th>
-                  <th class="px-4 py-3 text-center no-print w-10">Rincian</th>
+                  <th data-i18n="th_pb_entry" class="px-4 py-3 w-16">No Entry</th>
+                  <th data-i18n="th_pb_time_block" class="px-4 py-3">Waktu & Blok</th>
+                  <th data-i18n="th_pb_action" class="px-4 py-3">Aksi Finansial</th>
+                  <th data-i18n="th_pb_asset" class="px-4 py-3">Aset</th>
+                  <th data-i18n="th_pb_mutation" class="px-4 py-3 text-right">Mutasi</th>
+                  <th data-i18n="th_pb_fee" class="px-4 py-3 text-right">Fee</th>
+                  <th data-i18n="th_pb_running_balance" class="px-4 py-3 text-right">Saldo Berjalan</th>
+                  <th data-i18n="th_pb_status" class="px-4 py-3 text-center">Status</th>
+                  <th data-i18n="th_pb_details" class="px-4 py-3 text-center no-print w-10">Rincian</th>
                 </tr>
               </thead>
               <tbody id="passbookTableBody" class="divide-y divide-gray-800/60 text-gray-300">
                 <tr>
-                  <td colspan="9" class="px-4 py-8 text-center text-gray-500">Memuat mutasi rekening...</td>
+                  <td colspan="9" data-i18n="pb_loading_mutations" class="px-4 py-8 text-center text-gray-500">Memuat mutasi rekening...</td>
                 </tr>
               </tbody>
             </table>
@@ -482,7 +498,7 @@
     <div
       class="bg-[#111827] border border-gray-800 w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
       <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/70">
-        <h2 id="modalTitle" class="font-mono font-bold text-sm text-white">Inspeksi Objek</h2>
+        <h2 id="modalTitle" data-i18n="modal_title_inspect" class="font-mono font-bold text-sm text-white">Inspeksi Objek</h2>
         <button onclick="closeModal()" class="text-gray-400 hover:text-white text-xl px-2">&times;</button>
       </div>
       <div class="p-6 overflow-y-auto space-y-4 font-mono text-xs">
@@ -493,7 +509,7 @@
         <div class="pt-2 border-t border-gray-800/80">
           <button onclick="toggleRawJson()" id="rawJsonBtn"
             class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
-            <span>▶ Tampilkan JSON Mentah</span>
+            <span data-i18n="modal_raw_json_show">▶ Tampilkan JSON Mentah</span>
           </button>
           <pre id="modalContent"
             class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800/80 text-emerald-400 overflow-x-auto select-all max-h-80"></pre>
@@ -502,7 +518,7 @@
       <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
         <button onclick="closeModal()"
           class="px-4 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
-          Tutup
+          <span data-i18n="btn_close">Tutup</span>
         </button>
       </div>
     </div>
@@ -516,7 +532,7 @@
       <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/80">
         <div class="flex items-center gap-2">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          <h2 class="font-mono font-bold text-sm text-white">Cryptographic Passbook Statement & Merkle Proof</h2>
+          <h2 data-i18n="stmt_modal_title" class="font-mono font-bold text-sm text-white">Cryptographic Passbook Statement & Merkle Proof</h2>
         </div>
         <button onclick="closeStatementModal()" class="text-gray-400 hover:text-white text-xl px-2 font-mono">&times;</button>
       </div>
@@ -526,7 +542,7 @@
         <div id="statementIntegrityBanner" class="p-4 rounded-xl border flex items-center gap-3 bg-emerald-950/40 border-emerald-800 text-emerald-300">
           <span class="text-2xl">🛡️</span>
           <div>
-            <div class="font-bold text-sm" id="statementIntegrityTitle">Status Verifikasi: VALID & MATHEMATICALLY INCLUDED</div>
+            <div class="font-bold text-sm" id="statementIntegrityTitle">Status Verifikasi: VALID & MATHEMATICALLY PROVED</div>
             <div class="text-[11px] text-emerald-400/80 mt-0.5" id="statementIntegrityDesc">Seluruh leaf UTXO terbukti valid terikat pada Merkle root kanonikal.</div>
           </div>
         </div>
@@ -534,19 +550,19 @@
         <!-- Statement Metadata Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
-            <span class="text-gray-500 text-[11px] uppercase block mb-1">Akun Target (Bech32):</span>
+            <span data-i18n="stmt_label_account" class="text-gray-500 text-[11px] uppercase block mb-1">Akun Target (Bech32):</span>
             <div id="stmtAccount" class="text-white font-bold select-all break-all">--</div>
           </div>
           <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
-            <span class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Height:</span>
+            <span data-i18n="stmt_label_tip_height" class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Height:</span>
             <div id="stmtTipHeight" class="text-white font-bold">--</div>
           </div>
           <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
-            <span class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Hash:</span>
+            <span data-i18n="stmt_label_tip_hash" class="text-gray-500 text-[11px] uppercase block mb-1">Canonical Tip Hash:</span>
             <div id="stmtTipHash" class="text-emerald-400 font-bold select-all break-all text-[11px]">--</div>
           </div>
           <div class="bg-gray-900/70 p-3.5 rounded-xl border border-gray-800">
-            <span class="text-gray-500 text-[11px] uppercase block mb-1">UTXO Merkle Root Hash:</span>
+            <span data-i18n="stmt_label_utxo_root" class="text-gray-500 text-[11px] uppercase block mb-1">UTXO Merkle Root Hash:</span>
             <div id="stmtUtxoRoot" class="text-teal-300 font-bold select-all break-all text-[11px]">--</div>
           </div>
         </div>
@@ -554,23 +570,23 @@
         <!-- Active UTXOs Proof Table -->
         <div>
           <h4 class="font-bold text-xs text-gray-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Daftar Bukti Inklusi UTXO Aktif (Active Spendable UTXOs)</span>
+            <span data-i18n="stmt_proofs_title">Daftar Bukti Inklusi UTXO Aktif (Active Spendable UTXOs)</span>
             <span id="stmtProofCountBadge" class="text-gray-400 text-[11px] px-2 py-0.5 rounded bg-gray-800">0 bukti</span>
           </h4>
           <div class="border border-gray-800 rounded-xl overflow-hidden">
             <table class="w-full text-left text-xs">
               <thead class="bg-gray-900 text-gray-400 uppercase text-[11px] border-b border-gray-800">
                 <tr>
-                  <th class="px-3.5 py-2.5">OutPoint (TxID:Index)</th>
-                  <th class="px-3.5 py-2.5 text-right">Nilai (SCY / Quanta)</th>
-                  <th class="px-3.5 py-2.5">Leaf Hash</th>
-                  <th class="px-3.5 py-2.5 text-center">Audit Steps</th>
-                  <th class="px-3.5 py-2.5 text-center">Status</th>
+                  <th data-i18n="th_stmt_outpoint" class="px-3.5 py-2.5">OutPoint (TxID:Index)</th>
+                  <th data-i18n="th_stmt_value" class="px-3.5 py-2.5 text-right">Nilai (SCY / Quanta)</th>
+                  <th data-i18n="th_stmt_leaf_hash" class="px-3.5 py-2.5">Leaf Hash</th>
+                  <th data-i18n="th_stmt_audit_steps" class="px-3.5 py-2.5 text-center">Audit Steps</th>
+                  <th data-i18n="th_stmt_status" class="px-3.5 py-2.5 text-center">Status</th>
                 </tr>
               </thead>
               <tbody id="statementProofsTableBody" class="divide-y divide-gray-800 text-gray-300 font-mono text-[11px]">
                 <tr>
-                  <td colspan="5" class="px-4 py-4 text-center text-gray-500">Tidak ada UTXO aktif untuk akun ini.</td>
+                  <td colspan="5" data-i18n="stmt_no_proofs" class="px-4 py-4 text-center text-gray-500">Tidak ada UTXO aktif untuk akun ini.</td>
                 </tr>
               </tbody>
             </table>
@@ -581,7 +597,7 @@
         <div class="pt-2 border-t border-gray-800">
           <button onclick="toggleStatementRawJson()" id="stmtRawJsonBtn"
             class="text-gray-400 hover:text-gray-200 text-xs flex items-center gap-1">
-            <span>▶ Tampilkan JSON Statement Mentah</span>
+            <span data-i18n="stmt_raw_json_show">▶ Tampilkan JSON Statement Mentah</span>
           </button>
           <pre id="statementRawJson"
             class="hidden bg-gray-950 p-4 mt-2 rounded-xl border border-gray-800 text-emerald-400 overflow-x-auto select-all max-h-60 text-[11px]"></pre>
@@ -591,7 +607,7 @@
       <div class="px-6 py-3 border-t border-gray-800 bg-gray-900/50 flex justify-end">
         <button onclick="closeStatementModal()"
           class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs rounded-lg transition font-medium">
-          Tutup
+          <span data-i18n="btn_close">Tutup</span>
         </button>
       </div>
     </div>
@@ -605,8 +621,420 @@
 
   <!-- JAVASCRIPT CONTROLLER LOGIC -->
   <script>
+    const I18N = {
+      en: {
+        brand_sub: "EXPLORER",
+        api_placeholder: "/rpc or node URL",
+        search_placeholder: "Search Height (#23), Block Hash (0x...), TxID, or Bech32 Address (scy1...)...",
+        search_btn: "Search",
+        toast_copied: "Copied: ",
+        toast_copied_default: "Copied to clipboard!",
+
+        metric_canonical_height: "Canonical Height",
+        metric_canonical_height_sub: "Confirmed Canonical Blocks",
+        metric_canonical_tip: "Canonical Tip Hash",
+        metric_canonical_tip_sub: "Heaviest Chain Tip",
+        metric_mempool_txs: "Mempool Transactions",
+        metric_mempool_txs_sub: "Pending Priority Queue",
+        metric_mining_engine: "Mining Engine",
+        metric_mining_engine_sub: "Autonomous Proof-of-Work",
+        mining_active: "MINING...",
+        mining_standby: "STANDBY",
+
+        tab_blocks: "Recent Blocks",
+        tab_mempool: "Mempool & Fee Market",
+        tab_passbook: "📑 Passbook Ledger",
+
+        blocks_title: "Recent Blocks Feed",
+        btn_refresh: "Refresh",
+        th_height: "Height",
+        th_block_hash: "Block Hash",
+        th_txs: "Txs",
+        th_total_scy: "Total (SCY)",
+        th_nonce: "Nonce",
+        th_timestamp: "Timestamp",
+        th_action: "Action",
+        blocks_loading: "Loading blocks from node...",
+        blocks_empty: "No blocks recorded yet.",
+        btn_details: "Details",
+
+        mempool_slots: "TX SLOTS",
+        mempool_slots_used: "{percent}% Used",
+        mempool_slots_max: "Max: 5,000 txs",
+        mempool_memory: "MEMPOOL MEMORY",
+        mempool_memory_used: "{percent}% Used",
+        mempool_memory_max: "Max: 5.0 MB",
+        mempool_total_fees: "Total Pending Fees",
+        mempool_min_relay: "Min Relay Floor",
+        mempool_min_relay_sub: "1,000 milli-quanta/byte",
+        mempool_queue_title: "Priority Transaction Queue (Block-Space Auction)",
+        mempool_tx_count: "{n} transactions",
+        th_rank: "#Rank",
+        th_txid: "Transaction ID",
+        th_size: "Size",
+        th_fee_quanta: "Fee (quanta)",
+        th_density: "Density (q/B)",
+        th_priority_status: "Priority Status",
+        mempool_empty: "Mempool is empty. No pending transactions.",
+        badge_eviction_risk: "Eviction Risk",
+        badge_high_priority: "High Priority",
+        btn_inspect: "Inspect",
+
+        print_title: "SCYTALE BLOCKCHAIN FINANCIAL LEDGER",
+        print_subtitle: "OFFICIAL BANK PASSBOOK & STATEMENT (eUTXO CRYPTOGRAPHIC STATEMENT)",
+        print_official_doc: "Official Document: ",
+        print_integrity: "Integrity: UTXO Merkle Root Verification",
+
+        pb_search_title: "Financial Account Inspection & Digital Passbook",
+        pb_search_desc: "Audit financial mutations, SCY-20 token holdings, and UTXO Merkle inclusion proofs.",
+        pb_example_label: "Example:",
+        pb_example_genesis: "Genesis Miner",
+        pb_input_placeholder: "Enter Bech32 Account Address (scy1...) or Hex Locking Script",
+        pb_btn_open: "Open Passbook",
+
+        pb_account_badge: "Financial Passbook Statement",
+        pb_account_label: "Account Number / Bech32 Address:",
+        btn_copy: "📋 Copy",
+        btn_verify_integrity: "🛡️ Verify Integrity",
+        btn_print_statement: "🖨️ Print Statement",
+        btn_refresh_data: "Refresh Data",
+        pb_confirmed_balance: "Confirmed Balance",
+        pb_pending_delta: "Pending Delta",
+        pb_pending_sync: "Balance synchronized with canonical state",
+        pb_pending_queued: "Mutations pending in mempool",
+        pb_token_portfolio: "eUTXO SCY-20 Token Portfolio",
+        pb_no_tokens: "0 SCY-20 tokens recorded",
+
+        pb_table_title: "Financial Account Journal Ledger",
+        pb_entries_badge: "{n} entries",
+        pb_table_hint: "Click row for OutPoint & TxID details",
+        th_pb_entry: "Entry No",
+        th_pb_time_block: "Block / Time",
+        th_pb_action: "Action & Asset",
+        th_pb_asset: "Asset",
+        th_pb_mutation: "Mutation",
+        th_pb_fee: "Fee",
+        th_pb_running_balance: "Running Balance",
+        th_pb_status: "Status",
+        th_pb_details: "Details",
+        pb_loading_mutations: "Loading passbook entries...",
+        pb_no_mutations: "No financial mutations recorded for this account.",
+        pb_block_link: "Block #{height}",
+        pb_mempool_label: "Mempool",
+        pb_asset_native: "Native SCY",
+        pb_asset_scy20: "SCY-20",
+        pb_conf_suffix: "Conf",
+        pb_confs_suffix: "Confs",
+        pb_confirmed_label: "Confirmed",
+        pb_pending_label: "Pending",
+        pb_genesis_timestamp: "Genesis (Block #0)",
+
+        pb_detail_txid: "Transaction ID:",
+        pb_detail_outpoint: "OutPoint (Referenced UTXO):",
+        pb_detail_datum: "Datum Hash (eUTXO State Commitment):",
+        pb_btn_inspect_tx: "Inspect Tx",
+
+        action_mining_reward: "Mining Reward",
+        action_received: "Received",
+        action_sent: "Sent",
+        action_change: "Change",
+        action_scy20_mint: "Mint",
+        action_scy20_transfer: "Transfer",
+        action_scy20_burn: "Burn",
+        action_contract_interaction: "Contract Interaction",
+        action_vault_deposit: "Vault Lock (Timelock: {time})",
+        action_vault_withdrawal: "Vault Unlock",
+
+        modal_title_inspect: "Object Inspection",
+        modal_raw_json_show: "▶ Show Raw JSON",
+        modal_raw_json_hide: "▼ Hide Raw JSON",
+        btn_close: "Close",
+
+        stmt_modal_title: "Cryptographic Statement Verification",
+        stmt_valid_title: "Verification Status: VALID & MATHEMATICALLY PROVED",
+        stmt_valid_desc: "Total {count} inclusion proof leaves valued at {amt} ({quanta} quanta) match 100% and are cryptographically bound to the UTXO Merkle Root.",
+        stmt_partial_title: "Verification Status: PARTIAL / UNVERIFIED",
+        stmt_partial_desc: "Proof leaves total ({sum}) vs confirmed balance ({confirmed}).",
+        stmt_error_title: "Failed to Fetch Cryptographic Statement",
+        stmt_label_account: "Target Account (Bech32):",
+        stmt_label_tip_height: "Canonical Tip Height:",
+        stmt_label_tip_hash: "Canonical Tip Hash:",
+        stmt_label_tip: "Canonical Tip:",
+        stmt_label_utxo_root: "UTXO Merkle Root Hash:",
+        stmt_proofs_title: "Active Spendable UTXO Inclusion Proofs",
+        stmt_proofs_badge: "{count} active proofs",
+        th_stmt_outpoint: "OutPoint (TxID:Index)",
+        th_stmt_value: "Value (SCY / Quanta)",
+        th_stmt_leaf_hash: "Leaf Hash",
+        th_stmt_audit_steps: "Audit Path",
+        th_stmt_status: "Proof Status",
+        stmt_no_proofs: "No active UTXOs to prove for this account.",
+        stmt_loading: "Downloading cryptographic Merkle proofs...",
+        stmt_verified_badge: "✔ Verified",
+        stmt_raw_json_show: "▶ Show Raw Statement JSON",
+        stmt_raw_json_hide: "▼ Hide Raw Statement JSON",
+
+        inspect_block_title: "Block #{height} Details",
+        inspect_tx_title: "Transaction: {txid}",
+        inspect_inputs: "Inputs ({n}):",
+        inspect_outputs: "Outputs ({n}):",
+        inspect_coinbase_msg: "Mining Subsidy & Consensus Genesis",
+        inspect_tx_list: "Transaction List",
+        inspect_no_txs: "No transaction details available.",
+        inspect_not_found_block: "Block not found",
+        inspect_not_found_tx: "Transaction not found",
+        inspect_err_passbook: "Failed to load passbook ({status}): Address not found"
+      },
+      id: {
+        brand_sub: "EXPLORER",
+        api_placeholder: "/rpc atau URL node",
+        search_placeholder: "Cari Height (#23), Block Hash (0x...), TxID, atau Alamat Bech32 (scy1...)...",
+        search_btn: "Cari",
+        toast_copied: "Tersalin: ",
+        toast_copied_default: "Tersalin ke clipboard!",
+
+        metric_canonical_height: "Canonical Height",
+        metric_canonical_height_sub: "Blok Kanonikal Terkonfirmasi",
+        metric_canonical_tip: "Canonical Tip Hash",
+        metric_canonical_tip_sub: "Puncak Rantai Terberat",
+        metric_mempool_txs: "Mempool Transactions",
+        metric_mempool_txs_sub: "Antrean Prioritas Pending",
+        metric_mining_engine: "Mining Engine",
+        metric_mining_engine_sub: "Proof-of-Work Autonomous",
+        mining_active: "MINING...",
+        mining_standby: "STANDBY",
+
+        tab_blocks: "Blok Terbaru",
+        tab_mempool: "Mempool & Pasar Biaya",
+        tab_passbook: "📑 Buku Tabungan (Passbook)",
+
+        blocks_title: "Daftar Blok Terakhir",
+        btn_refresh: "Segarkan",
+        th_height: "Height",
+        th_block_hash: "Block Hash",
+        th_txs: "Txs",
+        th_total_scy: "Total (SCY)",
+        th_nonce: "Nonce",
+        th_timestamp: "Waktu",
+        th_action: "Aksi",
+        blocks_loading: "Memuat blok dari node...",
+        blocks_empty: "Belum ada blok yang tercatat.",
+        btn_details: "Rincian",
+
+        mempool_slots: "SLOT TRANSAKSI",
+        mempool_slots_used: "{percent}% Terpakai",
+        mempool_slots_max: "Max: 5,000 txs",
+        mempool_memory: "MEMORI MEMPOOL",
+        mempool_memory_used: "{percent}% Terpakai",
+        mempool_memory_max: "Max: 5.0 MB",
+        mempool_total_fees: "Total Biaya Pending",
+        mempool_min_relay: "Batas Minimum Relay",
+        mempool_min_relay_sub: "1,000 milli-quanta/byte",
+        mempool_queue_title: "Antrean Transaksi Prioritas (Block-Space Auction)",
+        mempool_tx_count: "{n} transaksi",
+        th_rank: "#Peringkat",
+        th_txid: "Transaction ID",
+        th_size: "Ukuran",
+        th_fee_quanta: "Biaya (quanta)",
+        th_density: "Densitas (q/B)",
+        th_priority_status: "Status Prioritas",
+        mempool_empty: "Mempool kosong. Tidak ada transaksi yang menunggu.",
+        badge_eviction_risk: "Risiko Tergusur",
+        badge_high_priority: "Prioritas Tinggi",
+        btn_inspect: "Inspeksi",
+
+        print_title: "BUKU TABUNGAN BLOCKCHAIN SCYTALE",
+        print_subtitle: "BUKU TABUNGAN & REKENING KORAN RESMI (eUTXO CRYPTOGRAPHIC STATEMENT)",
+        print_official_doc: "Dokumen Resmi: ",
+        print_integrity: "Integritas: Verifikasi UTXO Merkle Root",
+
+        pb_search_title: "Inspeksi Rekening & Buku Tabungan Digital",
+        pb_search_desc: "Audit mutasi finansial, kepemilikan token SCY-20, dan bukti inklusi Merkle UTXO set.",
+        pb_example_label: "Contoh:",
+        pb_example_genesis: "Genesis Miner",
+        pb_input_placeholder: "Masukkan Alamat Akun Bech32 (scy1...) atau Hex Locking Script",
+        pb_btn_open: "Buka Buku Tabungan",
+
+        pb_account_badge: "Rekening Buku Tabungan",
+        pb_account_label: "Nomor Rekening / Alamat Bech32:",
+        btn_copy: "📋 Salin",
+        btn_verify_integrity: "🛡️ Verifikasi Integritas",
+        btn_print_statement: "🖨️ Cetak Rekening Koran",
+        btn_refresh_data: "Segarkan Data",
+        pb_confirmed_balance: "Saldo Terkonfirmasi",
+        pb_pending_delta: "Delta Pending",
+        pb_pending_sync: "Saldo sinkron dengan kanonikal",
+        pb_pending_queued: "Terdapat mutasi antrean mempool",
+        pb_token_portfolio: "Portofolio Token eUTXO SCY-20",
+        pb_no_tokens: "0 token SCY-20 tercatat",
+
+        pb_table_title: "Mutasi Jurnal Rekening Finansial",
+        pb_entries_badge: "{n} mutasi",
+        pb_table_hint: "Klik baris untuk rincian OutPoint & TxID",
+        th_pb_entry: "Entry No",
+        th_pb_time_block: "Blok / Waktu",
+        th_pb_action: "Aksi & Aset",
+        th_pb_asset: "Aset",
+        th_pb_mutation: "Mutasi",
+        th_pb_fee: "Biaya",
+        th_pb_running_balance: "Saldo Berjalan",
+        th_pb_status: "Status",
+        th_pb_details: "Rincian",
+        pb_loading_mutations: "Memuat entri buku tabungan...",
+        pb_no_mutations: "Belum ada catatan mutasi finansial pada rekening ini.",
+        pb_block_link: "Blok #{height}",
+        pb_mempool_label: "Mempool",
+        pb_asset_native: "Native SCY",
+        pb_asset_scy20: "SCY-20",
+        pb_conf_suffix: "Conf",
+        pb_confs_suffix: "Confs",
+        pb_confirmed_label: "Confirmed",
+        pb_pending_label: "Pending",
+        pb_genesis_timestamp: "Genesis (Blok #0)",
+
+        pb_detail_txid: "Transaction ID:",
+        pb_detail_outpoint: "OutPoint (Referenced UTXO):",
+        pb_detail_datum: "Datum Hash (eUTXO State Commitment):",
+        pb_btn_inspect_tx: "Inspeksi Tx",
+
+        action_mining_reward: "Mining Reward",
+        action_received: "Received",
+        action_sent: "Sent",
+        action_change: "Change",
+        action_scy20_mint: "Mint",
+        action_scy20_transfer: "Transfer",
+        action_scy20_burn: "Burn",
+        action_contract_interaction: "Interaksi Kontrak",
+        action_vault_deposit: "Vault Lock (Timelock: {time})",
+        action_vault_withdrawal: "Vault Unlock",
+
+        modal_title_inspect: "Inspeksi Objek",
+        modal_raw_json_show: "▶ Tampilkan JSON Mentah",
+        modal_raw_json_hide: "▼ Sembunyikan JSON Mentah",
+        btn_close: "Tutup",
+
+        stmt_modal_title: "Verifikasi Pernyataan Kriptografis",
+        stmt_valid_title: "Status Verifikasi: VALID & TERBUKTI SECARA MATEMATIS",
+        stmt_valid_desc: "Total {count} leaf bukti inklusi senilai {amt} ({quanta} quanta) cocok 100% dan terikat secara kriptografis pada UTXO Merkle Root.",
+        stmt_partial_title: "Status Verifikasi: PARSIAL / BELUM TERVERIFIKASI",
+        stmt_partial_desc: "Jumlah leaf quanta ({sum}) vs saldo terkonfirmasi ({confirmed}).",
+        stmt_error_title: "Gagal Mengambil Statement Kriptografis",
+        stmt_label_account: "Akun Target (Bech32):",
+        stmt_label_tip_height: "Ketinggian Blok Tip Kanonikal:",
+        stmt_label_tip_hash: "Hash Blok Tip Kanonikal:",
+        stmt_label_tip: "Canonical Tip:",
+        stmt_label_utxo_root: "Hash UTXO Merkle Root:",
+        stmt_proofs_title: "Daftar Bukti Inklusi UTXO Aktif (Active Spendable UTXOs)",
+        stmt_proofs_badge: "{count} bukti UTXO aktif",
+        th_stmt_outpoint: "OutPoint (TxID:Index)",
+        th_stmt_value: "Nilai (SCY / Quanta)",
+        th_stmt_leaf_hash: "Leaf Hash",
+        th_stmt_audit_steps: "Audit Path",
+        th_stmt_status: "Proof Status",
+        stmt_no_proofs: "Tidak ada UTXO aktif yang perlu dibuktikan.",
+        stmt_loading: "Mengunduh cryptographic Merkle proofs...",
+        stmt_verified_badge: "✔ Terverifikasi",
+        stmt_raw_json_show: "▶ Tampilkan JSON Statement Mentah",
+        stmt_raw_json_hide: "▼ Sembunyikan JSON Statement Mentah",
+
+        inspect_block_title: "Rincian Blok #{height}",
+        inspect_tx_title: "Transaksi: {txid}",
+        inspect_inputs: "Masukan (Inputs - {n}):",
+        inspect_outputs: "Keluaran (Outputs - {n}):",
+        inspect_coinbase_msg: "Mining Subsidy & Consensus Genesis",
+        inspect_tx_list: "Daftar Transaksi",
+        inspect_no_txs: "Tidak ada detail transaksi.",
+        inspect_not_found_block: "Blok tidak ditemukan",
+        inspect_not_found_tx: "Transaksi tidak ditemukan",
+        inspect_err_passbook: "Gagal memuat passbook ({status}): Alamat tidak ditemukan"
+      }
+    };
+
+    let currentLang = 'en';
     let activeTab = 'blocks';
     let lastMempoolData = null;
+    let lastBlocksData = null;
+    let lastPassbookData = null;
+    let lastStatementData = null;
+    let currentPassbookAddress = 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
+
+    function t(key, params = {}) {
+      const dict = I18N[currentLang] || I18N.en;
+      let str = dict[key] || I18N.en[key] || key;
+      for (const [k, v] of Object.entries(params)) {
+        str = str.replaceAll(`{${k}}`, v);
+      }
+      return str;
+    }
+
+    function setLanguage(lang) {
+      if (lang !== 'en' && lang !== 'id') lang = 'en';
+      currentLang = lang;
+      try {
+        localStorage.setItem('scytale_lang', lang);
+      } catch (e) {}
+
+      document.documentElement.lang = lang;
+
+      // Update switcher buttons UI
+      const btnId = document.getElementById('langBtn-id');
+      const btnEn = document.getElementById('langBtn-en');
+      if (btnId && btnEn) {
+        if (lang === 'id') {
+          btnId.className = 'px-2 py-1 rounded-md bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow transition flex items-center gap-1';
+          btnEn.className = 'px-2 py-1 rounded-md text-gray-400 hover:text-white transition flex items-center gap-1';
+        } else {
+          btnEn.className = 'px-2 py-1 rounded-md bg-emerald-950 text-emerald-300 font-bold border border-emerald-800/80 shadow transition flex items-center gap-1';
+          btnId.className = 'px-2 py-1 rounded-md text-gray-400 hover:text-white transition flex items-center gap-1';
+        }
+      }
+
+      // Update static DOM elements with data-i18n
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          el.textContent = t(key);
+        }
+      });
+
+      // Update input placeholders with data-i18n-placeholder
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+          el.placeholder = t(key);
+        }
+      });
+
+      // Update print date formatting
+      const printDateEl = document.getElementById('printDate');
+      if (printDateEl) {
+        printDateEl.textContent = new Date().toLocaleString(lang === 'id' ? 'id-ID' : 'en-US');
+      }
+
+      // Re-render cached dynamic components instantly
+      if (lastPassbookData) {
+        renderPassbookData(lastPassbookData);
+      }
+      if (lastMempoolData) {
+        renderMempoolData(lastMempoolData);
+      }
+      if (lastBlocksData) {
+        renderBlocksTable(lastBlocksData);
+      }
+      if (lastStatementData) {
+        renderStatementModal(lastStatementData.address, lastStatementData.data);
+      }
+    }
+
+    function formatDateTime(ts) {
+      if (!ts) return '--';
+      return new Date(ts * 1000).toLocaleString(currentLang === 'id' ? 'id-ID' : 'en-US');
+    }
+
+    function formatTime(ts) {
+      if (!ts) return '--';
+      return new Date(ts * 1000).toLocaleTimeString(currentLang === 'id' ? 'id-ID' : 'en-US');
+    }
 
     function getBaseUrl() {
       const input = document.getElementById('nodeUrl');
@@ -669,13 +1097,13 @@
 
     function copyText(text) {
       navigator.clipboard.writeText(text).then(() => {
-        showToast('Tersalin: ' + truncateMiddle(text, 10, 6));
+        showToast(t('toast_copied') + truncateMiddle(text, 10, 6));
       });
     }
 
     function showToast(msg) {
       const toast = document.getElementById('toast');
-      toast.textContent = msg || 'Tersalin ke clipboard!';
+      toast.textContent = msg || t('toast_copied_default');
       toast.classList.remove('hidden');
       setTimeout(() => toast.classList.add('hidden'), 2200);
     }
@@ -702,9 +1130,9 @@
 
         const miningBadge = document.getElementById('metricMining');
         if (status.mining_active) {
-          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span><span class="font-mono text-xs text-emerald-400 font-bold">MINING...</span>`;
+          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span><span class="font-mono text-xs text-emerald-400 font-bold">${t('mining_active')}</span>`;
         } else {
-          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span><span class="font-mono text-xs text-gray-400 font-bold">STANDBY</span>`;
+          miningBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span><span class="font-mono text-xs text-gray-400 font-bold">${t('mining_standby')}</span>`;
         }
 
         // Fetch Mempool Telemetry
@@ -728,77 +1156,79 @@
         if (!res.ok) return;
         const mp = await res.json();
         lastMempoolData = mp;
-
-        // Metric Card Bytes
-        const kb = (mp.total_bytes / 1024).toFixed(1);
-        document.getElementById('metricMempoolBytes').textContent = `${kb} KB`;
-
-        // Slots Gauge
-        const maxSlots = mp.max_count || 5000;
-        const slotsPercent = Math.min(100, (mp.count / maxSlots) * 100);
-        document.getElementById('mempoolSlotsText').textContent = `${mp.count.toLocaleString()} / ${maxSlots.toLocaleString()}`;
-        document.getElementById('mempoolSlotsPercent').textContent = `${slotsPercent.toFixed(1)}% Terpakai`;
-        const slotsBar = document.getElementById('mempoolSlotsBar');
-        slotsBar.style.width = `${slotsPercent}%`;
-        slotsBar.className = `h-2.5 rounded-full transition-all duration-500 ${slotsPercent >= 90 ? 'bg-rose-500' : slotsPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-          }`;
-
-        // Memory Gauge
-        const maxBytes = mp.max_bytes || 5000000;
-        const memPercent = Math.min(100, (mp.total_bytes / maxBytes) * 100);
-        const memKb = Math.round(mp.total_bytes / 1024);
-        const maxMemKb = Math.round(maxBytes / 1024);
-        document.getElementById('mempoolMemoryText').textContent = `${memKb.toLocaleString()} KB / ${maxMemKb.toLocaleString()} KB`;
-        document.getElementById('mempoolMemoryPercent').textContent = `${memPercent.toFixed(1)}% Terpakai`;
-        const memBar = document.getElementById('mempoolMemoryBar');
-        memBar.style.width = `${memPercent}%`;
-        memBar.className = `h-2.5 rounded-full transition-all duration-500 ${memPercent >= 90 ? 'bg-rose-500' : memPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-          }`;
-
-        // Fees
-        document.getElementById('mempoolTotalFees').textContent = formatScyOnly(mp.total_fees_quanta);
-        document.getElementById('mempoolTotalFeesQuanta').textContent = `${(mp.total_fees_quanta || 0).toLocaleString()} quanta`;
-        document.getElementById('mempoolTableCountBadge').textContent = `${mp.count} transaksi`;
-
-        // Table Render
-        const tbody = document.getElementById('mempoolTableBody');
-        const txs = mp.transactions || [];
-        if (txs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Mempool kosong. Tidak ada transaksi yang menunggu.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = txs.map((tx, idx) => {
-          const density = ((tx.fee_rate_milli || (tx.fee_rate * 1000) || 1000) / 1000).toFixed(2);
-          const isEvictionRisk = (slotsPercent >= 90 || memPercent >= 90) && idx >= txs.length - 2;
-          const statusBadge = isEvictionRisk
-            ? `<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800">Eviction Risk</span>`
-            : `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">High Priority</span>`;
-
-          const rankColor = idx === 0 ? 'text-amber-400 font-black' : idx === 1 ? 'text-gray-300 font-bold' : idx === 2 ? 'text-amber-600 font-bold' : 'text-gray-400';
-
-          return `
-            <tr class="hover:bg-gray-900/50 transition">
-              <td class="px-4 py-3 ${rankColor}">#${idx + 1}</td>
-              <td class="px-4 py-3">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectTx('${tx.txid}')" title="${tx.txid}">${truncateMiddle(tx.txid, 10, 8)}</span>
-                  <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin TxID">📋</button>
-                </div>
-              </td>
-              <td class="px-4 py-3 text-right text-gray-300">${tx.size_bytes.toLocaleString()} B</td>
-              <td class="px-4 py-3 text-right font-bold text-emerald-400">${tx.fee_quanta.toLocaleString()} q</td>
-              <td class="px-4 py-3 text-right text-teal-300 font-bold">${density} q/B</td>
-              <td class="px-4 py-3 text-center">${statusBadge}</td>
-              <td class="px-4 py-3 text-right">
-                <button onclick="inspectTx('${tx.txid}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">Inspeksi</button>
-              </td>
-            </tr>
-          `;
-        }).join('');
+        renderMempoolData(mp);
       } catch (e) {
         console.error('Error fetching mempool:', e);
       }
+    }
+
+    function renderMempoolData(mp) {
+      if (!mp) return;
+      // Metric Card Bytes
+      const kb = (mp.total_bytes / 1024).toFixed(1);
+      document.getElementById('metricMempoolBytes').textContent = `${kb} KB`;
+
+      // Slots Gauge
+      const maxSlots = mp.max_count || 5000;
+      const slotsPercent = Math.min(100, (mp.count / maxSlots) * 100);
+      document.getElementById('mempoolSlotsText').textContent = `${mp.count.toLocaleString()} / ${maxSlots.toLocaleString()}`;
+      document.getElementById('mempoolSlotsPercent').textContent = t('mempool_slots_used', { percent: slotsPercent.toFixed(1) });
+      const slotsBar = document.getElementById('mempoolSlotsBar');
+      slotsBar.style.width = `${slotsPercent}%`;
+      slotsBar.className = `h-2.5 rounded-full transition-all duration-500 ${slotsPercent >= 90 ? 'bg-rose-500' : slotsPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+
+      // Memory Gauge
+      const maxBytes = mp.max_bytes || 5000000;
+      const memPercent = Math.min(100, (mp.total_bytes / maxBytes) * 100);
+      const memKb = Math.round(mp.total_bytes / 1024);
+      const maxMemKb = Math.round(maxBytes / 1024);
+      document.getElementById('mempoolMemoryText').textContent = `${memKb.toLocaleString()} KB / ${maxMemKb.toLocaleString()} KB`;
+      document.getElementById('mempoolMemoryPercent').textContent = t('mempool_memory_used', { percent: memPercent.toFixed(1) });
+      const memBar = document.getElementById('mempoolMemoryBar');
+      memBar.style.width = `${memPercent}%`;
+      memBar.className = `h-2.5 rounded-full transition-all duration-500 ${memPercent >= 90 ? 'bg-rose-500' : memPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+
+      // Fees
+      document.getElementById('mempoolTotalFees').textContent = formatScyOnly(mp.total_fees_quanta);
+      document.getElementById('mempoolTotalFeesQuanta').textContent = `${(mp.total_fees_quanta || 0).toLocaleString()} quanta`;
+      document.getElementById('mempoolTableCountBadge').textContent = t('mempool_tx_count', { n: mp.count });
+
+      // Table Render
+      const tbody = document.getElementById('mempoolTableBody');
+      const txs = mp.transactions || [];
+      if (txs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">${t('mempool_empty')}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = txs.map((tx, idx) => {
+        const density = ((tx.fee_rate_milli || (tx.fee_rate * 1000) || 1000) / 1000).toFixed(2);
+        const isEvictionRisk = (slotsPercent >= 90 || memPercent >= 90) && idx >= txs.length - 2;
+        const statusBadge = isEvictionRisk
+          ? `<span class="px-2 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800">${t('badge_eviction_risk')}</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">${t('badge_high_priority')}</span>`;
+
+        const rankColor = idx === 0 ? 'text-amber-400 font-black' : idx === 1 ? 'text-gray-300 font-bold' : idx === 2 ? 'text-amber-600 font-bold' : 'text-gray-400';
+
+        return `
+          <tr class="hover:bg-gray-900/50 transition">
+            <td class="px-4 py-3 ${rankColor}">#${idx + 1}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectTx('${tx.txid}')" title="${tx.txid}">${truncateMiddle(tx.txid, 10, 8)}</span>
+                <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin TxID">📋</button>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-right text-gray-300">${tx.size_bytes.toLocaleString()} B</td>
+            <td class="px-4 py-3 text-right font-bold text-emerald-400">${tx.fee_quanta.toLocaleString()} q</td>
+            <td class="px-4 py-3 text-right text-teal-300 font-bold">${density} q/B</td>
+            <td class="px-4 py-3 text-center">${statusBadge}</td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="inspectTx('${tx.txid}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_inspect')}</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     async function fetchRecentBlocks() {
@@ -807,48 +1237,52 @@
         const res = await fetch(`${baseUrl}/api/v1/blocks?limit=10`);
         if (!res.ok) return;
         const blocks = await res.json();
-
-        const tbody = document.getElementById('blocksTableBody');
-        if (!blocks || blocks.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Belum ada blok yang tercatat.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = blocks.map(b => `
-          <tr class="hover:bg-gray-900/50 transition">
-            <td class="px-4 py-3 text-emerald-400 font-black">#${b.height}</td>
-            <td class="px-4 py-3">
-              <div class="flex items-center gap-1.5">
-                <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectBlock('${b.hash}')" title="${b.hash}">${truncateMiddle(b.hash, 10, 8)}</span>
-                <button onclick="copyText('${b.hash}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin Hash">📋</button>
-              </div>
-            </td>
-            <td class="px-4 py-3 text-center font-bold">${b.tx_count || (b.transactions ? b.transactions.length : 1)}</td>
-            <td class="px-4 py-3 text-emerald-300 font-bold">${b.total_scy ? b.total_scy + ' SCY' : formatScyOnly(b.total_quanta || 0)}</td>
-            <td class="px-4 py-3 text-gray-400">${b.nonce ? '0x' + b.nonce.toString(16) : '0x0'}</td>
-            <td class="px-4 py-3 text-gray-400">${new Date(b.timestamp * 1000).toLocaleTimeString()}</td>
-            <td class="px-4 py-3 text-right">
-              <button onclick="inspectBlock('${b.hash}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">Rincian</button>
-            </td>
-          </tr>
-        `).join('');
+        lastBlocksData = blocks;
+        renderBlocksTable(blocks);
       } catch (e) {
         console.error('Error fetching blocks:', e);
       }
+    }
+
+    function renderBlocksTable(blocks) {
+      const tbody = document.getElementById('blocksTableBody');
+      if (!blocks || blocks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">${t('blocks_empty')}</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = blocks.map(b => `
+        <tr class="hover:bg-gray-900/50 transition">
+          <td class="px-4 py-3 text-emerald-400 font-black">#${b.height}</td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-1.5">
+              <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectBlock('${b.hash}')" title="${b.hash}">${truncateMiddle(b.hash, 10, 8)}</span>
+              <button onclick="copyText('${b.hash}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin Hash">📋</button>
+            </div>
+          </td>
+          <td class="px-4 py-3 text-center font-bold">${b.tx_count || (b.transactions ? b.transactions.length : 1)}</td>
+          <td class="px-4 py-3 text-emerald-300 font-bold">${b.total_scy ? b.total_scy + ' SCY' : formatScyOnly(b.total_quanta || 0)}</td>
+          <td class="px-4 py-3 text-gray-400">${b.nonce ? '0x' + b.nonce.toString(16) : '0x0'}</td>
+          <td class="px-4 py-3 text-gray-400">${formatTime(b.timestamp)}</td>
+          <td class="px-4 py-3 text-right">
+            <button onclick="inspectBlock('${b.hash}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_details')}</button>
+          </td>
+        </tr>
+      `).join('');
     }
 
     async function inspectBlock(identifier) {
       const baseUrl = getBaseUrl();
       try {
         const res = await fetch(`${baseUrl}/api/v1/blocks/${identifier}`);
-        if (!res.ok) throw new Error('Blok tidak ditemukan');
+        if (!res.ok) throw new Error(t('inspect_not_found_block'));
         const block = await res.json();
 
         // Render formatted block view
         let html = `
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
             <div><span class="text-gray-500">Height:</span> <span class="font-bold text-emerald-400">#${block.height}</span></div>
-            <div><span class="text-gray-500">Timestamp:</span> <span class="text-gray-300">${new Date(block.timestamp * 1000).toLocaleString()}</span></div>
+            <div><span class="text-gray-500">Timestamp:</span> <span class="text-gray-300">${formatDateTime(block.timestamp)}</span></div>
             <div class="col-span-1 sm:col-span-2">
               <span class="text-gray-500">Block Hash:</span>
               <div class="flex items-center gap-1.5 font-bold text-white break-all mt-0.5">
@@ -866,18 +1300,18 @@
           </div>
 
           <div class="space-y-3 mt-4">
-            <h4 class="font-bold text-xs uppercase tracking-wider text-gray-400">Daftar Transaksi</h4>
+            <h4 class="font-bold text-xs uppercase tracking-wider text-gray-400">${t('inspect_tx_list')}</h4>
         `;
 
         if (block.transactions && block.transactions.length > 0) {
           html += block.transactions.map((tx, tIdx) => renderTxCard(tx, tIdx)).join('');
         } else {
-          html += '<p class="text-gray-500">Tidak ada detail transaksi.</p>';
+          html += `<p class="text-gray-500">${t('inspect_no_txs')}</p>`;
         }
 
         html += '</div>';
 
-        openModal(`Rincian Blok #${block.height}`, block, html);
+        openModal(t('inspect_block_title', { height: block.height }), block, html);
       } catch (err) {
         alert(err.message);
       }
@@ -888,10 +1322,10 @@
       try {
         const clean = txid.replace(/^0x/, '');
         const res = await fetch(`${baseUrl}/api/v1/tx/${clean}`);
-        if (!res.ok) throw new Error('Transaksi tidak ditemukan');
+        if (!res.ok) throw new Error(t('inspect_not_found_tx'));
         const tx = await res.json();
         const html = renderTxCard(tx, 0);
-        openModal(`Transaksi: ${truncateMiddle(tx.txid, 10, 8)}`, tx, html);
+        openModal(t('inspect_tx_title', { txid: truncateMiddle(tx.txid, 10, 8) }), tx, html);
       } catch (err) {
         alert(err.message);
       }
@@ -919,17 +1353,17 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
             <!-- Inputs -->
             <div class="space-y-1.5">
-              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">Masukan (Inputs - ${tx.inputs ? tx.inputs.length : 0}):</span>
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">${t('inspect_inputs', { n: tx.inputs ? tx.inputs.length : 0 })}</span>
               ${(tx.inputs || []).map(inp => `
                 <div class="bg-gray-950 p-2 rounded-lg border border-gray-800/80 text-[11px] break-all">
-                  ${isCoinbase ? '<span class="text-yellow-400">Mining Subsidy & Consensus Genesis</span>' : truncateMiddle(inp.previous_output, 16, 8)}
+                  ${isCoinbase ? `<span class="text-yellow-400">${t('inspect_coinbase_msg')}</span>` : truncateMiddle(inp.previous_output, 16, 8)}
                 </div>
               `).join('')}
             </div>
 
             <!-- Outputs -->
             <div class="space-y-1.5">
-              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">Keluaran (Outputs - ${tx.outputs ? tx.outputs.length : 0}):</span>
+              <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">${t('inspect_outputs', { n: tx.outputs ? tx.outputs.length : 0 })}</span>
               ${(tx.outputs || []).map(out => {
         const isP2pkh = out.script_type === 'p2pkh';
         const isOpReturn = out.script_type === 'op_return';
@@ -973,8 +1407,6 @@
       return html;
     }
 
-    let currentPassbookAddress = 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
-
     function fillGenesisMiner() {
       const addr = 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
       document.getElementById('passbookLockInput').value = addr;
@@ -998,30 +1430,30 @@
       if (typeof action === 'string') {
         switch (action) {
           case 'MiningReward':
-            return { label: 'Mining Reward', badge: 'bg-amber-950/80 text-amber-400 border-amber-800', isCredit: true, icon: '⛏️' };
+            return { label: t('action_mining_reward'), badge: 'bg-amber-950/80 text-amber-400 border-amber-800', isCredit: true, icon: '⛏️' };
           case 'Received':
-            return { label: 'Penerimaan (Inbound)', badge: 'bg-emerald-950/80 text-emerald-400 border-emerald-800', isCredit: true, icon: '📥' };
+            return { label: t('action_received'), badge: 'bg-emerald-950/80 text-emerald-400 border-emerald-800', isCredit: true, icon: '📥' };
           case 'Sent':
-            return { label: 'Pengeluaran (Outbound)', badge: 'bg-rose-950/80 text-rose-400 border-rose-800', isCredit: false, icon: '📤' };
+            return { label: t('action_sent'), badge: 'bg-rose-950/80 text-rose-400 border-rose-800', isCredit: false, icon: '📤' };
           case 'Change':
-            return { label: 'Kembalian (Change)', badge: 'bg-cyan-950/80 text-cyan-400 border-cyan-800', isCredit: true, icon: '🔄' };
+            return { label: t('action_change'), badge: 'bg-cyan-950/80 text-cyan-400 border-cyan-800', isCredit: true, icon: '🔄' };
           case 'Scy20Mint':
-            return { label: 'SCY-20 Mint', badge: 'bg-blue-950/80 text-blue-400 border-blue-800', isCredit: true, icon: '🪙' };
+            return { label: t('action_scy20_mint'), badge: 'bg-blue-950/80 text-blue-400 border-blue-800', isCredit: true, icon: '🪙' };
           case 'Scy20Transfer':
-            return { label: 'SCY-20 Transfer', badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: true, icon: '🪙' };
+            return { label: t('action_scy20_transfer'), badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: true, icon: '🪙' };
           case 'Scy20Burn':
-            return { label: 'SCY-20 Burn', badge: 'bg-orange-950/80 text-orange-400 border-orange-800', isCredit: false, icon: '🔥' };
+            return { label: t('action_scy20_burn'), badge: 'bg-orange-950/80 text-orange-400 border-orange-800', isCredit: false, icon: '🔥' };
           case 'VaultWithdrawal':
-            return { label: 'Vault Withdrawal', badge: 'bg-teal-950/80 text-teal-400 border-teal-800', isCredit: true, icon: '🔓' };
+            return { label: t('action_vault_withdrawal'), badge: 'bg-teal-950/80 text-teal-400 border-teal-800', isCredit: true, icon: '🔓' };
           default:
             return { label: action, badge: 'bg-gray-800 text-gray-300 border-gray-700', isCredit: true, icon: '🏷️' };
         }
       } else if (action && typeof action === 'object') {
         if (action.ContractInteraction !== undefined) {
-          return { label: 'Contract Interaction', badge: 'bg-purple-950/80 text-purple-400 border-purple-800', isCredit: false, icon: '📜', datum: action.ContractInteraction.datum_hash };
+          return { label: t('action_contract_interaction'), badge: 'bg-purple-950/80 text-purple-400 border-purple-800', isCredit: false, icon: '📜', datum: action.ContractInteraction.datum_hash };
         }
         if (action.VaultDeposit !== undefined) {
-          return { label: `Vault Deposit (Timelock: ${action.VaultDeposit.timelock_until})`, badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: false, icon: '🔒' };
+          return { label: t('action_vault_deposit', { time: action.VaultDeposit.timelock_until }), badge: 'bg-indigo-950/80 text-indigo-400 border-indigo-800', isCredit: false, icon: '🔒' };
         }
         const key = Object.keys(action)[0] || 'Unknown';
         return { label: key, badge: 'bg-gray-800 text-gray-300 border-gray-700', isCredit: true, icon: '⚙️' };
@@ -1036,7 +1468,7 @@
 
       currentPassbookAddress = lock;
       const printDateEl = document.getElementById('printDate');
-      if (printDateEl) printDateEl.textContent = new Date().toLocaleString('id-ID');
+      if (printDateEl) printDateEl.textContent = new Date().toLocaleString(currentLang === 'id' ? 'id-ID' : 'en-US');
 
       const btn = document.getElementById('btnOpenPassbook');
       if (btn) btn.disabled = true;
@@ -1049,142 +1481,150 @@
         if (!res || !res.ok) {
           res = await fetch(`${baseUrl}/api/v1/passbook/${encodeURIComponent(lock)}`);
         }
-        if (!res.ok) throw new Error(`Gagal memuat passbook (${res.status}): Alamat tidak ditemukan`);
+        if (!res.ok) throw new Error(t('inspect_err_passbook', { status: res.status }));
 
         const data = await res.json();
-        document.getElementById('passbookResult').classList.remove('hidden');
-
-        // Account Header
-        document.getElementById('pbLockText').textContent = lock;
-
-        // Confirmed Native Balance
-        const confirmedQuanta = Number(data.confirmed_native_balance_quanta ?? data.confirmed_balance_quanta ?? data.confirmed_balance ?? 0);
-        document.getElementById('pbBalanceScy').textContent = formatScyOnly(confirmedQuanta);
-        document.getElementById('pbBalanceQuanta').textContent = `${confirmedQuanta.toLocaleString()} quanta`;
-
-        // Pending Native Balance Delta
-        const pendingDelta = Number(data.pending_native_balance_quanta ?? data.pending_balance_quanta ?? 0);
-        const sign = pendingDelta > 0 ? '+' : (pendingDelta < 0 ? '-' : '+');
-        const absPending = Math.abs(pendingDelta);
-        document.getElementById('pbPendingDelta').textContent = `${sign}${formatScyOnly(absPending)}`;
-        document.getElementById('pbPendingDelta').className = `text-xl font-bold mt-1 ${pendingDelta > 0 ? 'text-emerald-400' : (pendingDelta < 0 ? 'text-rose-400' : 'text-gray-300')}`;
-        document.getElementById('pbPendingStatus').textContent = pendingDelta !== 0 ? 'Terdapat mutasi antrean mempool' : 'Saldo sinkron dengan kanonikal';
-
-        // Token Balances (SCY-20)
-        const tokensContainer = document.getElementById('pbTokensContainer');
-        const tokenBalances = data.token_balances || {};
-        const tokenKeys = Object.keys(tokenBalances);
-        if (tokenKeys.length === 0) {
-          tokensContainer.innerHTML = '<span class="text-xs text-gray-500 italic font-mono">0 token SCY-20 tercatat</span>';
-        } else {
-          tokensContainer.innerHTML = tokenKeys.map(tid => `
-            <div class="px-2.5 py-1 rounded-lg bg-indigo-950/70 border border-indigo-800/80 text-[11px] font-mono flex items-center gap-1.5 shadow">
-              <span class="text-indigo-400">🪙 ${truncateMiddle(tid, 6, 4)}:</span>
-              <span class="text-white font-bold">${Number(tokenBalances[tid]).toLocaleString()} unit</span>
-            </div>
-          `).join('');
-        }
-
-        // Entries Table
-        const entries = data.entries || [];
-        document.getElementById('pbEntriesBadge').textContent = `${entries.length} mutasi`;
-
-        const tbody = document.getElementById('passbookTableBody');
-        if (entries.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500 font-mono">Belum ada catatan mutasi finansial pada rekening ini.</td></tr>';
-        } else {
-          tbody.innerHTML = entries.map((e, idx) => {
-            const actionInfo = parseActionInfo(e.action || e.entry_type);
-            const amountQuanta = Number(e.amount_quanta || e.amount || 0);
-            const feeQuanta = Number(e.fee_quanta || e.fee || 0);
-            const blockHeight = e.block_height !== undefined ? e.block_height : (e.height !== undefined ? e.height : null);
-            const timestamp = (e.timestamp && e.timestamp > 0) ? new Date(e.timestamp * 1000).toLocaleString('id-ID') : (blockHeight === 0 ? 'Genesis (Block #0)' : '--');
-            const txid = bytesToHex(e.txid);
-            const outpointStr = formatOutpointFull(e.outpoint);
-            const datumHashStr = e.datum_hash ? bytesToHex(e.datum_hash) : null;
-
-            // Running balance logic
-            const runningQuanta = e.running_native_balance_quanta !== undefined ? Number(e.running_native_balance_quanta) : null;
-            const runningDisplay = runningQuanta !== null ? formatScyOnly(runningQuanta) : '--';
-
-            // Status label
-            let statusBadge = '<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">Confirmed</span>';
-            if (typeof e.status === 'object' && e.status !== null) {
-              if (e.status.Confirmed !== undefined) {
-                const confs = e.status.Confirmed.confirmations;
-                statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${confs} ${confs > 1 ? 'Confs' : 'Conf'}</span>`;
-              } else if (e.status.Pending !== undefined) {
-                statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">Pending</span>';
-              }
-            } else if (e.status === 'Pending' || e.is_confirmed === false) {
-              statusBadge = '<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">Pending</span>';
-            }
-
-            const detailRowId = `pb-detail-${idx}`;
-
-            return `
-              <tr class="hover:bg-gray-900/60 transition cursor-pointer" onclick="toggleRowDetail('${detailRowId}')">
-                <td class="px-4 py-3 text-gray-400 font-bold">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
-                <td class="px-4 py-3">
-                  <div class="text-gray-300">${timestamp}</div>
-                  ${blockHeight !== null ? `<a href="javascript:void(0)" onclick="event.stopPropagation(); inspectBlock(${blockHeight})" class="text-emerald-400 hover:underline text-[11px]">Blok #${blockHeight}</a>` : '<span class="text-amber-400 text-[11px]">Mempool</span>'}
-                </td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${actionInfo.badge}">
-                    <span>${actionInfo.icon}</span>
-                    <span>${actionInfo.label}</span>
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-gray-300">
-                  ${e.asset === 'Native' || !e.asset ? '<span class="text-white font-semibold">Native SCY</span>' : '<span class="text-indigo-300 font-semibold">SCY-20</span>'}
-                </td>
-                <td class="px-4 py-3 text-right font-bold text-sm ${actionInfo.isCredit ? 'text-emerald-400' : 'text-rose-400'}">
-                  ${actionInfo.isCredit ? '+' : '-'}${formatScyOnly(amountQuanta)}
-                </td>
-                <td class="px-4 py-3 text-right text-gray-400">
-                  ${feeQuanta > 0 ? formatScyOnly(feeQuanta) : '0 SCY'}
-                </td>
-                <td class="px-4 py-3 text-right font-bold text-gray-200">
-                  ${runningDisplay}
-                </td>
-                <td class="px-4 py-3 text-center">
-                  ${statusBadge}
-                </td>
-                <td class="px-4 py-3 text-center no-print">
-                  <button type="button" class="text-gray-400 hover:text-white text-xs font-bold" onclick="event.stopPropagation(); toggleRowDetail('${detailRowId}')">▼</button>
-                </td>
-              </tr>
-              <!-- Collapsible Row Details -->
-              <tr id="${detailRowId}" class="collapsible-row hidden bg-gray-950/80 border-b border-gray-800/80 text-[11px]">
-                <td colspan="9" class="p-4 space-y-2">
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <span class="text-gray-500 uppercase block">Transaction ID:</span>
-                      <div class="flex items-center gap-1.5 font-bold text-emerald-400 break-all mt-0.5">
-                        <span>${txid}</span>
-                        ${txid !== '--' ? `<button onclick="event.stopPropagation(); inspectTx('${txid}')" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-[10px]">Inspeksi Tx</button>` : ''}
-                      </div>
-                    </div>
-                    <div>
-                      <span class="text-gray-500 uppercase block">OutPoint (Referenced UTXO):</span>
-                      <div class="font-mono text-gray-300 break-all mt-0.5">${outpointStr}</div>
-                    </div>
-                    ${datumHashStr ? `
-                    <div class="col-span-1 md:col-span-2">
-                      <span class="text-gray-500 uppercase block">Datum Hash (eUTXO State Commitment):</span>
-                      <div class="font-mono text-purple-400 break-all mt-0.5">${datumHashStr}</div>
-                    </div>` : ''}
-                  </div>
-                </td>
-              </tr>
-            `;
-          }).join('');
-        }
+        lastPassbookData = { lock, data };
+        renderPassbookData(lastPassbookData);
 
       } catch (err) {
         alert(err.message);
       } finally {
         if (btn) btn.disabled = false;
+      }
+    }
+
+    function renderPassbookData(stored) {
+      if (!stored || !stored.data) return;
+      const { lock, data } = stored;
+      document.getElementById('passbookResult').classList.remove('hidden');
+
+      // Account Header
+      document.getElementById('pbLockText').textContent = lock;
+
+      // Confirmed Native Balance
+      const confirmedQuanta = Number(data.confirmed_native_balance_quanta ?? data.confirmed_balance_quanta ?? data.confirmed_balance ?? 0);
+      document.getElementById('pbBalanceScy').textContent = formatScyOnly(confirmedQuanta);
+      document.getElementById('pbBalanceQuanta').textContent = `${confirmedQuanta.toLocaleString()} quanta`;
+
+      // Pending Native Balance Delta
+      const pendingDelta = Number(data.pending_native_balance_quanta ?? data.pending_balance_quanta ?? 0);
+      const sign = pendingDelta > 0 ? '+' : (pendingDelta < 0 ? '-' : '+');
+      const absPending = Math.abs(pendingDelta);
+      document.getElementById('pbPendingDelta').textContent = `${sign}${formatScyOnly(absPending)}`;
+      document.getElementById('pbPendingDelta').className = `text-xl font-bold mt-1 ${pendingDelta > 0 ? 'text-emerald-400' : (pendingDelta < 0 ? 'text-rose-400' : 'text-gray-300')}`;
+      document.getElementById('pbPendingStatus').textContent = pendingDelta !== 0 ? t('pb_pending_queued') : t('pb_pending_sync');
+
+      // Token Balances (SCY-20)
+      const tokensContainer = document.getElementById('pbTokensContainer');
+      const tokenBalances = data.token_balances || {};
+      const tokenKeys = Object.keys(tokenBalances);
+      if (tokenKeys.length === 0) {
+        tokensContainer.innerHTML = `<span class="text-xs text-gray-500 italic font-mono">${t('pb_no_tokens')}</span>`;
+      } else {
+        tokensContainer.innerHTML = tokenKeys.map(tid => `
+          <div class="px-2.5 py-1 rounded-lg bg-indigo-950/70 border border-indigo-800/80 text-[11px] font-mono flex items-center gap-1.5 shadow">
+            <span class="text-indigo-400">🪙 ${truncateMiddle(tid, 6, 4)}:</span>
+            <span class="text-white font-bold">${Number(tokenBalances[tid]).toLocaleString()} unit</span>
+          </div>
+        `).join('');
+      }
+
+      // Entries Table
+      const entries = data.entries || [];
+      document.getElementById('pbEntriesBadge').textContent = t('pb_entries_badge', { n: entries.length });
+
+      const tbody = document.getElementById('passbookTableBody');
+      if (entries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500 font-mono">${t('pb_no_mutations')}</td></tr>`;
+      } else {
+        tbody.innerHTML = entries.map((e, idx) => {
+          const actionInfo = parseActionInfo(e.action || e.entry_type);
+          const amountQuanta = Number(e.amount_quanta || e.amount || 0);
+          const feeQuanta = Number(e.fee_quanta || e.fee || 0);
+          const blockHeight = e.block_height !== undefined ? e.block_height : (e.height !== undefined ? e.height : null);
+          const timestamp = (e.timestamp && e.timestamp > 0) ? formatDateTime(e.timestamp) : (blockHeight === 0 ? t('pb_genesis_timestamp') : '--');
+          const txid = bytesToHex(e.txid);
+          const outpointStr = formatOutpointFull(e.outpoint);
+          const datumHashStr = e.datum_hash ? bytesToHex(e.datum_hash) : null;
+
+          // Running balance logic
+          const runningQuanta = e.running_native_balance_quanta !== undefined ? Number(e.running_native_balance_quanta) : null;
+          const runningDisplay = runningQuanta !== null ? formatScyOnly(runningQuanta) : '--';
+
+          // Status label
+          let statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${t('pb_confirmed_label')}</span>`;
+          if (typeof e.status === 'object' && e.status !== null) {
+            if (e.status.Confirmed !== undefined) {
+              const confs = e.status.Confirmed.confirmations;
+              const confSuffix = confs > 1 ? t('pb_confs_suffix') : t('pb_conf_suffix');
+              statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${confs} ${confSuffix}</span>`;
+            } else if (e.status.Pending !== undefined) {
+              statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">${t('pb_pending_label')}</span>`;
+            }
+          } else if (e.status === 'Pending' || e.is_confirmed === false) {
+            statusBadge = `<span class="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-800 text-[10px]">${t('pb_pending_label')}</span>`;
+          }
+
+          const detailRowId = `pb-detail-${idx}`;
+
+          return `
+            <tr class="hover:bg-gray-900/60 transition cursor-pointer" onclick="toggleRowDetail('${detailRowId}')">
+              <td class="px-4 py-3 text-gray-400 font-bold">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
+              <td class="px-4 py-3">
+                <div class="text-gray-300">${timestamp}</div>
+                ${blockHeight !== null ? `<a href="javascript:void(0)" onclick="event.stopPropagation(); inspectBlock(${blockHeight})" class="text-emerald-400 hover:underline text-[11px]">${t('pb_block_link', { height: blockHeight })}</a>` : `<span class="text-amber-400 text-[11px]">${t('pb_mempool_label')}</span>`}
+              </td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${actionInfo.badge}">
+                  <span>${actionInfo.icon}</span>
+                  <span>${actionInfo.label}</span>
+                </span>
+              </td>
+              <td class="px-4 py-3 text-gray-300">
+                ${e.asset === 'Native' || !e.asset ? `<span class="text-white font-semibold">${t('pb_asset_native')}</span>` : `<span class="text-indigo-300 font-semibold">${t('pb_asset_scy20')}</span>`}
+              </td>
+              <td class="px-4 py-3 text-right font-bold text-sm ${actionInfo.isCredit ? 'text-emerald-400' : 'text-rose-400'}">
+                ${actionInfo.isCredit ? '+' : '-'}${formatScyOnly(amountQuanta)}
+              </td>
+              <td class="px-4 py-3 text-right text-gray-400">
+                ${feeQuanta > 0 ? formatScyOnly(feeQuanta) : '0 SCY'}
+              </td>
+              <td class="px-4 py-3 text-right font-bold text-gray-200">
+                ${runningDisplay}
+              </td>
+              <td class="px-4 py-3 text-center">
+                ${statusBadge}
+              </td>
+              <td class="px-4 py-3 text-center no-print">
+                <button type="button" class="text-gray-400 hover:text-white text-xs font-bold" onclick="event.stopPropagation(); toggleRowDetail('${detailRowId}')">▼</button>
+              </td>
+            </tr>
+            <!-- Collapsible Row Details -->
+            <tr id="${detailRowId}" class="collapsible-row hidden bg-gray-950/80 border-b border-gray-800/80 text-[11px]">
+              <td colspan="9" class="p-4 space-y-2">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <span class="text-gray-500 uppercase block">${t('pb_detail_txid')}</span>
+                    <div class="flex items-center gap-1.5 font-bold text-emerald-400 break-all mt-0.5">
+                      <span>${txid}</span>
+                      ${txid !== '--' ? `<button onclick="event.stopPropagation(); inspectTx('${txid}')" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-[10px]">${t('pb_btn_inspect_tx')}</button>` : ''}
+                    </div>
+                  </div>
+                  <div>
+                    <span class="text-gray-500 uppercase block">${t('pb_detail_outpoint')}</span>
+                    <div class="font-mono text-gray-300 break-all mt-0.5">${outpointStr}</div>
+                  </div>
+                  ${datumHashStr ? `
+                  <div class="col-span-1 md:col-span-2">
+                    <span class="text-gray-500 uppercase block">${t('pb_detail_datum')}</span>
+                    <div class="font-mono text-purple-400 break-all mt-0.5">${datumHashStr}</div>
+                  </div>` : ''}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
       }
     }
 
@@ -1200,90 +1640,95 @@
       modal.classList.remove('hidden');
 
       document.getElementById('stmtAccount').textContent = address;
-      document.getElementById('stmtTipHeight').textContent = 'Memuat...';
-      document.getElementById('stmtTipHash').textContent = 'Memuat...';
-      document.getElementById('stmtUtxoRoot').textContent = 'Memuat...';
-      document.getElementById('stmtProofCountBadge').textContent = 'Memverifikasi...';
-      document.getElementById('statementProofsTableBody').innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">Mengunduh cryptographic Merkle proofs...</td></tr>';
+      document.getElementById('stmtTipHeight').textContent = '...';
+      document.getElementById('stmtTipHash').textContent = '...';
+      document.getElementById('stmtUtxoRoot').textContent = '...';
+      document.getElementById('stmtProofCountBadge').textContent = '...';
+      document.getElementById('statementProofsTableBody').innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">${t('stmt_loading')}</td></tr>`;
 
       try {
         const res = await fetch(`${baseUrl}/api/v1/passbook/statement?address=${encodeURIComponent(address)}`);
-        if (!res.ok) throw new Error(`Gagal memuat statement: ${res.statusText}`);
+        if (!res.ok) throw new Error(`Status: ${res.status}`);
         const data = await res.json();
-
-        const hexTipHash = bytesToHex(data.block_hash);
-        const hexUtxoRoot = bytesToHex(data.utxo_root);
-
-        // Populate fields
-        document.getElementById('stmtAccount').textContent = data.account || address;
-        document.getElementById('stmtTipHeight').textContent = `#${data.generated_at_height !== undefined ? data.generated_at_height : '--'}`;
-        document.getElementById('stmtTipHash').textContent = hexTipHash;
-        document.getElementById('stmtUtxoRoot').textContent = hexUtxoRoot;
-
-        const proofs = data.active_utxo_proofs || [];
-        document.getElementById('stmtProofCountBadge').textContent = `${proofs.length} bukti UTXO aktif`;
-
-        // Mathematical Integrity Verification
-        let sumQuanta = 0;
-        proofs.forEach(p => {
-          sumQuanta += (Number(p.value_quanta) || 0);
-        });
-        const confirmedQuanta = Number(data.confirmed_native_balance_quanta || 0);
-        const isSumMatch = sumQuanta === confirmedQuanta;
-        const hasRoot = Boolean(hexUtxoRoot && hexUtxoRoot !== '--' && hexUtxoRoot.length >= 34);
-
-        const banner = document.getElementById('statementIntegrityBanner');
-        const title = document.getElementById('statementIntegrityTitle');
-        const desc = document.getElementById('statementIntegrityDesc');
-
-        if (isSumMatch && hasRoot) {
-          banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-emerald-950/40 border-emerald-800 text-emerald-300';
-          title.textContent = 'Status Verifikasi: VALID & MATHEMATICALLY PROVED';
-          desc.textContent = `Total ${proofs.length} leaf bukti inklusi senilai ${formatScyOnly(sumQuanta)} (${sumQuanta.toLocaleString()} quanta) cocok 100% dan terikat secara kriptografis pada UTXO Merkle Root.`;
-        } else {
-          banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-amber-950/40 border-amber-800 text-amber-300';
-          title.textContent = 'Status Verifikasi: PARSIAL / UNVERIFIED';
-          desc.textContent = `Jumlah leaf quanta (${sumQuanta}) vs saldo terkonfirmasi (${confirmedQuanta}).`;
-        }
-
-        // Render Table
-        const tbody = document.getElementById('statementProofsTableBody');
-        if (proofs.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">Tidak ada UTXO aktif yang perlu dibuktikan.</td></tr>';
-        } else {
-          tbody.innerHTML = proofs.map((p, pIdx) => {
-            const outpointStr = formatOutpoint(p.outpoint);
-            const leafHash = bytesToHex(p.leaf_hash);
-            const valQuanta = Number(p.value_quanta || 0);
-            const auditSteps = p.audit_path ? p.audit_path.length : 0;
-
-            return `
-              <tr class="hover:bg-gray-900/50">
-                <td class="px-3.5 py-2.5 font-bold text-white font-mono break-all">${outpointStr}</td>
-                <td class="px-3.5 py-2.5 text-right font-bold text-emerald-400 font-mono">${formatScyOnly(valQuanta)}</td>
-                <td class="px-3.5 py-2.5 text-gray-300 font-mono text-[10px] break-all">${truncateMiddle(leafHash, 10, 8)}</td>
-                <td class="px-3.5 py-2.5 text-center font-bold text-teal-300">${auditSteps} siblings</td>
-                <td class="px-3.5 py-2.5 text-center">
-                  <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold">✔ Verified</span>
-                </td>
-              </tr>
-            `;
-          }).join('');
-        }
-
-        const cleanData = JSON.parse(JSON.stringify(data, (key, val) => {
-          if (Array.isArray(val) && val.length === 32 && val.every(n => typeof n === 'number')) {
-            return bytesToHex(val);
-          }
-          return val;
-        }));
-        document.getElementById('statementRawJson').textContent = JSON.stringify(cleanData, null, 2);
+        lastStatementData = { address, data };
+        renderStatementModal(address, data);
 
       } catch (err) {
         document.getElementById('statementIntegrityBanner').className = 'p-4 rounded-xl border flex items-center gap-3 bg-rose-950/40 border-rose-800 text-rose-300';
-        document.getElementById('statementIntegrityTitle').textContent = 'Gagal Mengambil Statement Kriptografis';
+        document.getElementById('statementIntegrityTitle').textContent = t('stmt_error_title');
         document.getElementById('statementIntegrityDesc').textContent = err.message;
       }
+    }
+
+    function renderStatementModal(address, data) {
+      if (!data) return;
+      const hexTipHash = bytesToHex(data.block_hash);
+      const hexUtxoRoot = bytesToHex(data.utxo_root);
+
+      // Populate fields
+      document.getElementById('stmtAccount').textContent = data.account || address;
+      document.getElementById('stmtTipHeight').textContent = `#${data.generated_at_height !== undefined ? data.generated_at_height : '--'}`;
+      document.getElementById('stmtTipHash').textContent = hexTipHash;
+      document.getElementById('stmtUtxoRoot').textContent = hexUtxoRoot;
+
+      const proofs = data.active_utxo_proofs || [];
+      document.getElementById('stmtProofCountBadge').textContent = t('stmt_proofs_badge', { count: proofs.length });
+
+      // Mathematical Integrity Verification
+      let sumQuanta = 0;
+      proofs.forEach(p => {
+        sumQuanta += (Number(p.value_quanta) || 0);
+      });
+      const confirmedQuanta = Number(data.confirmed_native_balance_quanta || 0);
+      const isSumMatch = sumQuanta === confirmedQuanta;
+      const hasRoot = Boolean(hexUtxoRoot && hexUtxoRoot !== '--' && hexUtxoRoot.length >= 34);
+
+      const banner = document.getElementById('statementIntegrityBanner');
+      const title = document.getElementById('statementIntegrityTitle');
+      const desc = document.getElementById('statementIntegrityDesc');
+
+      if (isSumMatch && hasRoot) {
+        banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-emerald-950/40 border-emerald-800 text-emerald-300';
+        title.textContent = t('stmt_valid_title');
+        desc.textContent = t('stmt_valid_desc', { count: proofs.length, amt: formatScyOnly(sumQuanta), quanta: sumQuanta.toLocaleString() });
+      } else {
+        banner.className = 'p-4 rounded-xl border flex items-center gap-3 bg-amber-950/40 border-amber-800 text-amber-300';
+        title.textContent = t('stmt_partial_title');
+        desc.textContent = t('stmt_partial_desc', { sum: sumQuanta.toLocaleString(), confirmed: confirmedQuanta.toLocaleString() });
+      }
+
+      // Render Table
+      const tbody = document.getElementById('statementProofsTableBody');
+      if (proofs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">${t('stmt_no_proofs')}</td></tr>`;
+      } else {
+        tbody.innerHTML = proofs.map((p, pIdx) => {
+          const outpointStr = formatOutpoint(p.outpoint);
+          const leafHash = bytesToHex(p.leaf_hash);
+          const valQuanta = Number(p.value_quanta || 0);
+          const auditSteps = p.audit_path ? p.audit_path.length : 0;
+
+          return `
+            <tr class="hover:bg-gray-900/50">
+              <td class="px-3.5 py-2.5 font-bold text-white font-mono break-all">${outpointStr}</td>
+              <td class="px-3.5 py-2.5 text-right font-bold text-emerald-400 font-mono">${formatScyOnly(valQuanta)}</td>
+              <td class="px-3.5 py-2.5 text-gray-300 font-mono text-[10px] break-all">${truncateMiddle(leafHash, 10, 8)}</td>
+              <td class="px-3.5 py-2.5 text-center font-bold text-teal-300">${auditSteps} siblings</td>
+              <td class="px-3.5 py-2.5 text-center">
+                <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold">${t('stmt_verified_badge')}</span>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      const cleanData = JSON.parse(JSON.stringify(data, (key, val) => {
+        if (Array.isArray(val) && val.length === 32 && val.every(n => typeof n === 'number')) {
+          return bytesToHex(val);
+        }
+        return val;
+      }));
+      document.getElementById('statementRawJson').textContent = JSON.stringify(cleanData, null, 2);
     }
 
     function toggleStatementRawJson() {
@@ -1291,10 +1736,10 @@
       const btn = document.getElementById('stmtRawJsonBtn');
       if (content.classList.contains('hidden')) {
         content.classList.remove('hidden');
-        btn.textContent = '▼ Sembunyikan JSON Statement Mentah';
+        btn.innerHTML = `<span>${t('stmt_raw_json_hide')}</span>`;
       } else {
         content.classList.add('hidden');
-        btn.textContent = '▶ Tampilkan JSON Statement Mentah';
+        btn.innerHTML = `<span>${t('stmt_raw_json_show')}</span>`;
       }
     }
 
@@ -1365,7 +1810,7 @@
       document.getElementById('modalContent').textContent = JSON.stringify(rawData, null, 2);
       document.getElementById('modalRendered').innerHTML = renderedHtml || '';
       document.getElementById('modalContent').classList.add('hidden');
-      document.getElementById('rawJsonBtn').textContent = '▶ Tampilkan JSON Mentah';
+      document.getElementById('rawJsonBtn').innerHTML = `<span>${t('modal_raw_json_show')}</span>`;
       document.getElementById('detailModal').classList.remove('hidden');
     }
 
@@ -1374,10 +1819,10 @@
       const btn = document.getElementById('rawJsonBtn');
       if (content.classList.contains('hidden')) {
         content.classList.remove('hidden');
-        btn.textContent = '▼ Sembunyikan JSON Mentah';
+        btn.innerHTML = `<span>${t('modal_raw_json_hide')}</span>`;
       } else {
         content.classList.add('hidden');
-        btn.textContent = '▶ Tampilkan JSON Mentah';
+        btn.innerHTML = `<span>${t('modal_raw_json_show')}</span>`;
       }
     }
 
@@ -1395,6 +1840,22 @@
           input.value = 'http://127.0.0.1:8332';
         }
       }
+    })();
+
+    // Initialize Language from localStorage or Browser Preference
+    (function initLanguage() {
+      let saved = null;
+      try {
+        saved = localStorage.getItem('scytale_lang');
+      } catch (e) {}
+      if (!saved) {
+        if (navigator && navigator.language && navigator.language.toLowerCase().startsWith('id')) {
+          saved = 'id';
+        } else {
+          saved = 'en';
+        }
+      }
+      setLanguage(saved);
     })();
 
     // Polling Loop (2 detik)
