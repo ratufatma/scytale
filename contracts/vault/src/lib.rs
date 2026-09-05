@@ -19,6 +19,7 @@ pub enum VaultRedeemer {
 }
 
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn validate(
     datum_ptr: *const u8,
     datum_len: usize,

@@ -122,7 +122,24 @@ async fn test_http_blocks_endpoints() {
     assert_eq!(list.len(), 1);
     assert_eq!(list[0]["height"], 0);
 
-    // 5. Non-existent block returns 404
+    // 5. Query list of blocks with order=asc and from_height=0
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/blocks?from_height=0&limit=10&order=asc")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    let asc_list: Vec<serde_json::Value> = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(asc_list.len(), 1);
+    assert_eq!(asc_list[0]["height"], 0);
+
+    // 6. Non-existent block returns 404
     let response = app
         .oneshot(
             Request::builder()

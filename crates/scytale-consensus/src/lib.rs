@@ -27,6 +27,7 @@ pub const MINING_RESERVE_QUANTA: Quanta = 2_898_000_000_000_000;
 /// Terminal block height where the mining emission reserve is fully exhausted:
 /// - Epoch 0 (height 0..2,099,999): 2,100,000 blocks * 10 SCY = 21,000,000 SCY
 /// - Epoch 1 (height 2,100,000..3,695,999): 1,596,000 blocks * 5 SCY = 7,980,000 SCY
+///
 /// Total: 28,980,000 SCY (2,898,000,000,000,000 quanta).
 /// Blocks with height >= MINING_REWARD_END_HEIGHT emit 0 subsidy.
 pub const MINING_REWARD_END_HEIGHT: u64 = 3_696_000;

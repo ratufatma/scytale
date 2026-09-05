@@ -32,12 +32,16 @@ pub enum WalletError {
     InsufficientFunds { required: u64, available: u64 },
     #[error("Data payload exceeds maximum limit of {max} bytes (got {size} bytes)")]
     DataPayloadTooLarge { size: usize, max: usize },
+    #[error("Mnemonic error: {0}")]
+    Mnemonic(String),
 }
 
 /// Persistent non-custodial wallet file representation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WalletFile {
     pub version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mnemonic: Option<String>,
     pub private_key: String,
     pub public_key: String,
     #[serde(alias = "p2pkh_address")]
@@ -76,6 +80,95 @@ impl WalletFile {
 
         let wallet = Self {
             version: 1,
+            mnemonic: None,
+            private_key: to_hex(&privkey_bytes),
+            public_key: to_hex(&pubkey_bytes),
+            address: bech32_addr,
+        };
+
+        wallet.save_to(path)?;
+        Ok(wallet)
+    }
+
+    /// Generates a new cryptographic Ed25519 keypair derived from a BIP-39 mnemonic phrase.
+    pub fn generate_with_mnemonic(
+        path: &Path,
+        overwrite: bool,
+        word_count: usize,
+    ) -> Result<(Self, String), WalletError> {
+        if path.exists() && !overwrite {
+            return Err(WalletError::FileAlreadyExists(path.to_path_buf()));
+        }
+
+        let mut entropy = match word_count {
+            12 => vec![0u8; 16],
+            24 => vec![0u8; 32],
+            other => {
+                return Err(WalletError::Mnemonic(format!(
+                    "Unsupported word count: {other}. Expected 12 or 24."
+                )))
+            }
+        };
+        use rand::RngCore;
+        rand::rngs::OsRng.fill_bytes(&mut entropy);
+        let mnemonic = bip39::Mnemonic::from_entropy(&entropy)
+            .map_err(|e| WalletError::Mnemonic(e.to_string()))?;
+
+        let phrase = mnemonic.to_string();
+        let seed = mnemonic.to_seed("");
+        let mut privkey_bytes = [0u8; 32];
+        privkey_bytes.copy_from_slice(&seed[0..32]);
+
+        let signing_key = SigningKey::from_bytes(&privkey_bytes);
+        let verifying_key = signing_key.verifying_key();
+        let pubkey_bytes = verifying_key.to_bytes();
+        let address_bytes = *blake3::hash(&pubkey_bytes).as_bytes();
+        let bech32_addr = Address::new(address_bytes)
+            .to_bech32()
+            .map_err(|e| WalletError::InvalidAddress(e.to_string()))?;
+
+        let wallet = Self {
+            version: 2,
+            mnemonic: Some(phrase.clone()),
+            private_key: to_hex(&privkey_bytes),
+            public_key: to_hex(&pubkey_bytes),
+            address: bech32_addr,
+        };
+
+        wallet.save_to(path)?;
+        Ok((wallet, phrase))
+    }
+
+    /// Restores a wallet from an existing BIP-39 mnemonic phrase.
+    pub fn restore_from_mnemonic(
+        path: &Path,
+        phrase: &str,
+        overwrite: bool,
+    ) -> Result<Self, WalletError> {
+        if path.exists() && !overwrite {
+            return Err(WalletError::FileAlreadyExists(path.to_path_buf()));
+        }
+
+        let clean_phrase = phrase.split_whitespace().collect::<Vec<_>>().join(" ");
+        let mnemonic =
+            bip39::Mnemonic::parse_in_normalized(bip39::Language::English, &clean_phrase)
+                .map_err(|e| WalletError::Mnemonic(e.to_string()))?;
+
+        let seed = mnemonic.to_seed("");
+        let mut privkey_bytes = [0u8; 32];
+        privkey_bytes.copy_from_slice(&seed[0..32]);
+
+        let signing_key = SigningKey::from_bytes(&privkey_bytes);
+        let verifying_key = signing_key.verifying_key();
+        let pubkey_bytes = verifying_key.to_bytes();
+        let address_bytes = *blake3::hash(&pubkey_bytes).as_bytes();
+        let bech32_addr = Address::new(address_bytes)
+            .to_bech32()
+            .map_err(|e| WalletError::InvalidAddress(e.to_string()))?;
+
+        let wallet = Self {
+            version: 2,
+            mnemonic: Some(clean_phrase),
             private_key: to_hex(&privkey_bytes),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,

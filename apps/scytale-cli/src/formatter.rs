@@ -245,6 +245,62 @@ pub fn print_wallet_created(path: &std::path::Path, pubkey: &str, address: &str)
     println!("============================================================");
 }
 
+/// Prints a formatted summary when a new wallet is generated with a BIP-39 mnemonic.
+pub fn print_wallet_mnemonic_created(
+    path: &std::path::Path,
+    pubkey: &str,
+    address: &str,
+    phrase: &str,
+) {
+    println!("============================================================");
+    println!("                 SCYTALE WALLET CREATED");
+    println!("============================================================");
+    println!("Wallet File       : {}", path.display());
+    println!(
+        "Public Key (Hex)  : 0x{}",
+        pubkey.strip_prefix("0x").unwrap_or(pubkey)
+    );
+    if address.starts_with("scy1") {
+        println!("Address (Bech32)  : {}", address);
+    } else {
+        println!(
+            "Address (Legacy)  : 0x{}",
+            address.strip_prefix("0x").unwrap_or(address)
+        );
+    }
+    println!("Permissions       : 0600 (POSIX strict user read/write)");
+    println!("------------------------------------------------------------");
+    println!("                 BIP-39 RECOVERY MNEMONIC");
+    println!("------------------------------------------------------------");
+    println!("{}", phrase);
+    println!("------------------------------------------------------------");
+    println!("WARNING: Write this mnemonic phrase down and store it securely!");
+    println!("Anyone with these words can access and spend your funds.");
+    println!("============================================================");
+}
+
+/// Prints a formatted summary when a wallet is restored from a BIP-39 mnemonic phrase.
+pub fn print_wallet_restored(path: &std::path::Path, pubkey: &str, address: &str) {
+    println!("============================================================");
+    println!("                SCYTALE WALLET RESTORED");
+    println!("============================================================");
+    println!("Wallet File       : {}", path.display());
+    println!(
+        "Public Key (Hex)  : 0x{}",
+        pubkey.strip_prefix("0x").unwrap_or(pubkey)
+    );
+    if address.starts_with("scy1") {
+        println!("Address (Bech32)  : {}", address);
+    } else {
+        println!(
+            "Address (Legacy)  : 0x{}",
+            address.strip_prefix("0x").unwrap_or(address)
+        );
+    }
+    println!("Permissions       : 0600 (POSIX strict user read/write)");
+    println!("============================================================");
+}
+
 /// Prints detailed wallet information including on-chain confirmed balance.
 pub fn print_wallet_info(
     path: &std::path::Path,

@@ -351,3 +351,63 @@ async fn test_wallet_op_return_embed_data() {
 
     node.shutdown().unwrap();
 }
+
+#[test]
+fn test_wallet_mnemonic_generate_and_restore() {
+    let temp = tempdir().unwrap();
+    let wallet_path = temp.path().join("mnemonic_wallet.json");
+
+    // 1. Generate 12-word wallet
+    let (wallet_12, phrase_12) =
+        WalletFile::generate_with_mnemonic(&wallet_path, false, 12).unwrap();
+    assert_eq!(phrase_12.split_whitespace().count(), 12);
+    assert_eq!(wallet_12.version, 2);
+    assert!(wallet_12.address.starts_with("scy1"));
+    assert_eq!(wallet_12.mnemonic, Some(phrase_12.clone()));
+
+    // 2. Restore 12-word wallet to a second path
+    let restore_path = temp.path().join("restored_wallet.json");
+    let restored = WalletFile::restore_from_mnemonic(&restore_path, &phrase_12, false).unwrap();
+    assert_eq!(restored.private_key, wallet_12.private_key);
+    assert_eq!(restored.public_key, wallet_12.public_key);
+    assert_eq!(restored.address, wallet_12.address);
+
+    // 3. Generate 24-word wallet
+    let wallet_24_path = temp.path().join("wallet_24.json");
+    let (wallet_24, phrase_24) =
+        WalletFile::generate_with_mnemonic(&wallet_24_path, false, 24).unwrap();
+    assert_eq!(phrase_24.split_whitespace().count(), 24);
+    assert_eq!(wallet_24.version, 2);
+
+    let restore_24_path = temp.path().join("restored_24.json");
+    let restored_24 =
+        WalletFile::restore_from_mnemonic(&restore_24_path, &phrase_24, false).unwrap();
+    assert_eq!(restored_24.private_key, wallet_24.private_key);
+    assert_eq!(restored_24.address, wallet_24.address);
+
+    // 4. Reject unsupported word count
+    let invalid_words = temp.path().join("invalid_words.json");
+    assert!(WalletFile::generate_with_mnemonic(&invalid_words, false, 15).is_err());
+
+    // 5. Reject invalid phrase / bad checksum
+    let invalid_restore = temp.path().join("invalid_restore.json");
+    assert!(WalletFile::restore_from_mnemonic(
+        &invalid_restore,
+        "not a valid bip39 phrase at all",
+        false
+    )
+    .is_err());
+
+    // 6. Backward compatibility: load legacy wallet without mnemonic field
+    let legacy_json = serde_json::json!({
+        "version": 1,
+        "private_key": wallet_12.private_key,
+        "public_key": wallet_12.public_key,
+        "address": wallet_12.address
+    });
+    let legacy_path = temp.path().join("legacy_wallet.json");
+    std::fs::write(&legacy_path, serde_json::to_string(&legacy_json).unwrap()).unwrap();
+    let loaded_legacy = WalletFile::load_from(&legacy_path).unwrap();
+    assert_eq!(loaded_legacy.mnemonic, None);
+    assert_eq!(loaded_legacy.address, wallet_12.address);
+}

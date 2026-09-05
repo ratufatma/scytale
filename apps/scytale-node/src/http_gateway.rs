@@ -353,6 +353,9 @@ async fn get_block_tip(
 #[derive(Debug, Deserialize)]
 struct BlocksQuery {
     limit: Option<usize>,
+    offset: Option<usize>,
+    from_height: Option<u64>,
+    order: Option<String>,
 }
 
 async fn get_blocks(
@@ -369,10 +372,27 @@ async fn get_blocks(
     })?;
 
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
-    let summaries = chain
-        .iter()
-        .rev()
-        .take(limit)
+    let offset = query.offset.unwrap_or(0);
+    let is_asc = query
+        .order
+        .as_deref()
+        .map(|s| s.eq_ignore_ascii_case("asc"))
+        .unwrap_or(false);
+
+    let filtered: Vec<&(Block, u64)> = match query.from_height {
+        Some(from_h) if is_asc => chain.iter().filter(|(_, h)| *h >= from_h).collect(),
+        Some(from_h) => chain.iter().filter(|(_, h)| *h <= from_h).collect(),
+        None => chain.iter().collect(),
+    };
+
+    let selected: Vec<&(Block, u64)> = if is_asc {
+        filtered.into_iter().skip(offset).take(limit).collect()
+    } else {
+        filtered.into_iter().rev().skip(offset).take(limit).collect()
+    };
+
+    let summaries = selected
+        .into_iter()
         .map(|(b, h)| {
             let total_quanta: u64 = b
                 .transactions

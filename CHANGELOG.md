@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v0.3.1-devnet] - 2026-09-05
+
+### Milestone: Phase 1 Hardening — Mnemonic BIP-39, Indexer Catch-Up & Codec/Script Fuzzing
+
+#### Added
+- **BIP-39 Mnemonic Key Management & Wallet Restoration (`apps/scytale-cli`)**:
+  - Integrated `bip39` crate for generating 12-word and 24-word recovery seed phrases.
+  - Deterministic Ed25519 asymmetric keypair derivation from 32-byte secret entropy slice with Bech32 address calculation.
+  - Added CLI flags `scytale-cli wallet new --mnemonic [--words 12|24]`.
+  - Added CLI command `scytale-cli wallet restore --phrase "<words>"` for deterministic wallet recovery.
+  - Full backward-compatibility preserving legacy v1 wallet file parsing.
+- **Node HTTP Gateway Historical Range & Order Queries (`apps/scytale-node`)**:
+  - Extended `/api/v1/blocks` endpoint with query parameters `offset`, `from_height`, and `order=asc|desc`.
+  - Enables downstream block indexers and explorers to perform sequential ascending block range queries.
+- **Explorer Startup & Periodic Block Reconciler (`explorer/server.mjs`)**:
+  - Implemented background `reconcileBlocks()` routine executing on startup and every 15-second heartbeat.
+  - Automatic detection and batch backfilling of missing blocks between local SQLite database and canonical node tip.
+- **Canonical Binary Codec Adversarial & Fuzz Testing (`crates/scytale-core`)**:
+  - Added `tests/canonical_codec_fuzz_tests.rs` containing 5 comprehensive property-based fuzz scenarios.
+  - Validates fail-closed handling against 1,000 random noise payloads, bit flips, arbitrary prefix truncations, trailing bytes, and malicious vector lengths (>16 MB).
+- **ScytaleScript Interpreter Adversarial & Fuzz Testing (`crates/scytale-script`)**:
+  - Added `tests/script_fuzz_tests.rs` covering random bytecode interpretation, opcode execution budget exhaustion, maximum stack overflow protection, unbalanced conditional branching, and arithmetic overflow bounds.
+- **Comprehensive Documentation**:
+  - Created [docs/work/46-phase-1-hardening-mnemonic-indexer-catchup-fuzzing.md](docs/work/46-phase-1-hardening-mnemonic-indexer-catchup-fuzzing.md).
+
+---
+
 ## [v0.3.0-devnet] - 2026-09-03
 
 ### Milestone: Phase 3 Completion — Programmable Consensus, Network Autonomy & State Authenticity

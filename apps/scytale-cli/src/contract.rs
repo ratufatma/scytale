@@ -154,13 +154,19 @@ pub fn cmd_inspect(args: InspectArgs) -> Result<(), CliClientError> {
         .map_err(|e| CliClientError::User(format!("Failed to read wasm: {e}")))?;
 
     let hash = blake3::hash(&bytes);
-    let size_kb = bytes.len() as f64 / 1024.0;
+    let size_kb_int = bytes.len() / 1024;
+    let size_kb_dec = (bytes.len() % 1024) * 100 / 1024;
 
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║             SCYTALE CONTRACT INSPECTOR                      ║");
     println!("╚══════════════════════════════════════════════════════════════╝");
     println!("  File       : {}", path.display());
-    println!("  Size       : {} bytes ({:.2} KiB)", bytes.len(), size_kb);
+    println!(
+        "  Size       : {} bytes ({}.{:02} KiB)",
+        bytes.len(),
+        size_kb_int,
+        size_kb_dec
+    );
     println!("  ScriptHash : {}", hex::encode(hash.as_bytes()));
     println!();
     println!("  Use this script_hash when building a Deploy transaction:");

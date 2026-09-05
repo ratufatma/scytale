@@ -7,3 +7,6 @@ edition = "2021"
 blake3 = { workspace = true }
 thiserror = { workspace = true }
 ed25519-dalek = { version = "2.1", default-features = false }
+
+[dev-dependencies]
+rand = "0.8"

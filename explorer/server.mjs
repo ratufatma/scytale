@@ -249,6 +249,84 @@ app.get('/favicon.ico', (req, res) => {
 app.use(express.static(__dirname));
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Block Reconciler & Historical Catch-Up
+// ─────────────────────────────────────────────────────────────────────────────
+
+let isReconciling = false;
+
+/**
+ * Reconciles missing blocks from the node into the local SQLite database.
+ * Compares local max height with upstream canonical_height, fetching missing blocks in ascending order.
+ */
+export async function reconcileBlocks() {
+  if (!nodeBaseUrl || isReconciling) return;
+  isReconciling = true;
+
+  try {
+    const statusRes = await fetch(`${nodeBaseUrl}/api/v1/status`, {
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!statusRes.ok) return;
+    const status = await statusRes.json();
+    const tipHeight = Number(status.canonical_height);
+    if (isNaN(tipHeight)) return;
+
+    const latestBlock = getLatestBlock();
+    const localHeight = latestBlock ? Number(latestBlock.height) : -1;
+
+    if (localHeight >= tipHeight) return;
+
+    console.log(`[Scytale Explorer Reconciler] Catching up: local height ${localHeight} vs node tip ${tipHeight}`);
+
+    let currentFrom = localHeight + 1;
+    while (currentFrom <= tipHeight) {
+      const batchLimit = Math.min(50, tipHeight - currentFrom + 1);
+      const blocksRes = await fetch(
+        `${nodeBaseUrl}/api/v1/blocks?from_height=${currentFrom}&limit=${batchLimit}&order=asc`,
+        { signal: AbortSignal.timeout(10000) }
+      );
+      if (!blocksRes.ok) break;
+
+      const summaries = await blocksRes.json();
+      if (!Array.isArray(summaries) || summaries.length === 0) break;
+
+      for (const summary of summaries) {
+        let miner = 'Unknown';
+        try {
+          const detailRes = await fetch(`${nodeBaseUrl}/api/v1/blocks/${summary.height}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (detailRes.ok) {
+            const detail = await detailRes.json();
+            const coinbaseTx = (detail.transactions || []).find(t => t.is_coinbase);
+            if (coinbaseTx && coinbaseTx.outputs && coinbaseTx.outputs.length > 0) {
+              miner = coinbaseTx.outputs[0].address || coinbaseTx.outputs[0].locking_script_hex || 'Unknown';
+            }
+          }
+        } catch {
+          // Keep default miner on individual detail timeout
+        }
+
+        upsertBlock({
+          height: summary.height,
+          hash: summary.hash,
+          prev_hash: summary.previous_block_hash,
+          miner,
+          timestamp: summary.timestamp,
+          tx_count: summary.tx_count
+        });
+      }
+
+      currentFrom += summaries.length;
+    }
+  } catch (err) {
+    console.error('[Scytale Explorer Reconciler] Error during reconciliation:', err.message);
+  } finally {
+    isReconciling = false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Server Start
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -260,6 +338,11 @@ if (process.env.NODE_ENV !== 'test') {
   serverInstance = app.listen(PORT, HOST, () => {
     console.log(`[Scytale Explorer] Server running on http://${HOST}:${PORT}`);
     console.log(`[Scytale Explorer] Ingest endpoint ready at POST http://${HOST}:${PORT}/api/ingest`);
+    if (nodeBaseUrl) {
+      console.log(`[Scytale Explorer] Node upstream configured at ${nodeBaseUrl}. Starting block reconciler...`);
+      reconcileBlocks();
+      setInterval(reconcileBlocks, 15000);
+    }
   });
 }
 

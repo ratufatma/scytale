@@ -73,12 +73,12 @@ pub fn verify_transaction_eutxo(
     // 1. Calculate total input value and total output value
     let mut total_in: u64 = 0;
     for input in &tx.inputs {
-        let utxo = utxos.get(&input.previous_output).ok_or_else(|| {
+        let utxo = utxos.get(&input.previous_output).ok_or(
             EutxoValidationError::MissingUtxo(
                 input.previous_output.txid,
                 input.previous_output.index,
-            )
-        })?;
+            ),
+        )?;
         total_in = total_in
             .checked_add(utxo.output.value)
             .ok_or(EutxoValidationError::ArithmeticOverflow)?;

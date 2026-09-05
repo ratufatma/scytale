@@ -174,6 +174,29 @@ pub enum WalletSubcommands {
         /// Overwrite existing file if it already exists
         #[arg(long)]
         force: bool,
+
+        /// Generate wallet with a BIP-39 mnemonic seed phrase
+        #[arg(long)]
+        mnemonic: bool,
+
+        /// Number of words for BIP-39 mnemonic (12 or 24, default: 12)
+        #[arg(long, default_value_t = 12)]
+        words: usize,
+    },
+
+    /// Restore an existing wallet from a BIP-39 mnemonic phrase
+    Restore {
+        /// BIP-39 mnemonic phrase (12 or 24 words separated by spaces)
+        #[arg(long)]
+        phrase: String,
+
+        /// Path to save wallet JSON file (defaults to ~/.scytale/wallet.json)
+        #[arg(short, long)]
+        file: Option<PathBuf>,
+
+        /// Overwrite existing file if it already exists
+        #[arg(long)]
+        force: bool,
     },
 
     /// Display wallet details and confirmed balance from node
@@ -507,11 +530,38 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
         }
 
         Commands::Wallet(args) => match args.action {
-            WalletSubcommands::New { file, force } => {
+            WalletSubcommands::New {
+                file,
+                force,
+                mnemonic,
+                words,
+            } => {
                 let path = file.unwrap_or_else(WalletFile::default_path);
-                let wallet =
-                    WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?;
-                formatter::print_wallet_created(&path, &wallet.public_key, &wallet.address);
+                if mnemonic {
+                    let (wallet, phrase) =
+                        WalletFile::generate_with_mnemonic(&path, force, words)
+                            .map_err(CliClientError::Wallet)?;
+                    formatter::print_wallet_mnemonic_created(
+                        &path,
+                        &wallet.public_key,
+                        &wallet.address,
+                        &phrase,
+                    );
+                } else {
+                    let wallet =
+                        WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?;
+                    formatter::print_wallet_created(&path, &wallet.public_key, &wallet.address);
+                }
+            }
+            WalletSubcommands::Restore {
+                phrase,
+                file,
+                force,
+            } => {
+                let path = file.unwrap_or_else(WalletFile::default_path);
+                let wallet = WalletFile::restore_from_mnemonic(&path, &phrase, force)
+                    .map_err(CliClientError::Wallet)?;
+                formatter::print_wallet_restored(&path, &wallet.public_key, &wallet.address);
             }
             WalletSubcommands::Info { file } => {
                 let path = file.unwrap_or_else(WalletFile::default_path);
