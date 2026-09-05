@@ -218,6 +218,10 @@
         class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
         <span data-i18n="tab_passbook">📑 Buku Tabungan (Passbook)</span>
       </button>
+      <button onclick="switchTab('faucet')" id="tabBtn-faucet"
+        class="pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2">
+        <span data-i18n="tab_faucet">🚰 Kran Devnet (Faucet)</span>
+      </button>
     </div>
 
     <!-- VIEW 1: RECENT BLOCKS -->
@@ -487,6 +491,106 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- VIEW 4: DEVNET FAUCET -->
+    <div id="view-faucet" class="hidden space-y-6 font-mono text-xs">
+      <!-- MAIN FAUCET CARD -->
+      <div class="bg-[#111827] border border-gray-800 rounded-2xl p-6 shadow-xl space-y-6">
+        <!-- Banner & Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-800/80 pb-5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🚰</span>
+              <h2 data-i18n="faucet_banner_title" class="text-base font-bold text-white tracking-wide">Scytale Devnet Faucet</h2>
+              <span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">Live Devnet</span>
+            </div>
+            <p data-i18n="faucet_banner_desc" class="text-xs text-gray-400 mt-1">
+              Dapatkan 10 SCY gratis untuk pengujian smart contract dan transaksi devnet. Batas klaim: 1 kali setiap 30 menit per alamat dan IP.
+            </p>
+          </div>
+          <!-- Reserve Balance Widget -->
+          <div class="bg-gray-900/90 border border-gray-800 rounded-xl px-4 py-3 flex items-center gap-3 min-w-[220px]">
+            <div class="p-2.5 bg-emerald-500/10 rounded-lg text-emerald-400 text-base">💰</div>
+            <div>
+              <div data-i18n="faucet_reserve_label" class="text-[11px] text-gray-400 uppercase tracking-wider">Cadangan Faucet</div>
+              <div class="flex items-baseline gap-1.5 mt-0.5">
+                <span id="faucetReserveBalance" class="text-sm font-bold text-emerald-400">---</span>
+                <span class="text-[10px] text-gray-500">SCY</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Faucet Form -->
+        <div class="space-y-4 max-w-2xl">
+          <div class="space-y-2">
+            <label for="faucetAddressInput" data-i18n="faucet_input_label" class="block text-xs font-semibold text-gray-300">
+              Alamat Penerima Devnet (Bech32):
+            </label>
+            <div class="relative flex items-center">
+              <input
+                id="faucetAddressInput"
+                type="text"
+                placeholder="scy1..."
+                class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-emerald-500 transition font-mono pr-24"
+                oninput="validateFaucetInput()"
+                onkeydown="if(event.key==='Enter') handleFaucetClaim()"
+              />
+              <button
+                type="button"
+                onclick="pasteToFaucetInput()"
+                class="absolute right-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-lg text-[11px] font-mono transition border border-gray-700/60"
+              >
+                <span data-i18n="faucet_btn_paste">📋 Tempel</span>
+              </button>
+            </div>
+            <!-- Validation hint -->
+            <div id="faucetValidationHint" class="text-[11px] text-gray-500 flex items-center gap-1.5 pl-1">
+              <span>ℹ️</span>
+              <span data-i18n="faucet_hint_prefix">Alamat harus berupa alamat Scytale valid dengan awalan "scy1".</span>
+            </div>
+          </div>
+
+          <!-- Claim Action Button & Cooldown Timer -->
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+            <button
+              id="btn-faucet-claim"
+              onclick="handleFaucetClaim()"
+              class="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-gray-950 font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
+            >
+              <span id="faucetClaimSpinner" class="hidden w-3.5 h-3.5 border-2 border-gray-950 border-t-transparent rounded-full animate-spin"></span>
+              <span id="faucetClaimBtnText" data-i18n="faucet_btn_claim">Minta 10 SCY</span>
+            </button>
+            <div id="faucetCooldownStatus" class="hidden text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2">
+              <span>⏳</span>
+              <span id="faucetCooldownText"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Result / Notification Box -->
+        <div id="faucetResultBox" class="hidden p-4 rounded-xl border text-xs space-y-2 max-w-2xl transition"></div>
+
+        <!-- Faucet Parameters & Rules Info Footer -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-gray-800/60">
+          <div class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3">
+            <div data-i18n="faucet_info_dispense_title" class="text-[11px] text-gray-400">Jumlah Penyaluran</div>
+            <div class="text-xs font-bold text-white mt-0.5">10.00000000 SCY</div>
+            <div data-i18n="faucet_info_dispense_sub" class="text-[10px] text-gray-500 mt-0.5">1.000.000.000 Quanta</div>
+          </div>
+          <div class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3">
+            <div data-i18n="faucet_info_cooldown_title" class="text-[11px] text-gray-400">Periode Cooldown</div>
+            <div class="text-xs font-bold text-white mt-0.5">30 Menit</div>
+            <div data-i18n="faucet_info_cooldown_sub" class="text-[10px] text-gray-500 mt-0.5">Per Alamat & IP Remote</div>
+          </div>
+          <div class="bg-gray-900/40 border border-gray-800/80 rounded-xl p-3">
+            <div data-i18n="faucet_info_fee_title" class="text-[11px] text-gray-400">Biaya Transaksi</div>
+            <div class="text-xs font-bold text-white mt-0.5">0.00001000 SCY</div>
+            <div data-i18n="faucet_info_fee_sub" class="text-[10px] text-gray-500 mt-0.5">Ditanggung Cadangan Faucet</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -783,7 +887,30 @@
         inspect_no_txs: "No transaction details available.",
         inspect_not_found_block: "Block not found",
         inspect_not_found_tx: "Transaction not found",
-        inspect_err_passbook: "Failed to load passbook ({status}): Address not found"
+        inspect_err_passbook: "Failed to load passbook ({status}): Address not found",
+
+        tab_faucet: "🚰 Devnet Faucet",
+        faucet_banner_title: "Scytale Devnet Faucet",
+        faucet_banner_desc: "Get 10 free SCY for testing smart contracts and devnet transactions. Limit: 1 claim every 30 minutes per address and IP.",
+        faucet_reserve_label: "Faucet Reserve Balance",
+        faucet_input_label: "Devnet Recipient Address (Bech32):",
+        faucet_btn_paste: "📋 Paste",
+        faucet_hint_prefix: "Address must be a valid Scytale Bech32 address starting with 'scy1'.",
+        faucet_hint_valid: "Valid Scytale address format.",
+        faucet_btn_claim: "Request 10 SCY",
+        faucet_btn_claiming: "Sending 10 SCY...",
+        faucet_info_dispense_title: "Dispense Amount",
+        faucet_info_dispense_sub: "1,000,000,000 Quanta",
+        faucet_info_cooldown_title: "Cooldown Period",
+        faucet_info_cooldown_sub: "Per Address & Remote IP",
+        faucet_info_fee_title: "Transaction Fee",
+        faucet_info_fee_sub: "Covered by Faucet Reserve",
+        faucet_success_title: "10 SCY Successfully Sent!",
+        faucet_success_txid: "Transaction ID:",
+        faucet_view_tx: "Inspect Transaction in Explorer",
+        faucet_cooldown_msg: "Cooldown active. You can claim again in {remaining}.",
+        faucet_err_empty: "Please enter a recipient address.",
+        faucet_err_invalid: "Invalid address format. Address must begin with 'scy1'."
       },
       id: {
         brand_sub: "EXPLORER",
@@ -946,7 +1073,30 @@
         inspect_no_txs: "Tidak ada detail transaksi.",
         inspect_not_found_block: "Blok tidak ditemukan",
         inspect_not_found_tx: "Transaksi tidak ditemukan",
-        inspect_err_passbook: "Gagal memuat passbook ({status}): Alamat tidak ditemukan"
+        inspect_err_passbook: "Gagal memuat passbook ({status}): Alamat tidak ditemukan",
+
+        tab_faucet: "🚰 Kran Devnet (Faucet)",
+        faucet_banner_title: "Kran Koin Devnet Scytale",
+        faucet_banner_desc: "Dapatkan 10 SCY gratis untuk pengujian smart contract dan transaksi devnet. Batas: 1 klaim setiap 30 menit per alamat dan IP.",
+        faucet_reserve_label: "Saldo Cadangan Faucet",
+        faucet_input_label: "Alamat Penerima Devnet (Bech32):",
+        faucet_btn_paste: "📋 Tempel",
+        faucet_hint_prefix: "Alamat harus berupa alamat Scytale valid dengan awalan 'scy1'.",
+        faucet_hint_valid: "Format alamat Scytale valid.",
+        faucet_btn_claim: "Minta 10 SCY",
+        faucet_btn_claiming: "Mengirimkan 10 SCY...",
+        faucet_info_dispense_title: "Jumlah Penyaluran",
+        faucet_info_dispense_sub: "1.000.000.000 Quanta",
+        faucet_info_cooldown_title: "Periode Cooldown",
+        faucet_info_cooldown_sub: "Per Alamat & IP Remote",
+        faucet_info_fee_title: "Biaya Transaksi",
+        faucet_info_fee_sub: "Ditanggung Cadangan Faucet",
+        faucet_success_title: "10 SCY Berhasil Dikirimkan!",
+        faucet_success_txid: "ID Transaksi:",
+        faucet_view_tx: "Lihat Transaksi di Explorer",
+        faucet_cooldown_msg: "Cooldown aktif. Anda dapat mengklaim kembali dalam {remaining}.",
+        faucet_err_empty: "Harap masukkan alamat penerima.",
+        faucet_err_invalid: "Format alamat tidak valid. Alamat harus diawali dengan 'scy1'."
       }
     };
 
@@ -1024,6 +1174,7 @@
       if (lastStatementData) {
         renderStatementModal(lastStatementData.address, lastStatementData.data);
       }
+      checkFaucetCooldown();
     }
 
     function formatDateTime(ts) {
@@ -1792,17 +1943,229 @@
 
     function switchTab(tab) {
       activeTab = tab;
-      ['blocks', 'mempool', 'passbook'].forEach(t => {
-        document.getElementById(`view-${t}`).classList.toggle('hidden', t !== tab);
+      ['blocks', 'mempool', 'passbook', 'faucet'].forEach(t => {
+        const viewEl = document.getElementById(`view-${t}`);
+        if (viewEl) viewEl.classList.toggle('hidden', t !== tab);
         const btn = document.getElementById(`tabBtn-${t}`);
-        if (t === tab) {
-          btn.className = 'pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition flex items-center gap-2';
-        } else {
-          btn.className = 'pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2';
+        if (btn) {
+          if (t === tab) {
+            btn.className = 'pb-3 border-b-2 border-emerald-500 text-emerald-400 font-bold transition flex items-center gap-2';
+          } else {
+            btn.className = 'pb-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 transition flex items-center gap-2';
+          }
         }
       });
       if (tab === 'blocks') fetchRecentBlocks();
       if (tab === 'mempool') fetchMempoolTelemetry();
+      if (tab === 'faucet') {
+        fetchFaucetInfo();
+        checkFaucetCooldown();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DEVNET FAUCET MODULE
+    // ─────────────────────────────────────────────────────────────────────────
+
+    let faucetTimerInterval = null;
+    const FAUCET_COOLDOWN_MS = 30 * 60 * 1000;
+
+    function validateFaucetInput() {
+      const input = document.getElementById('faucetAddressInput');
+      const hint = document.getElementById('faucetValidationHint');
+      if (!input || !hint) return false;
+      const val = (input.value || '').trim();
+
+      if (!val) {
+        hint.className = 'text-[11px] text-gray-500 flex items-center gap-1.5 pl-1';
+        hint.innerHTML = `<span>ℹ️</span><span>${t('faucet_hint_prefix')}</span>`;
+        return false;
+      }
+
+      if (val.startsWith('scy1') && val.length >= 38 && val.length <= 90) {
+        hint.className = 'text-[11px] text-emerald-400 flex items-center gap-1.5 pl-1 font-semibold';
+        hint.innerHTML = `<span>✔</span><span>${t('faucet_hint_valid')}</span>`;
+        return true;
+      } else {
+        hint.className = 'text-[11px] text-amber-400 flex items-center gap-1.5 pl-1';
+        hint.innerHTML = `<span>⚠️</span><span>${t('faucet_hint_prefix')}</span>`;
+        return false;
+      }
+    }
+
+    async function pasteToFaucetInput() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const input = document.getElementById('faucetAddressInput');
+          if (input) {
+            input.value = text.trim();
+            validateFaucetInput();
+          }
+        }
+      } catch (err) {
+        console.warn('Clipboard read failed:', err);
+      }
+    }
+
+    async function fetchFaucetInfo() {
+      try {
+        const res = await fetch('/api/v1/faucet/info');
+        if (res.ok) {
+          const info = await res.json();
+          const balanceEl = document.getElementById('faucetReserveBalance');
+          if (balanceEl) {
+            balanceEl.textContent = Number(info.reserve_balance_scy || 0).toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 8
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch faucet info:', err);
+      }
+    }
+
+    function checkFaucetCooldown() {
+      const stored = localStorage.getItem('scytale_faucet_cooldown');
+      const btn = document.getElementById('btn-faucet-claim');
+      const statusEl = document.getElementById('faucetCooldownStatus');
+      const textEl = document.getElementById('faucetCooldownText');
+
+      if (!stored) {
+        if (statusEl) statusEl.classList.add('hidden');
+        if (btn && !btn.dataset.loading) btn.disabled = false;
+        if (faucetTimerInterval) {
+          clearInterval(faucetTimerInterval);
+          faucetTimerInterval = null;
+        }
+        return;
+      }
+
+      const lastClaim = Number(stored);
+      const now = Date.now();
+      const elapsed = now - lastClaim;
+
+      if (elapsed >= FAUCET_COOLDOWN_MS) {
+        localStorage.removeItem('scytale_faucet_cooldown');
+        if (statusEl) statusEl.classList.add('hidden');
+        if (btn && !btn.dataset.loading) btn.disabled = false;
+        if (faucetTimerInterval) {
+          clearInterval(faucetTimerInterval);
+          faucetTimerInterval = null;
+        }
+        return;
+      }
+
+      const remainingMs = FAUCET_COOLDOWN_MS - elapsed;
+      const remMin = Math.floor(remainingMs / 60000);
+      const remSec = Math.floor((remainingMs % 60000) / 1000);
+      const timeStr = `${remMin}m ${remSec < 10 ? '0' : ''}${remSec}s`;
+
+      if (statusEl) statusEl.classList.remove('hidden');
+      if (textEl) textEl.textContent = t('faucet_cooldown_msg', { remaining: timeStr });
+      if (btn) btn.disabled = true;
+
+      if (!faucetTimerInterval) {
+        faucetTimerInterval = setInterval(checkFaucetCooldown, 1000);
+      }
+    }
+
+    async function handleFaucetClaim() {
+      const input = document.getElementById('faucetAddressInput');
+      const address = (input.value || '').trim();
+      const resBox = document.getElementById('faucetResultBox');
+      const btn = document.getElementById('btn-faucet-claim');
+      const spinner = document.getElementById('faucetClaimSpinner');
+      const btnText = document.getElementById('faucetClaimBtnText');
+
+      if (!address) {
+        resBox.className = 'p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs space-y-1 block';
+        resBox.innerHTML = `<div><strong>⚠️ ${t('faucet_err_empty')}</strong></div>`;
+        return;
+      }
+
+      if (!address.startsWith('scy1') || address.length < 38) {
+        resBox.className = 'p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs space-y-1 block';
+        resBox.innerHTML = `<div><strong>⚠️ ${t('faucet_err_invalid')}</strong></div>`;
+        return;
+      }
+
+      // Check local cooldown
+      const stored = localStorage.getItem('scytale_faucet_cooldown');
+      if (stored && (Date.now() - Number(stored) < FAUCET_COOLDOWN_MS)) {
+        checkFaucetCooldown();
+        return;
+      }
+
+      // Loading state
+      btn.disabled = true;
+      btn.dataset.loading = 'true';
+      spinner.classList.remove('hidden');
+      btnText.textContent = t('faucet_btn_claiming');
+      resBox.className = 'hidden';
+
+      try {
+        const response = await fetch('/api/v1/faucet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          localStorage.setItem('scytale_faucet_cooldown', Date.now().toString());
+          checkFaucetCooldown();
+          fetchFaucetInfo();
+
+          resBox.className = 'p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs space-y-2 block shadow-lg';
+          resBox.innerHTML = `
+            <div class="flex items-center gap-2 text-emerald-400 font-bold">
+              <span>🎉</span>
+              <span>${t('faucet_success_title')}</span>
+            </div>
+            <div class="text-gray-300">
+              <span class="text-gray-400">${t('faucet_success_txid')} </span>
+              <span class="font-mono text-emerald-400 break-all select-all font-semibold">${data.txid}</span>
+            </div>
+            <div class="pt-1">
+              <a href="#/tx/${data.txid}" onclick="searchTx('${data.txid}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-[11px] font-mono transition">
+                <span>🔍 ${t('faucet_view_tx')}</span>
+                <span>↗</span>
+              </a>
+            </div>
+          `;
+        } else {
+          // Error response (e.g. 429 rate limit or 500)
+          if (response.status === 429 && data.remaining_minutes) {
+            const approxMs = Date.now() - (FAUCET_COOLDOWN_MS - data.remaining_minutes * 60000);
+            localStorage.setItem('scytale_faucet_cooldown', approxMs.toString());
+            checkFaucetCooldown();
+          }
+
+          resBox.className = 'p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs space-y-1 block';
+          resBox.innerHTML = `
+            <div class="font-bold flex items-center gap-2 text-amber-400">
+              <span>⚠️</span>
+              <span>${data.error || 'Gagal memproses klaim faucet'}</span>
+            </div>
+            ${data.details ? `<div class="text-[11px] text-gray-400 font-mono">${data.details}</div>` : ''}
+          `;
+        }
+      } catch (err) {
+        console.error('Faucet claim request error:', err);
+        resBox.className = 'p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs space-y-1 block';
+        resBox.innerHTML = `
+          <div class="font-bold">⚠️ Koneksi ke server explorer gagal.</div>
+          <div class="text-[11px] text-gray-400 font-mono">${err.message}</div>
+        `;
+      } finally {
+        delete btn.dataset.loading;
+        spinner.classList.add('hidden');
+        btnText.textContent = t('faucet_btn_claim');
+        checkFaucetCooldown();
+      }
     }
 
     function openModal(title, rawData, renderedHtml) {

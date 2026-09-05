@@ -2,6 +2,8 @@ import express from 'express';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   upsertBlock,
   getRecentBlocks,
@@ -9,6 +11,8 @@ import {
   getLatestBlock,
   getBlockCount
 } from './db.mjs';
+
+const execAsync = promisify(exec);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -219,6 +223,111 @@ app.get('/api/status', handleGetStatus);
 app.get('/api/v1/status', handleGetStatus);
 app.get('/rpc/api/status', handleGetStatus);
 app.get('/rpc/api/v1/status', handleGetStatus);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Faucet Endpoints (POST /api/v1/faucet & GET /api/v1/faucet/info)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const faucetCooldowns = new Map(); // address -> timestamp
+const ipCooldowns = new Map();      // ip -> timestamp
+const COOLDOWN_MS = 30 * 60 * 1000; // 30 Menit (1,800,000 ms)
+
+const FAUCET_WALLET = process.env.FAUCET_WALLET || '/var/lib/scytale/faucet_wallet.json';
+const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS || 'scy1kxwmc88ejusze6qsvze0f66jm05ke4e53xfst6deh3axwe9mh28ssujjul';
+const CLI_PATH = process.env.SCYTALE_CLI_BIN || '/usr/local/bin/scytale-cli';
+const SOCKET_PATH = process.env.SCYTALE_SOCKET || '/run/scytale/node.sock';
+
+async function handleFaucetInfo(req, res) {
+  let reserve_balance_scy = 0.0;
+  let reserve_quanta = 0;
+  try {
+    if (nodeBaseUrl) {
+      const resp = await fetch(`${nodeBaseUrl}/api/v1/passbook?address=${FAUCET_ADDRESS}`, {
+        signal: AbortSignal.timeout(3000)
+      });
+      if (resp.ok) {
+        const pb = await resp.json();
+        const conf = Number(pb.confirmed_native_balance_quanta) || 0;
+        const pend = Number(pb.pending_native_balance_quanta) || 0;
+        reserve_quanta = conf > 0 ? conf : pend;
+        reserve_balance_scy = Number((reserve_quanta / 100000000).toFixed(8));
+      }
+    }
+  } catch (err) {
+    console.error('[Faucet Info Error]', err.message);
+  }
+
+  return res.json({
+    faucet_address: FAUCET_ADDRESS,
+    dispense_amount_scy: 10.0,
+    cooldown_seconds: 1800,
+    reserve_balance_scy,
+    reserve_quanta
+  });
+}
+
+async function handleFaucetClaim(req, res) {
+  const body = req.body || {};
+  const { address } = body;
+  const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+
+  if (!address || typeof address !== 'string' || !address.startsWith('scy1') || address.length < 38 || address.length > 90) {
+    return res.status(400).json({ error: 'Alamat Bech32 Scytale tidak valid (harus diawali scy1).' });
+  }
+
+  const now = Date.now();
+  if (faucetCooldowns.has(address) && (now - faucetCooldowns.get(address) < COOLDOWN_MS)) {
+    const remainingMin = Math.ceil((COOLDOWN_MS - (now - faucetCooldowns.get(address))) / 60000);
+    return res.status(429).json({
+      error: `Rate limit reached. Please wait ${remainingMin} more minute(s) before requesting again.`,
+      remaining_minutes: remainingMin
+    });
+  }
+
+  if (ipCooldowns.has(clientIp) && (now - ipCooldowns.get(clientIp) < COOLDOWN_MS)) {
+    const remainingMin = Math.ceil((COOLDOWN_MS - (now - ipCooldowns.get(clientIp))) / 60000);
+    return res.status(429).json({
+      error: `Rate limit reached for your IP. Please wait ${remainingMin} more minute(s) before requesting again.`,
+      remaining_minutes: remainingMin
+    });
+  }
+
+  try {
+    const cmd = `${CLI_PATH} --socket ${SOCKET_PATH} transfer-p2pkh --wallet-file ${FAUCET_WALLET} --to ${address} --amount 1000000000 --fee 1000`;
+    const { stdout, stderr } = await execAsync(cmd);
+    const output = stdout + '\n' + (stderr || '');
+    const match = output.match(/0x[a-fA-F0-9]{64}/);
+    const txid = match ? match[0] : null;
+
+    if (!txid) {
+      throw new Error(`Tidak dapat mengekstrak TxID: ${output}`);
+    }
+
+    faucetCooldowns.set(address, now);
+    ipCooldowns.set(clientIp, now);
+
+    return res.status(200).json({
+      success: true,
+      txid,
+      amount_scy: 10.0,
+      recipient: address
+    });
+  } catch (err) {
+    console.error('[Faucet Distribution Error]', err);
+    return res.status(500).json({
+      error: 'Gagal mendistribusikan koin faucet',
+      details: err.message || String(err)
+    });
+  }
+}
+
+app.post('/api/faucet', handleFaucetClaim);
+app.post('/api/v1/faucet', handleFaucetClaim);
+app.post('/rpc/api/v1/faucet', handleFaucetClaim);
+
+app.get('/api/faucet/info', handleFaucetInfo);
+app.get('/api/v1/faucet/info', handleFaucetInfo);
+app.get('/rpc/api/v1/faucet/info', handleFaucetInfo);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Static Files & Web Interface
