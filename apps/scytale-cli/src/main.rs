@@ -146,7 +146,6 @@ pub enum Commands {
         pin: Option<String>,
     },
 
-
     /// Create, sign, and submit a transaction with an OP_RETURN data carrier output
     #[command(name = "embed-data")]
     EmbedData {
@@ -356,8 +355,7 @@ fn collect_pin(pin: Option<String>, confirm: bool) -> Result<String, CliClientEr
         None => rpassword::prompt_password("Masukkan PIN 6 Angka: ")
             .map_err(|error| CliClientError::User(format!("Gagal membaca PIN: {error}")))?,
     };
-    scytale_account::PinCode::new(&pin)
-        .map_err(|error| CliClientError::User(error.to_string()))?;
+    scytale_account::PinCode::new(&pin).map_err(|error| CliClientError::User(error.to_string()))?;
     if confirm && !supplied {
         let repeated = rpassword::prompt_password("Konfirmasi PIN 6 Angka: ")
             .map_err(|error| CliClientError::User(format!("Gagal membaca PIN: {error}")))?;
@@ -769,8 +767,9 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 } else {
                     WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?
                 };
-                let key_id = from_hex(&wallet.private_key)
-                    .map_err(|error| CliClientError::User(format!("Invalid private key: {error}")))?;
+                let key_id = from_hex(&wallet.private_key).map_err(|error| {
+                    CliClientError::User(format!("Invalid private key: {error}"))
+                })?;
                 wallet.encrypted_key = Some(
                     encrypt_key(&key_id, &pin)
                         .map_err(|error| CliClientError::User(error.to_string()))?,

@@ -263,7 +263,10 @@ pub fn print_human_wallet_created(account: &str, registered: bool) {
 pub fn print_wallet_dev_details(path: &std::path::Path, wallet: &crate::wallet::WalletFile) {
     println!("Developer Details");
     println!("Wallet File       : {}", path.display());
-    println!("Passbook ID       : {}", wallet.passbook_id.as_deref().unwrap_or(&wallet.address));
+    println!(
+        "Passbook ID       : {}",
+        wallet.passbook_id.as_deref().unwrap_or(&wallet.address)
+    );
     println!("Public Key Hex    : {}", wallet.public_key);
     if let Some(envelope) = &wallet.encrypted_key {
         println!("Salt Argon2id     : {}", hex::encode(envelope.salt));
