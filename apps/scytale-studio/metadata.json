@@ -1,0 +1,6 @@
+{
+  "name": "Scytale Studio",
+  "description": "Desktop-first VS Code-style 4-panel workbench layout with dual-theme and bilingual i18n support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

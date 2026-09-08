@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "crates/*",
-    "apps/*",
+    "apps/scytale-cli",
+    "apps/scytale-node",
+    "apps/scytale-studio/src-tauri",
     "contracts/*",
     "contracts/scy20",
 ]
