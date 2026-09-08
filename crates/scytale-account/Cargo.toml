@@ -1,0 +1,24 @@
+[package]
+name = "scytale-account"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Optional local account-number alias wrapper for Scytale Passbook IDs"
+
+[lints]
+workspace = true
+
+[dependencies]
+argon2 = "0.5"
+blake3 = { workspace = true }
+chacha20poly1305 = "0.10"
+getrandom = "0.2"
+scytale-core = { path = "../scytale-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+zeroize = { version = "1.8", features = ["derive"] }
+
+[dev-dependencies]
+rand = "0.8"
