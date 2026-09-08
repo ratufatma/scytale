@@ -9,6 +9,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use scytale_account::{AccountNumber, StoreError};
 use scytale_bridge::{PassbookViewDto, ProvenanceTraceDto};
 use scytale_core::codec::CanonicalDeserialize;
 use scytale_core::{Address, Block, Transaction, QUANTA_PER_SCY};
@@ -173,6 +174,107 @@ pub struct MempoolTxSummary {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ErrorResponse {
     pub error: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AliasBindRequest {
+    pub passbook_id: String,
+    pub candidate: String,
+    #[serde(default)]
+    pub signature: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AliasResponse {
+    pub account_number: String,
+    pub passbook_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AliasBindResponse {
+    pub status: String,
+    pub account_number: String,
+    pub passbook_id: String,
+}
+
+fn alias_error(
+    status: StatusCode,
+    message: impl Into<String>,
+) -> (StatusCode, Json<ErrorResponse>) {
+    (
+        status,
+        Json(ErrorResponse {
+            error: message.into(),
+        }),
+    )
+}
+
+async fn bind_alias(
+    State(node): State<Arc<Node>>,
+    Json(payload): Json<AliasBindRequest>,
+) -> Result<(StatusCode, Json<AliasBindResponse>), (StatusCode, Json<ErrorResponse>)> {
+    let account = payload
+        .candidate
+        .parse::<AccountNumber>()
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Invalid account number format"))?;
+    if payload.passbook_id.trim().is_empty() {
+        return Err(alias_error(
+            StatusCode::BAD_REQUEST,
+            "Passbook ID must not be empty",
+        ));
+    }
+
+    let store = node.alias_store();
+    let mut store = store
+        .write()
+        .map_err(|_| alias_error(StatusCode::INTERNAL_SERVER_ERROR, "Alias store unavailable"))?;
+    if let Some(existing) = store.by_account(&account) {
+        if existing != payload.passbook_id {
+            return Err(alias_error(
+                StatusCode::CONFLICT,
+                "Account number already registered to another passbook (gugur)",
+            ));
+        }
+    }
+    store
+        .bind(account.clone(), payload.passbook_id.clone())
+        .map_err(|error| {
+            let status = match error {
+                StoreError::AccountConflict | StoreError::PassbookConflict => StatusCode::CONFLICT,
+                StoreError::Io(_) | StoreError::Serialization(_) => {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                }
+            };
+            alias_error(status, error.to_string())
+        })?;
+    Ok((
+        StatusCode::CREATED,
+        Json(AliasBindResponse {
+            status: "Accepted".to_string(),
+            account_number: account.to_string(),
+            passbook_id: payload.passbook_id,
+        }),
+    ))
+}
+
+async fn resolve_alias(
+    State(node): State<Arc<Node>>,
+    Path(account): Path<String>,
+) -> Result<Json<AliasResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let account = account
+        .parse::<AccountNumber>()
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Invalid account number format"))?;
+    let store = node.alias_store();
+    let store = store
+        .read()
+        .map_err(|_| alias_error(StatusCode::INTERNAL_SERVER_ERROR, "Alias store unavailable"))?;
+    let passbook_id = store
+        .by_account(&account)
+        .ok_or_else(|| alias_error(StatusCode::NOT_FOUND, "Account number not found"))?;
+    Ok(Json(AliasResponse {
+        account_number: account.to_string(),
+        passbook_id: passbook_id.to_owned(),
+    }))
 }
 
 /// Formats quanta into decimal SCY string representation without float arithmetic.
@@ -854,6 +956,8 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/health", get(health_check))
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/status", get(get_status))
+        .route("/api/v1/alias/bind", post(bind_alias))
+        .route("/api/v1/alias/resolve/:account", get(resolve_alias))
         .route("/api/v1/blocks", get(get_blocks))
         .route("/api/v1/blocks/tip", get(get_block_tip))
         .route("/api/v1/blocks/:identifier", get(get_block_by_identifier))

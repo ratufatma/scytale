@@ -1677,6 +1677,7 @@ dependencies = [
  "crossbeam-channel",
  "ed25519-dalek",
  "futures",
+ "scytale-account",
  "scytale-bridge",
  "scytale-consensus",
  "scytale-core",

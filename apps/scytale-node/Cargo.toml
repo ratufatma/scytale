@@ -21,6 +21,7 @@ scytale-bridge = { path = "../../crates/scytale-bridge" }
 scytale-script = { path = "../../crates/scytale-script" }
 scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
 scytale-vm = { path = "../../crates/scytale-vm" }
+scytale-account = { path = "../../crates/scytale-account" }
 bincode = { workspace = true }
 futures = { workspace = true }
 clap = { workspace = true }

@@ -9,6 +9,7 @@
 use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
+use scytale_account::AliasStore;
 use scytale_core::{
     verify_transaction_eutxo, AuthorizationError, AuthorizationVerifier, Block,
     EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet,
@@ -91,6 +92,7 @@ pub struct Node {
     mining_handle: Mutex<Option<JoinHandle<()>>>,
     peer_count: Arc<AtomicUsize>,
     indexer: Option<Arc<IndexerHandle>>,
+    alias_store: Arc<RwLock<AliasStore>>,
 }
 
 #[allow(clippy::result_large_err)]
@@ -118,6 +120,14 @@ impl Node {
 
         let (p2p_event_tx, _rx) = broadcast::channel(128);
 
+        let alias_store = if config.data_dir.as_os_str() == ":memory:" {
+            AliasStore::in_memory()
+        } else {
+            AliasStore::open(config.data_dir.join("alias_store.json")).map_err(|error| {
+                NodeError::InconsistentState(format!("failed to open alias sidecar: {error}"))
+            })?
+        };
+
         Ok(Self {
             state: Arc::new(RwLock::new(NodeState::Starting)),
             storage: Arc::new(storage),
@@ -132,6 +142,7 @@ impl Node {
             peer_count: Arc::new(AtomicUsize::new(0)),
             config,
             indexer: None,
+            alias_store: Arc::new(RwLock::new(alias_store)),
         })
     }
 
@@ -143,6 +154,10 @@ impl Node {
     /// Sets or replaces the active indexer handle.
     pub fn set_indexer(&mut self, indexer: IndexerHandle) {
         self.indexer = Some(Arc::new(indexer));
+    }
+
+    pub fn alias_store(&self) -> Arc<RwLock<AliasStore>> {
+        Arc::clone(&self.alias_store)
     }
 
     /// Runs the full deterministic startup sequence and returns in `Ready`/`Running` state.

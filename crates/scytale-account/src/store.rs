@@ -59,7 +59,10 @@ impl AliasStore {
         passbook_id: impl Into<String>,
     ) -> Result<(), StoreError> {
         let passbook_id = passbook_id.into();
-        if self.data.by_account.contains_key(&account) {
+        if let Some(existing) = self.data.by_account.get(&account) {
+            if existing == &passbook_id {
+                return Ok(());
+            }
             return Err(StoreError::AccountConflict);
         }
         if self.data.by_passbook.contains_key(&passbook_id) {
