@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use scytale_bridge::P2pBridgeEvent;
 use scytale_consensus::INITIAL_REWARD;
-use scytale_core::{CanonicalDeserialize, Transaction, QUANTA_PER_SCY};
+use scytale_core::{Block, CanonicalDeserialize, Transaction, QUANTA_PER_SCY};
 use scytale_node::{IpcServer, Node, NodeConfig, P2pEngine, DEFAULT_SOCKET_PATH};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -382,12 +382,42 @@ async fn main() {
                             let block_engine = engine.clone();
                             let tx_engine = engine.clone();
                             let heartbeat_engine = engine.clone();
-                            let (block_tx, _block_rx) = mpsc::channel::<Vec<u8>>(128);
+                            let (block_tx, mut block_rx) = mpsc::channel::<Vec<u8>>(128);
                             let (tx_tx, mut tx_rx) = mpsc::channel::<Vec<u8>>(128);
 
                             let block_listener = tokio::spawn(async move {
                                 if let Err(e) = block_engine.listen_blocks(block_tx).await {
                                     tracing::error!("block listener error: {e}");
+                                }
+                            });
+                            let block_processor_node = Arc::clone(&node);
+                            let block_processor = tokio::spawn(async move {
+                                while let Some(payload) = block_rx.recv().await {
+                                    match Block::from_canonical_bytes(&payload) {
+                                        Ok(block) => {
+                                            let block_hash = block.header.hash();
+                                            match block_processor_node.submit_external_block(block) {
+                                                Ok(true) => tracing::info!(
+                                                    block_hash = %block_hash,
+                                                    height = block_processor_node.canonical_height(),
+                                                    "received block from NATS and advanced canonical tip"
+                                                ),
+                                                Ok(false) => tracing::info!(
+                                                    block_hash = %block_hash,
+                                                    "received block from NATS but canonical tip did not change"
+                                                ),
+                                                Err(e) => tracing::warn!(
+                                                    block_hash = %block_hash,
+                                                    error = %e,
+                                                    "received block from NATS but rejected by consensus"
+                                                ),
+                                            }
+                                        }
+                                        Err(e) => tracing::warn!(
+                                            error = %e,
+                                            "received invalid block payload from NATS"
+                                        ),
+                                    }
                                 }
                             });
                             let tx_listener = tokio::spawn(async move {
@@ -466,6 +496,7 @@ async fn main() {
                             Some((
                                 engine,
                                 block_listener,
+                                block_processor,
                                 tx_listener,
                                 tx_processor,
                                 broadcast_task,
@@ -522,6 +553,7 @@ async fn main() {
                 if let Some((
                     engine,
                     block_listener,
+                    block_processor,
                     tx_listener,
                     tx_processor,
                     broadcast_task,
@@ -532,6 +564,7 @@ async fn main() {
                         tracing::warn!("P2P engine shutdown failed: {e}");
                     }
                     let _ = block_listener.await;
+                    block_processor.abort();
                     let _ = tx_listener.await;
                     tx_processor.abort();
                     broadcast_task.abort();

@@ -1103,7 +1103,14 @@ fn mining_worker_loop(
     cancel: Arc<AtomicBool>,
     indexer: Option<Arc<IndexerHandle>>,
 ) {
-    let mut compact_target = initial_target;
+    let mining_target_override = std::env::var("SCYTALE_MINING_TARGET").ok().and_then(|value| {
+        value
+            .strip_prefix("0x")
+            .map(|hex| u32::from_str_radix(hex, 16))
+            .unwrap_or_else(|| value.parse::<u32>())
+            .ok()
+    });
+    let mut compact_target = mining_target_override.unwrap_or(initial_target);
     let mut current_nonce: u64 = 0;
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -1118,7 +1125,7 @@ fn mining_worker_loop(
             }
             let tip = chain.canonical_tip();
             if let Some(node) = chain.get_node(&tip) {
-                compact_target = node.block.header.difficulty_target;
+                compact_target = mining_target_override.unwrap_or(node.block.header.difficulty_target);
             }
 
             let utxos = shared.utxo_set.lock().unwrap();
