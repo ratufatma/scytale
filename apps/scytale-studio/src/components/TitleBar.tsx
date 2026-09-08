@@ -5,9 +5,6 @@ import {
   Moon,
   Globe,
   Radio,
-  Minimize2,
-  Square,
-  X,
   Terminal,
   PanelLeftClose,
   PanelLeftOpen,
@@ -52,42 +49,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   return (
     <header
       id="workbench-titlebar"
-      className="h-10 w-full flex-shrink-0 flex items-center justify-between px-3 select-none bg-zinc-100 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 transition-colors duration-150 z-20"
+      className="relative z-20 flex h-10 w-full flex-shrink-0 items-center justify-between border-b border-zinc-200 bg-zinc-100 px-3 text-zinc-700 transition-colors duration-150 select-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200"
     >
-      {/* Left: Window Traffic Light Dots & App Identity */}
-      <div className="flex items-center gap-3 min-w-[200px]">
-        <div className="flex items-center gap-1.5 group pr-1">
-          <button
-            id="traffic-dot-close"
-            aria-label="Close window"
-            title="Close"
-            className="w-3 h-3 rounded-full bg-rose-500 hover:bg-rose-600 transition-colors flex items-center justify-center cursor-pointer border border-rose-600/30"
-          >
-            <span className="opacity-0 group-hover:opacity-100 text-[8px] text-rose-950 font-bold leading-none">×</span>
-          </button>
-          <button
-            id="traffic-dot-minimize"
-            aria-label="Minimize window"
-            title="Minimize"
-            className="w-3 h-3 rounded-full bg-amber-500 hover:bg-amber-600 transition-colors flex items-center justify-center cursor-pointer border border-amber-600/30"
-          >
-            <span className="opacity-0 group-hover:opacity-100 text-[8px] text-amber-950 font-bold leading-none">-</span>
-          </button>
-          <button
-            id="traffic-dot-maximize"
-            aria-label="Maximize window"
-            title="Maximize"
-            className="w-3 h-3 rounded-full bg-emerald-500 hover:bg-emerald-600 transition-colors flex items-center justify-center cursor-pointer border border-emerald-600/30"
-          >
-            <span className="opacity-0 group-hover:opacity-100 text-[7px] text-emerald-950 font-bold leading-none">+</span>
-          </button>
-        </div>
-
+      <div data-tauri-drag-region className="absolute inset-0 -z-10" />
+      {/* Left: App Identity */}
+      <div className="flex min-w-[200px] items-center gap-3">
         {/* Brand Tag */}
-        <div className="flex items-center gap-2 border-l border-zinc-300 dark:border-zinc-800 pl-3">
-          <div className="w-5 h-5 rounded bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center font-bold text-xs shadow-sm">
-            S
-          </div>
+        <div className="flex items-center gap-2">
+          <img
+            src="/icon.png"
+            alt="Scytale"
+            className="h-5 w-5 rounded object-cover shadow-sm"
+          />
           <span className="font-semibold text-xs tracking-tight text-zinc-900 dark:text-zinc-100">
             {t('app.title')}
           </span>
@@ -176,30 +149,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           )}
         </button>
 
-        {/* Desktop Window Controls (Tauri mock) */}
-        <div className="hidden lg:flex items-center pl-1 border-l border-zinc-300 dark:border-zinc-800 text-zinc-400">
-          <button
-            id="win-btn-minimize"
-            aria-label={t('header.minimize')}
-            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded transition-colors"
-          >
-            <Minimize2 className="w-3 h-3" />
-          </button>
-          <button
-            id="win-btn-maximize"
-            aria-label={t('header.maximize')}
-            className="p-1.5 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded transition-colors"
-          >
-            <Square className="w-3 h-3" />
-          </button>
-          <button
-            id="win-btn-close"
-            aria-label={t('header.close')}
-            className="p-1.5 hover:bg-rose-500 hover:text-white rounded transition-colors"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </div>
     </header>
   );

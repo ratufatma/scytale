@@ -16,6 +16,7 @@ pub fn run() {
             commands::create_wallet_with_pin,
             commands::get_system_status,
             commands::get_node_telemetry,
+            commands::get_passbook_ledger,
             commands::get_active_account_details,
             commands::list_local_wallets,
             commands::set_active_wallet,

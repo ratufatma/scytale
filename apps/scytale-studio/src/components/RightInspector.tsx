@@ -78,7 +78,7 @@ export function RightInspector({ onExecuteTool }: RightInspectorProps) {
     };
 
     return (
-        <aside className="flex h-full w-72 flex-shrink-0 flex-col border-l border-zinc-200 bg-zinc-50/80 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
+        <aside id="workbench-right-inspector" data-tauri-drag-region="false" className="flex h-full w-72 flex-shrink-0 flex-col border-l border-zinc-200 bg-zinc-50/80 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
             <div className="flex h-9 items-center justify-between border-b border-zinc-200/80 bg-zinc-100/60 px-3 dark:border-zinc-800/80 dark:bg-zinc-950/40">
                 <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-zinc-600 dark:text-zinc-400">
                     <SlidersHorizontal className="h-3.5 w-3.5" />

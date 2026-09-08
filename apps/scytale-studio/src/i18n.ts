@@ -44,6 +44,9 @@ export const resources = {
         contracts: 'SMART CONTRACTS',
       },
       workspace: {
+        tabCanvas: 'Transaction Canvas',
+        tabMining: 'Mining Terminal',
+        tabPassbook: 'Passbook Canvas',
         transactionCanvas: 'TRANSACTION CANVAS',
         assembleTitle: 'Assemble P2PKH Transaction',
         assembleDescription: 'Build, inspect, sign, and broadcast a transaction payload.',
@@ -80,6 +83,10 @@ export const resources = {
         gasUsed: 'Gas Consumed',
         executionStatus: 'Execution Status',
       },
+      passbook: {
+        title: 'Passbook Canvas',
+        refresh: 'Refresh from node',
+      },
       terminal: {
         title: 'PROMPT & TERMINAL',
         statusIdle: 'Ready',
@@ -91,6 +98,9 @@ export const resources = {
         tabSystem: 'System',
         clearLogs: 'Clear Logs',
         copyLogs: 'Copy Output',
+      },
+      mining: {
+        eyebrow: 'LIVE MINING TELEMETRY', title: 'Mining Terminal', connected: 'CONNECTED', offline: 'OFFLINE', activeNodes: 'Active Nodes', networkHashrate: 'Network Hashrate', difficulty: 'Target Difficulty', blockReward: 'Block Reward', successRate: 'Success / Fail', chartTitle: 'Hashrate & Block Discovery Time', timezone: 'UTC', feedTitle: 'Live Block Resolution Feed', waiting: 'Waiting for node telemetry...', blockHeight: 'Block height', orphan: 'orphan block',
       },
       inspector: {
         title: 'INSPECTOR & STATUS',
@@ -178,6 +188,9 @@ export const resources = {
         contracts: 'KONTRAK PINTAR',
       },
       workspace: {
+        tabCanvas: 'Kanvas Transaksi',
+        tabMining: 'Mining Terminal',
+        tabPassbook: 'Passbook Canvas',
         transactionCanvas: 'KANVAS TRANSAKSI',
         assembleTitle: 'Rakit Transaksi P2PKH',
         assembleDescription: 'Bangun, periksa, tanda tangani, dan broadcast payload transaksi.',
@@ -214,6 +227,10 @@ export const resources = {
         gasUsed: 'Gas Terpakai',
         executionStatus: 'Status Eksekusi',
       },
+      passbook: {
+        title: 'Passbook Canvas',
+        refresh: 'Refresh dari node',
+      },
       terminal: {
         title: 'PROMPT & TERMINAL',
         statusIdle: 'Siap',
@@ -225,6 +242,9 @@ export const resources = {
         tabSystem: 'Sistem',
         clearLogs: 'Bersihkan Log',
         copyLogs: 'Salin Keluaran',
+      },
+      mining: {
+        eyebrow: 'TELEMETRI MINING LIVE', title: 'Mining Terminal', connected: 'TERHUBUNG', offline: 'OFFLINE', activeNodes: 'Active Nodes', networkHashrate: 'Network Hashrate', difficulty: 'Target Difficulty', blockReward: 'Block Reward', successRate: 'Success / Fail', chartTitle: 'Hashrate & Waktu Penemuan Blok', timezone: 'UTC', feedTitle: 'Live Block Resolution Feed', waiting: 'Menunggu telemetry node...', blockHeight: 'Block height', orphan: 'orphan block',
       },
       inspector: {
         title: 'INSPEKTOR & STATUS',

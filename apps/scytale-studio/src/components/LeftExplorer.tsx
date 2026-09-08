@@ -24,6 +24,7 @@ export const LeftExplorer: React.FC<LeftExplorerProps> = ({ activeWalletPath, on
     const [activity, setActivity] = useState<string[]>([]);
 
     const refreshWallets = async () => {
+        if (!('__TAURI_INTERNALS__' in window)) return;
         setLoadingWallets(true);
         setWalletError('');
         try {
@@ -76,7 +77,7 @@ export const LeftExplorer: React.FC<LeftExplorerProps> = ({ activeWalletPath, on
     };
 
     return (
-        <aside id="workbench-left-explorer" className="flex h-full w-64 flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50/80 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
+        <aside id="workbench-left-explorer" data-tauri-drag-region="false" className="flex h-full w-64 flex-shrink-0 flex-col border-r border-zinc-200 bg-zinc-50/80 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
             <header className="flex h-10 items-center justify-between border-b border-zinc-200/80 bg-zinc-100/60 px-3 dark:border-zinc-800/80 dark:bg-zinc-950/40">
                 <div className="flex items-center gap-2 text-[11px] font-semibold tracking-wider text-zinc-600 dark:text-zinc-400"><ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /><span>{t('navigation.title')}</span></div>
                 <div className="flex items-center gap-1"><button type="button" onClick={() => void refreshWallets()} title={t('navigation.refreshAccounts')} className="rounded p-1 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"><RefreshCw className={`h-3.5 w-3.5 ${loadingWallets ? 'animate-spin' : ''}`} /></button><button type="button" onClick={() => { setWalletError(''); setShowPinDialog(true); }} title={t('navigation.newAccount')} className="rounded p-1 text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"><Plus className="h-3.5 w-3.5" /></button></div>

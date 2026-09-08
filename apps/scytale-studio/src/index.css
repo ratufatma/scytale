@@ -3,6 +3,159 @@
 @tailwind utilities;
 
 @layer base {
+  [data-tauri-drag-region="false"] {
+    -webkit-app-region: no-drag;
+  }
+
+  html:not(.dark) {
+    background: #f0f2f5;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) body {
+    background: #f0f2f5;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-titlebar {
+    background: #ffffff;
+    border-color: #dddfe2;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-titlebar .bg-zinc-200\/70 {
+    background: #e4e6eb;
+    color: #65676b;
+  }
+
+  html:not(.dark) #workbench-left-explorer,
+  html:not(.dark) #workbench-right-inspector {
+    background: #f7f8fa;
+    border-color: #dddfe2;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-left-explorer>header,
+  html:not(.dark) #workbench-right-inspector>div:first-child {
+    background: #ffffff;
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) #workbench-status-bar {
+    background: #ffffff;
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) input,
+  html:not(.dark) select,
+  html:not(.dark) textarea {
+    border-color: #ccd0d5;
+    background: #ffffff;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) input:focus,
+  html:not(.dark) select:focus,
+  html:not(.dark) textarea:focus {
+    border-color: #1877f2;
+    outline: 2px solid rgba(24, 119, 242, 0.18);
+    outline-offset: 0;
+  }
+
+  html:not(.dark) #workbench-center-workspace {
+    background: #ffffff;
+  }
+
+  html:not(.dark) #workbench-center-workspace>nav {
+    background: #f0f2f5;
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) #workbench-center-workspace>nav button {
+    color: #65676b;
+  }
+
+  html:not(.dark) #workbench-center-workspace>nav button[class*="bg-white"] {
+    color: #1c1e21;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="border-zinc-200"] {
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="bg-zinc-50"] {
+    background: #ffffff;
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="bg-zinc-100"] {
+    background: #f0f2f5;
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="bg-zinc-950"] {
+    background: #f7f8fa;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="text-zinc-100"],
+  html:not(.dark) #workbench-center-workspace [class*="text-zinc-900"] {
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-center-workspace [class*="text-zinc-500"],
+  html:not(.dark) #workbench-center-workspace [class*="text-zinc-400"] {
+    color: #65676b;
+  }
+
+  html:not(.dark) #workbench-mining-dashboard,
+  html:not(.dark) #workbench-passbook-canvas {
+    background: #f0f2f5;
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-mining-dashboard [class*="border-zinc-800"],
+  html:not(.dark) #workbench-passbook-canvas [class*="border-zinc-800"] {
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) #workbench-mining-dashboard [class*="bg-zinc-900"],
+  html:not(.dark) #workbench-mining-dashboard [class*="bg-zinc-950"],
+  html:not(.dark) #workbench-passbook-canvas [class*="bg-zinc-900"],
+  html:not(.dark) #workbench-passbook-canvas [class*="bg-zinc-950"] {
+    background: #ffffff;
+  }
+
+  html:not(.dark) #workbench-mining-dashboard [class*="text-zinc-100"],
+  html:not(.dark) #workbench-passbook-canvas [class*="text-zinc-100"],
+  html:not(.dark) #workbench-passbook-canvas [class*="text-white"] {
+    color: #1c1e21;
+  }
+
+  html:not(.dark) #workbench-mining-dashboard [class*="text-zinc-500"],
+  html:not(.dark) #workbench-mining-dashboard [class*="text-zinc-400"],
+  html:not(.dark) #workbench-mining-dashboard [class*="text-zinc-600"],
+  html:not(.dark) #workbench-passbook-canvas [class*="text-zinc-500"],
+  html:not(.dark) #workbench-passbook-canvas [class*="text-zinc-400"],
+  html:not(.dark) #workbench-passbook-canvas [class*="text-zinc-600"] {
+    color: #65676b;
+  }
+
+  html:not(.dark) #workbench-passbook-canvas>div>div:first-of-type {
+    background: #ffffff;
+    border-color: #b7d8d0;
+    box-shadow: 0 2px 8px rgba(28, 30, 33, 0.08);
+  }
+
+  html:not(.dark) #workbench-terminal {
+    background: #ffffff;
+    border-color: #dddfe2;
+  }
+
+  html:not(.dark) #workbench-terminal>div:first-child {
+    background: #f0f2f5;
+    border-color: #dddfe2;
+  }
+
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(120, 120, 120, 0.25) transparent;

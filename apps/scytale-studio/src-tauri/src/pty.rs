@@ -4,6 +4,18 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
+fn workspace_root() -> std::path::PathBuf {
+    let mut candidate = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    loop {
+        if candidate.join("Cargo.toml").is_file() && candidate.join("apps/scytale-studio").is_dir() {
+            return candidate;
+        }
+        if !candidate.pop() {
+            return Path::new(".").to_path_buf();
+        }
+    }
+}
+
 pub struct PtyState {
     master: Arc<Mutex<Box<dyn MasterPty + Send>>>,
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -21,8 +33,13 @@ impl PtyState {
         })?;
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
         let mut command = CommandBuilder::new(shell);
-        command.cwd(Path::new("/mnt/ssd/scytale-lab/scytale"));
+        command.args(["-i"]);
+        command.cwd(&workspace_root());
+        for (key, value) in std::env::vars() {
+            command.env(key, value);
+        }
         command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
         let child = pair.slave.spawn_command(command)?;
         let mut reader = pair.master.try_clone_reader()?;
         let master = Arc::new(Mutex::new(pair.master));
@@ -30,15 +47,13 @@ impl PtyState {
         let app_handle = app.clone();
 
         std::thread::spawn(move || {
-            let mut buffer = [0u8; 4096];
-            loop {
-                match reader.read(&mut buffer) {
-                    Ok(0) | Err(_) => break,
-                    Ok(size) => {
-                        let output = String::from_utf8_lossy(&buffer[..size]).into_owned();
-                        let _ = app_handle.emit("pty_output", output);
-                    }
+            let mut buffer = [0u8; 1024];
+            while let Ok(size) = reader.read(&mut buffer) {
+                if size == 0 {
+                    break;
                 }
+                let output = String::from_utf8_lossy(&buffer[..size]).into_owned();
+                let _ = app_handle.emit("pty_output", output);
             }
         });
 
