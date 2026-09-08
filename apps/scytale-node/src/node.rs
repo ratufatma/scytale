@@ -930,6 +930,19 @@ impl Node {
     /// resolution, authorization, and value conservation). Read-only with respect
     /// to the canonical ledger; the transaction remains unconfirmed until mined.
     pub fn submit_transaction(&self, tx: Transaction) -> Result<Hash256, NodeError> {
+        self.submit_transaction_internal(tx, true)
+    }
+
+    /// Admits a transaction received from the network without rebroadcasting it.
+    pub fn submit_network_transaction(&self, tx: Transaction) -> Result<Hash256, NodeError> {
+        self.submit_transaction_internal(tx, false)
+    }
+
+    fn submit_transaction_internal(
+        &self,
+        tx: Transaction,
+        broadcast: bool,
+    ) -> Result<Hash256, NodeError> {
         let height = self.canonical_height();
         let utxos = self.shared.utxo_set.lock().unwrap();
         Self::verify_transaction_scripts(&tx, height, &utxos)?;
@@ -944,7 +957,8 @@ impl Node {
         let verifier = PermissiveVerifier;
         let txid = mempool.admit_transaction(tx.clone(), &utxos, &verifier, now)?;
 
-        if let Ok(bytes) = tx.to_canonical_bytes() {
+        if broadcast {
+            if let Ok(bytes) = tx.to_canonical_bytes() {
             let _ = self
                 .shared
                 .p2p_event_tx
@@ -952,6 +966,7 @@ impl Node {
                     tx_hex: scytale_primitives::to_hex(&bytes),
                     txid_hex: txid.to_string(),
                 });
+                    }
         }
 
         Ok(txid)

@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
+use scytale_bridge::P2pBridgeEvent;
 use scytale_consensus::INITIAL_REWARD;
-use scytale_core::QUANTA_PER_SCY;
+use scytale_core::{CanonicalDeserialize, Transaction, QUANTA_PER_SCY};
 use scytale_node::{IpcServer, Node, NodeConfig, P2pEngine, DEFAULT_SOCKET_PATH};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -382,7 +383,7 @@ async fn main() {
                             let tx_engine = engine.clone();
                             let heartbeat_engine = engine.clone();
                             let (block_tx, _block_rx) = mpsc::channel::<Vec<u8>>(128);
-                            let (tx_tx, _tx_rx) = mpsc::channel::<Vec<u8>>(128);
+                            let (tx_tx, mut tx_rx) = mpsc::channel::<Vec<u8>>(128);
 
                             let block_listener = tokio::spawn(async move {
                                 if let Err(e) = block_engine.listen_blocks(block_tx).await {
@@ -392,6 +393,60 @@ async fn main() {
                             let tx_listener = tokio::spawn(async move {
                                 if let Err(e) = tx_engine.listen_transactions(tx_tx).await {
                                     tracing::error!("transaction listener error: {e}");
+                                }
+                            });
+                            let tx_processor_node = Arc::clone(&node);
+                            let tx_processor = tokio::spawn(async move {
+                                while let Some(payload) = tx_rx.recv().await {
+                                    match Transaction::from_canonical_bytes(&payload) {
+                                        Ok(tx) => match tx_processor_node.submit_network_transaction(tx) {
+                                            Ok(txid) => tracing::info!(
+                                                txid = %txid,
+                                                "received transaction from NATS and admitted to mempool"
+                                            ),
+                                            Err(e) => tracing::warn!(
+                                                error = %e,
+                                                "received transaction from NATS but rejected by mempool"
+                                            ),
+                                        },
+                                        Err(e) => tracing::warn!(
+                                            error = %e,
+                                            "received invalid transaction payload from NATS"
+                                        ),
+                                    }
+                                }
+                            });
+                            let mut p2p_events = node.subscribe_p2p_events();
+                            let broadcast_engine = engine.clone();
+                            let broadcast_task = tokio::spawn(async move {
+                                loop {
+                                    match p2p_events.recv().await {
+                                        Ok(P2pBridgeEvent::BroadcastTransaction { tx_hex, .. }) => {
+                                            match scytale_primitives::from_hex(&tx_hex) {
+                                                Ok(bytes) => {
+                                                    if let Err(e) = broadcast_engine.broadcast_transaction(&bytes).await {
+                                                        tracing::warn!(error = %e, "failed to broadcast transaction over NATS");
+                                                    }
+                                                }
+                                                Err(e) => tracing::warn!(error = %e, "invalid transaction event hex"),
+                                            }
+                                        }
+                                        Ok(P2pBridgeEvent::BroadcastBlock { block_hex, .. }) => {
+                                            match scytale_primitives::from_hex(&block_hex) {
+                                                Ok(bytes) => {
+                                                    if let Err(e) = broadcast_engine.broadcast_block(&bytes).await {
+                                                        tracing::warn!(error = %e, "failed to broadcast block over NATS");
+                                                    }
+                                                }
+                                                Err(e) => tracing::warn!(error = %e, "invalid block event hex"),
+                                            }
+                                        }
+                                        Ok(P2pBridgeEvent::ConnectPeer { .. }) => {}
+                                        Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                                            tracing::warn!(count, "P2P event broadcaster lagged")
+                                        }
+                                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                    }
                                 }
                             });
                             let heartbeat_task = tokio::spawn(async move {
@@ -408,7 +463,14 @@ async fn main() {
                                 }
                             });
 
-                            Some((engine, block_listener, tx_listener, heartbeat_task))
+                            Some((
+                                engine,
+                                block_listener,
+                                tx_listener,
+                                tx_processor,
+                                broadcast_task,
+                                heartbeat_task,
+                            ))
                         }
                         Err(e) => {
                             tracing::warn!("native P2P engine failed to connect: {e}");
@@ -457,12 +519,22 @@ async fn main() {
                     Err(e) => tracing::error!("shutdown task failed to join: {e}"),
                 }
                 let _ = ipc_handle.await;
-                if let Some((engine, block_listener, tx_listener, heartbeat_task)) = p2p_handle {
+                if let Some((
+                    engine,
+                    block_listener,
+                    tx_listener,
+                    tx_processor,
+                    broadcast_task,
+                    heartbeat_task,
+                )) = p2p_handle
+                {
                     if let Err(e) = engine.shutdown().await {
                         tracing::warn!("P2P engine shutdown failed: {e}");
                     }
                     let _ = block_listener.await;
                     let _ = tx_listener.await;
+                    tx_processor.abort();
+                    broadcast_task.abort();
                     heartbeat_task.abort();
                 }
                 if let Some(h) = http_handle {
