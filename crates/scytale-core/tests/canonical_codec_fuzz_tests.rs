@@ -16,7 +16,12 @@ fn sample_valid_tx() -> Transaction {
     let input = TxIn::new(prev_op, vec![0x01, 0x02, 0x03, 0x04]);
     let output1 = TxOut::new(500_000_000, vec![0x73, 0xa0, 0x88, 0xac]);
     let output2 = TxOut::new(490_000_000, vec![0x6a, 0x04, 0xde, 0xad]);
-    Transaction::new(TRANSACTION_VERSION_1, vec![input], vec![output1, output2], 0)
+    Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![input],
+        vec![output1, output2],
+        0,
+    )
 }
 
 /// Constructs a valid sample block for differential testing.

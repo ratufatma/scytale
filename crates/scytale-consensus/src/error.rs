@@ -40,7 +40,9 @@ pub enum ChainError {
     },
     #[error("reorganization execution failed at block {hash:?}: {error}")]
     ReorgFailed { hash: Hash256, error: String },
-    #[error("chain reorganization depth exceeded: attempted {depth} blocks, maximum allowed is {max}")]
+    #[error(
+        "chain reorganization depth exceeded: attempted {depth} blocks, maximum allowed is {max}"
+    )]
     ReorgDepthExceeded { depth: u64, max: u64 },
     #[error("corrupted block linkage: parent hash {parent:?} not found")]
     CorruptedLinkage { parent: Hash256 },
@@ -69,4 +71,3 @@ pub enum ConsensusError {
     #[error("Transaction verification failed: {0}")]
     TransactionVerification(String),
 }
-

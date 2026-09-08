@@ -89,17 +89,26 @@ impl ScyVM {
                     };
 
                     let mut pk_bytes = [0u8; 32];
-                    if memory.read(&caller, pk_ptr as usize, &mut pk_bytes).is_err() {
+                    if memory
+                        .read(&caller, pk_ptr as usize, &mut pk_bytes)
+                        .is_err()
+                    {
                         return 0;
                     }
 
                     let mut sig_bytes = [0u8; 64];
-                    if memory.read(&caller, sig_ptr as usize, &mut sig_bytes).is_err() {
+                    if memory
+                        .read(&caller, sig_ptr as usize, &mut sig_bytes)
+                        .is_err()
+                    {
                         return 0;
                     }
 
                     let mut msg_bytes = vec![0u8; msg_len as usize];
-                    if memory.read(&caller, msg_ptr as usize, &mut msg_bytes).is_err() {
+                    if memory
+                        .read(&caller, msg_ptr as usize, &mut msg_bytes)
+                        .is_err()
+                    {
                         return 0;
                     }
 
@@ -123,10 +132,7 @@ impl ScyVM {
             .func_wrap(
                 "env",
                 "scytale_crypto_blake3",
-                |mut caller: Caller<'_, VmState>,
-                 data_ptr: i32,
-                 data_len: i32,
-                 out_ptr: i32| {
+                |mut caller: Caller<'_, VmState>, data_ptr: i32, data_len: i32, out_ptr: i32| {
                     if data_ptr < 0 || data_len < 0 || out_ptr < 0 {
                         return;
                     }
@@ -320,7 +326,10 @@ mod tests {
             1_000_000,
         )
         .unwrap();
-        assert!(!res_early.is_valid, "Kontrak harus menolak penarikan sebelum unlock time");
+        assert!(
+            !res_early.is_valid,
+            "Kontrak harus menolak penarikan sebelum unlock time"
+        );
 
         // 4. Eksekusi Test: Harus Ditolak (Signature tidak sah)
         let res_invalid = ScyVM::execute_validator(
@@ -331,7 +340,10 @@ mod tests {
             1_000_000,
         )
         .unwrap();
-        assert!(!res_invalid.is_valid, "Kontrak harus menolak penarikan dengan signature palsu");
+        assert!(
+            !res_invalid.is_valid,
+            "Kontrak harus menolak penarikan dengan signature palsu"
+        );
 
         // 5. Eksekusi Test: Harus Sukses (Waktu lewat & signature valid)
         let res_success = ScyVM::execute_validator(
@@ -342,7 +354,10 @@ mod tests {
             1_000_000,
         )
         .unwrap();
-        assert!(res_success.is_valid, "Kontrak harus meloloskan penarikan yang sah");
+        assert!(
+            res_success.is_valid,
+            "Kontrak harus meloloskan penarikan yang sah"
+        );
         assert!(res_success.gas_consumed > 0, "Gas harus terhitung");
     }
 }

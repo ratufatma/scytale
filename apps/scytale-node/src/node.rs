@@ -10,8 +10,9 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_core::{
-    AuthorizationError, AuthorizationVerifier, Block, Hash256, OutPoint, OutputLock, Transaction,
-    TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
+    verify_transaction_eutxo, AuthorizationError, AuthorizationVerifier, Block,
+    EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet,
+    MAX_BLOCK_GAS, MAX_TX_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
 use scytale_mining::{build_template, run_pow_search};
@@ -289,7 +290,6 @@ impl Node {
         scytale_core::genesis::build_genesis_block(config.genesis_difficulty_target)
     }
 
-
     /// Returns a fresh chain tree seeded with a placeholder genesis (used before recovery).
     fn empty_chain(config: &NodeConfig) -> scytale_consensus::ChainTree {
         scytale_consensus::ChainTree::new(Self::make_genesis(config))
@@ -377,18 +377,11 @@ impl Node {
             }
 
             match chain.process_block_with_verifier(block.clone(), &mut utxos, &NodeBlockVerifier) {
-
                 Ok(Some(reorg)) => {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        commit_block(
-                            &self.storage,
-                            &block,
-                            height,
-                            work,
-                            self.indexer.as_deref(),
-                        )?;
+                        commit_block(&self.storage, &block, height, work, self.indexer.as_deref())?;
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -449,13 +442,8 @@ impl Node {
         for tx in &block.transactions {
             if !tx.is_coinbase() {
                 Self::verify_transaction_scripts(tx, height, staged_utxos)?;
-                let tx_gas = verify_transaction_eutxo(
-                    tx,
-                    block_time,
-                    staged_utxos,
-                    MAX_TX_GAS,
-                )
-                .map_err(NodeError::EutxoValidation)?;
+                let tx_gas = verify_transaction_eutxo(tx, block_time, staged_utxos, MAX_TX_GAS)
+                    .map_err(NodeError::EutxoValidation)?;
                 block_gas_consumed = block_gas_consumed.saturating_add(tx_gas);
                 if block_gas_consumed > MAX_BLOCK_GAS {
                     return Err(NodeError::EutxoValidation(
@@ -475,11 +463,7 @@ impl Node {
                     let op = OutPoint::new(txid, idx as u32);
                     staged_utxos.insert(
                         op,
-                        scytale_core::UtxoEntry::new(
-                            output.clone(),
-                            height,
-                            tx.is_coinbase(),
-                        ),
+                        scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
                     );
                 }
             }
@@ -592,7 +576,6 @@ impl Node {
         }
 
         Ok(())
-
     }
 
     /// Returns a shared handle to the embedded storage for downstream inspection.
@@ -915,7 +898,11 @@ impl Node {
 
             // Skip ScriptEngine evaluation if the locking condition is an eUTXO smart contract (OutputLock::Script).
             // These inputs are validated deterministically by ScyVM via verify_transaction_eutxo.
-            if utxo.output.locking_condition.starts_with(&OutputLock::MAGIC_PREFIX) {
+            if utxo
+                .output
+                .locking_condition
+                .starts_with(&OutputLock::MAGIC_PREFIX)
+            {
                 if let Some(OutputLock::Script { .. }) =
                     OutputLock::from_locking_condition(&utxo.output.locking_condition)
                 {
@@ -1191,13 +1178,7 @@ fn mining_worker_loop(
                         "mined new block successfully committed"
                     );
                     if reorg.disconnected_blocks.is_empty() {
-                        let _ = commit_block(
-                            &storage,
-                            &block,
-                            height,
-                            work,
-                            indexer.as_deref(),
-                        );
+                        let _ = commit_block(&storage, &block, height, work, indexer.as_deref());
                     } else {
                         let connected_meta = reorg
                             .connected_blocks

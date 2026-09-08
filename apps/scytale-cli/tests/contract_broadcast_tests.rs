@@ -3,9 +3,7 @@ use std::sync::Arc;
 use tempfile::tempdir;
 use tokio::sync::broadcast;
 
-use scytale_core::{
-    Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut,
-};
+use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut};
 use scytale_node::{Node, NodeConfig};
 use serde::{Deserialize, Serialize};
 
@@ -69,7 +67,10 @@ fn get_vault_wasm_path() -> PathBuf {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/wasm32-unknown-unknown/release/scytale_contract_vault.wasm");
     if !path.exists() {
-        panic!("Vault wasm not found at {}. Build it first!", path.display());
+        panic!(
+            "Vault wasm not found at {}. Build it first!",
+            path.display()
+        );
     }
     path
 }
@@ -157,7 +158,11 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         dry_run: true,
     };
     assert!(deploy_contract(dry_deploy_args).is_ok());
-    assert_eq!(node.query_mempool().len(), 0, "Dry run must not broadcast to mempool");
+    assert_eq!(
+        node.query_mempool().len(),
+        0,
+        "Dry run must not broadcast to mempool"
+    );
 
     // 5. Test Live Broadcast deploy
     let live_deploy_args = DeployArgs {
@@ -170,11 +175,19 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         dry_run: false,
     };
     let deploy_res = deploy_contract(live_deploy_args);
-    assert!(deploy_res.is_ok(), "Live deploy must succeed: {:?}", deploy_res);
+    assert!(
+        deploy_res.is_ok(),
+        "Live deploy must succeed: {:?}",
+        deploy_res
+    );
 
     // Verify deployment transaction landed in node mempool
     let mempool_after_deploy = node.query_mempool();
-    assert_eq!(mempool_after_deploy.len(), 1, "Mempool should hold 1 deployed tx");
+    assert_eq!(
+        mempool_after_deploy.len(),
+        1,
+        "Mempool should hold 1 deployed tx"
+    );
     let deploy_tx = mempool_after_deploy[0].transaction.clone();
     let deploy_txid = deploy_tx.txid();
 
@@ -228,7 +241,11 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         node_url: node_url.clone(),
     };
     let dry_call_res = call_contract(dry_call_args);
-    assert!(dry_call_res.is_ok(), "Dry-run call should pass ScyVM: {:?}", dry_call_res);
+    assert!(
+        dry_call_res.is_ok(),
+        "Dry-run call should pass ScyVM: {:?}",
+        dry_call_res
+    );
 
     // 8. Test `contract call` live broadcast
     let live_call_args = CallArgs {
@@ -246,13 +263,21 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         node_url: node_url.clone(),
     };
     let live_call_res = call_contract(live_call_args);
-    assert!(live_call_res.is_ok(), "Live call should broadcast successfully: {:?}", live_call_res);
+    assert!(
+        live_call_res.is_ok(),
+        "Live call should broadcast successfully: {:?}",
+        live_call_res
+    );
 
     // Verify spending transaction is now in node mempool!
     let mempool_after_call = node.query_mempool();
     assert!(
         mempool_after_call.iter().any(|entry| {
-            entry.transaction.inputs.iter().any(|i| i.previous_output == contract_outpoint)
+            entry
+                .transaction
+                .inputs
+                .iter()
+                .any(|i| i.previous_output == contract_outpoint)
         }),
         "Contract spending transaction must be admitted to mempool"
     );
@@ -393,7 +418,10 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
     };
 
     let res = call_contract(underfunded_call);
-    assert!(res.is_err(), "Call with fee too low must be rejected by mempool");
+    assert!(
+        res.is_err(),
+        "Call with fee too low must be rejected by mempool"
+    );
     let err_msg = res.unwrap_err().to_string();
     assert!(
         err_msg.contains("Mempool submission rejected by node (HTTP 400)"),

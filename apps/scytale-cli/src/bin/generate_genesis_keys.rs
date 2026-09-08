@@ -73,26 +73,11 @@ fn generate_entry(role: &str, percent: u8, scy: u64, quanta: u64) -> GenesisKeyE
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let founder = generate_entry(
-        "Founder Allocation",
-        21,
-        8_820_000,
-        882_000_000_000_000,
-    );
+    let founder = generate_entry("Founder Allocation", 21, 8_820_000, 882_000_000_000_000);
 
-    let treasury = generate_entry(
-        "Development / Treasury",
-        5,
-        2_100_000,
-        210_000_000_000_000,
-    );
+    let treasury = generate_entry("Development / Treasury", 5, 2_100_000, 210_000_000_000_000);
 
-    let community = generate_entry(
-        "Ecosystem / Community",
-        5,
-        2_100_000,
-        210_000_000_000_000,
-    );
+    let community = generate_entry("Ecosystem / Community", 5, 2_100_000, 210_000_000_000_000);
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -125,9 +110,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     for entry in &keys_file.allocations {
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
         println!("Role                : {}", entry.role);
-        println!("Allocation          : {}% ({} SCY / {} quanta)", entry.allocation_percent, entry.allocation_scy, entry.allocation_quanta);
+        println!(
+            "Allocation          : {}% ({} SCY / {} quanta)",
+            entry.allocation_percent, entry.allocation_scy, entry.allocation_quanta
+        );
         println!("Public Key (Hex)    : {}", entry.public_key_hex);
         println!("Address Hash (Hex)  : {}", entry.address_hash_hex);
         println!("Bech32 Address      : {}", entry.bech32_address);
@@ -136,7 +126,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("================================================================================");
     println!("Total Genesis Quota : 31% (13,020,000 SCY / 1,302,000,000,000,000 quanta)");
     println!("================================================================================");
-
 
     Ok(())
 }

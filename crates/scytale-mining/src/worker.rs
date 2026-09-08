@@ -171,12 +171,13 @@ pub fn run_pow_search(
 ) -> Result<BlockHeader, MiningError> {
     let target = template.target();
     let initial_header = template.build_header(start_nonce);
-    let proto_bytes = initial_header
-        .to_canonical_bytes()
-        .map_err(|_| MiningError::ExhaustedNonce {
-            height: template.height,
-            searched: 0,
-        })?;
+    let proto_bytes =
+        initial_header
+            .to_canonical_bytes()
+            .map_err(|_| MiningError::ExhaustedNonce {
+                height: template.height,
+                searched: 0,
+            })?;
 
     let num_threads = std::thread::available_parallelism()
         .map(|n| n.get().min(8) as u64)

@@ -132,7 +132,15 @@ fn test_node_op_return_output_handling() {
         scytale_core::UtxoEntry::new(TxOut::new(subsidy1, vec![0x01, 0x02, 0x03]), 1, true),
     );
     let utxo_root1 = staging1.compute_utxo_root();
-    let header1 = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root1, 100, 0x207fffff, 0);
+    let header1 = BlockHeader::new(
+        1,
+        genesis_tip,
+        Hash256::ZERO,
+        utxo_root1,
+        100,
+        0x207fffff,
+        0,
+    );
     let block1 = Block::new(header1, vec![cb1.clone()]);
     assert!(node.submit_external_block(block1).unwrap());
     assert_eq!(node.canonical_height(), 1);
@@ -171,7 +179,6 @@ fn test_node_op_return_output_handling() {
 
     assert!(node.submit_external_block(block2).unwrap());
     assert_eq!(node.canonical_height(), 2);
-
 
     // 3. Verify standard output is present in the UTXO set
     let utxo_set = node.query_utxo_set();

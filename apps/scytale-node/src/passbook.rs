@@ -265,7 +265,10 @@ pub fn parse_locking_condition(script: &[u8]) -> ParsedContractCondition {
     if let Some(lock) = OutputLock::from_locking_condition(script) {
         match lock {
             OutputLock::PublicKey(_) => ParsedContractCondition::Standard,
-            OutputLock::Script { script_hash: _, datum } => {
+            OutputLock::Script {
+                script_hash: _,
+                datum,
+            } => {
                 if let Ok(scy20) = bincode::deserialize::<Scy20DatumPayload>(&datum) {
                     return ParsedContractCondition::Scy20(scy20);
                 }
@@ -340,10 +343,15 @@ impl Passbook {
 
     /// Returns `true` if the given locking condition belongs to the user.
     pub fn owns(&self, locking_condition: &[u8]) -> bool {
-        if self.owned_locks.iter().any(|l| l.as_slice() == locking_condition) {
+        if self
+            .owned_locks
+            .iter()
+            .any(|l| l.as_slice() == locking_condition)
+        {
             return true;
         }
-        if let Some(h) = scytale_storage::extract_address_from_locking_condition(locking_condition) {
+        if let Some(h) = scytale_storage::extract_address_from_locking_condition(locking_condition)
+        {
             return self.addresses.iter().any(|a| a.hash() == &h);
         }
         false
@@ -449,7 +457,8 @@ impl Passbook {
                 if Address::new(h) == *address {
                     user_outpoints.push(*op);
                 }
-            } else if self.owns(&entry.output.locking_condition) && self.addresses.contains(address) {
+            } else if self.owns(&entry.output.locking_condition) && self.addresses.contains(address)
+            {
                 user_outpoints.push(*op);
             }
         }
@@ -460,9 +469,8 @@ impl Passbook {
         // Generate Merkle proofs for all active user native UTXOs
         let mut active_utxo_proofs = Vec::with_capacity(user_outpoints.len());
         for op in user_outpoints {
-            let proof =
-                scytale_core::generate_utxo_merkle_proof(&utxo_entries_with_outpoints, &op)
-                    .map_err(|e| PassbookError::UtxoLookupFailed(e.to_string()))?;
+            let proof = scytale_core::generate_utxo_merkle_proof(&utxo_entries_with_outpoints, &op)
+                .map_err(|e| PassbookError::UtxoLookupFailed(e.to_string()))?;
             active_utxo_proofs.push(proof);
         }
 
@@ -565,9 +573,9 @@ fn sum_native_owned(passbook: &Passbook, utxos: &UtxoSet) -> Result<u64, Passboo
                     // SCY-20 token balances tracked in token_balances
                 }
                 _ => {
-                    total = total
-                        .checked_add(entry.output.value)
-                        .ok_or_else(|| PassbookError::UtxoLookupFailed("balance overflow".into()))?;
+                    total = total.checked_add(entry.output.value).ok_or_else(|| {
+                        PassbookError::UtxoLookupFailed("balance overflow".into())
+                    })?;
                 }
             }
         }
@@ -604,7 +612,9 @@ fn pending_delta(
     for entry in pending {
         for out in &entry.transaction.outputs {
             if passbook.owns(&out.locking_condition) {
-                if let ParsedContractCondition::Scy20(_) = parse_locking_condition(&out.locking_condition) {
+                if let ParsedContractCondition::Scy20(_) =
+                    parse_locking_condition(&out.locking_condition)
+                {
                     continue;
                 }
                 inflow = inflow
@@ -655,7 +665,8 @@ fn project_confirmed_history_via_index(
     // Query storage ADDRESS_TX_INDEX for each address owned by this passbook
     let mut height_records: Vec<(u64, AddressTxRecord)> = Vec::new();
     for addr in &passbook.addresses {
-        let records = storage.get_address_transactions_with_height(addr, 0, tip_height, usize::MAX)?;
+        let records =
+            storage.get_address_transactions_with_height(addr, 0, tip_height, usize::MAX)?;
         height_records.extend(records);
     }
 
@@ -688,14 +699,17 @@ fn project_confirmed_history_via_index(
         }
 
         // Determine if user funds any inputs
-        let owns_input = record.is_input || tx.inputs.iter().any(|input| {
-            if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid) {
-                if let Some(prev_out) = prev_tx.outputs.get(input.previous_output.index as usize) {
-                    return passbook.owns(&prev_out.locking_condition);
+        let owns_input = record.is_input
+            || tx.inputs.iter().any(|input| {
+                if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid) {
+                    if let Some(prev_out) =
+                        prev_tx.outputs.get(input.previous_output.index as usize)
+                    {
+                        return passbook.owns(&prev_out.locking_condition);
+                    }
                 }
-            }
-            false
-        });
+                false
+            });
 
         // Fee calculation
         let total_output = tx.total_output_quanta().unwrap_or(0);
@@ -703,7 +717,8 @@ fn project_confirmed_history_via_index(
             tx.inputs
                 .iter()
                 .filter_map(|input| {
-                    if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid) {
+                    if let Ok(Some(prev_tx)) = node.lookup_transaction(&input.previous_output.txid)
+                    {
                         prev_tx
                             .outputs
                             .get(input.previous_output.index as usize)

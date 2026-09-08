@@ -1,6 +1,6 @@
 use ed25519_dalek::{Signer, SigningKey};
 use scytale_core::{
-    verify_transaction_eutxo, EutxoValidationError, Hash256, OutputLock, OutPoint, Transaction,
+    verify_transaction_eutxo, EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction,
     TxIn, TxInput, TxOut, TxOutput, UtxoEntry, UtxoSet, MAX_TX_GAS, TRANSACTION_VERSION_1,
 };
 use serde::{Deserialize, Serialize};
@@ -94,11 +94,7 @@ fn load_vault_wasm() -> Vec<u8> {
     })
 }
 
-fn make_script_utxo(
-    wasm: &[u8],
-    datum_bytes: Vec<u8>,
-    value: u64,
-) -> (OutPoint, UtxoEntry) {
+fn make_script_utxo(wasm: &[u8], datum_bytes: Vec<u8>, value: u64) -> (OutPoint, UtxoEntry) {
     let script_hash = *blake3::hash(wasm).as_bytes();
     let lock = OutputLock::Script {
         script_hash,
@@ -241,7 +237,10 @@ fn test_vault_accepted_after_unlock_time() {
         result
     );
     let gas_consumed = result.unwrap();
-    assert!(gas_consumed > 0, "Gas consumed should be > 0 for script input");
+    assert!(
+        gas_consumed > 0,
+        "Gas consumed should be > 0 for script input"
+    );
     println!("[OK] Vault accepted. Gas consumed: {} fuel", gas_consumed);
 
     // Tampered signature must be REJECTED even after unlock_time
@@ -292,7 +291,10 @@ fn test_vault_gas_limit_exceeded() {
         "Expected GasLimitExceeded or VmExecutionFailed, got: {:?}",
         result
     );
-    println!("[OK] Gas limit enforcement passed: {:?}", result.unwrap_err());
+    println!(
+        "[OK] Gas limit enforcement passed: {:?}",
+        result.unwrap_err()
+    );
 }
 
 // ── Test 4: Script hash mismatch ─────────────────────────────────────────────
@@ -352,7 +354,11 @@ fn test_standard_pkh_transaction_unaffected() {
 
     // Should return Ok(0) gas — no script inputs
     let result = verify_transaction_eutxo(&tx, 1_700_000_000, &utxo_set, MAX_TX_GAS);
-    assert_eq!(result.unwrap(), 0, "Non-script tx should consume 0 eUTXO gas");
+    assert_eq!(
+        result.unwrap(),
+        0,
+        "Non-script tx should consume 0 eUTXO gas"
+    );
     println!("[OK] Standard P2PK transaction passes eUTXO gate with 0 gas.");
 }
 
@@ -421,7 +427,8 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
     );
 
     // 3. Buat spending transaction eUTXO yang sah (NormalWithdraw dengan Ed25519 signature sah)
-    let (valid_tx, _sig) = make_signed_vault_tx(&signing_key, script_outpoint, &wasm, subsidy - 1_000_000);
+    let (valid_tx, _sig) =
+        make_signed_vault_tx(&signing_key, script_outpoint, &wasm, subsidy - 1_000_000);
 
     // 3a. Verifikasi langsung bahwa verify_transaction_scripts tidak memicu error "Invalid opcode: 0x43"
     let script_check = Node::verify_transaction_scripts(&valid_tx, 1, &current_utxos);
@@ -439,10 +446,14 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         submit_res.err()
     );
     let txid = submit_res.unwrap();
-    println!("[OK] eUTXO transaction admitted to mempool with TxID: {}", txid);
+    println!(
+        "[OK] eUTXO transaction admitted to mempool with TxID: {}",
+        txid
+    );
 
     // 4. Verifikasi transaksi invalid (NormalWithdraw dengan signature palsu) ditolak oleh ScyVM
-    let invalid_tx = make_tampered_signed_vault_tx(&signing_key, script_outpoint, &wasm, subsidy - 1_000_000);
+    let invalid_tx =
+        make_tampered_signed_vault_tx(&signing_key, script_outpoint, &wasm, subsidy - 1_000_000);
 
     let invalid_res = node.submit_transaction(invalid_tx);
     assert!(
@@ -451,9 +462,14 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
     );
     match invalid_res.unwrap_err() {
         NodeError::EutxoValidation(EutxoValidationError::ValidationRejected) => {
-            println!("[OK] Correctly rejected by ScyVM with ValidationRejected (not InvalidOpCode).");
+            println!(
+                "[OK] Correctly rejected by ScyVM with ValidationRejected (not InvalidOpCode)."
+            );
         }
-        other => panic!("Expected EutxoValidation(ValidationRejected), got: {:?}", other),
+        other => panic!(
+            "Expected EutxoValidation(ValidationRejected), got: {:?}",
+            other
+        ),
     }
 
     node.shutdown().expect("Node shutdown failed");

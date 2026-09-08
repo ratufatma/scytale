@@ -435,7 +435,10 @@ pub fn print_passbook_view_table(address: &str, view: &scytale_node::passbook::P
     println!("{}", border);
 
     if view.entries.is_empty() {
-        println!("| {:<113} |", "(No transaction mutations recorded for this account)");
+        println!(
+            "| {:<113} |",
+            "(No transaction mutations recorded for this account)"
+        );
     } else {
         for e in &view.entries {
             let entry_num = format!("#{:06}", e.entry_number);
@@ -446,11 +449,19 @@ pub fn print_passbook_view_table(address: &str, view: &scytale_node::passbook::P
                 scytale_node::passbook::PassbookAction::MiningReward => "MiningReward".to_string(),
                 scytale_node::passbook::PassbookAction::Change => "Change".to_string(),
                 scytale_node::passbook::PassbookAction::Scy20Mint => "Scy20Mint".to_string(),
-                scytale_node::passbook::PassbookAction::Scy20Transfer => "Scy20Transfer".to_string(),
+                scytale_node::passbook::PassbookAction::Scy20Transfer => {
+                    "Scy20Transfer".to_string()
+                }
                 scytale_node::passbook::PassbookAction::Scy20Burn => "Scy20Burn".to_string(),
-                scytale_node::passbook::PassbookAction::ContractInteraction { .. } => "ContractInteraction".to_string(),
-                scytale_node::passbook::PassbookAction::VaultDeposit { .. } => "VaultDeposit".to_string(),
-                scytale_node::passbook::PassbookAction::VaultWithdrawal => "VaultWithdrawal".to_string(),
+                scytale_node::passbook::PassbookAction::ContractInteraction { .. } => {
+                    "ContractInteraction".to_string()
+                }
+                scytale_node::passbook::PassbookAction::VaultDeposit { .. } => {
+                    "VaultDeposit".to_string()
+                }
+                scytale_node::passbook::PassbookAction::VaultWithdrawal => {
+                    "VaultWithdrawal".to_string()
+                }
             };
 
             let amount_str = match &e.asset {
@@ -481,7 +492,11 @@ pub fn print_passbook_view_table(address: &str, view: &scytale_node::passbook::P
     if !view.token_balances.is_empty() {
         println!("| Token Balances (SCY-20):                                                                                            |");
         for (token_id, balance) in &view.token_balances {
-            let line = format!("  * Token [0x{}]: {} units", token_id, format_integer_commas(*balance));
+            let line = format!(
+                "  * Token [0x{}]: {} units",
+                token_id,
+                format_integer_commas(*balance)
+            );
             println!("| {:<113} |", line);
         }
         println!("+---------------------------------------------------------------------------------------------------------------------+");

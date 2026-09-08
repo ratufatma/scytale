@@ -1,7 +1,7 @@
 extern crate alloc;
-use alloc::vec::Vec;
 use crate::error::Scy20Error;
 use crate::types::{Scy20Datum, Scy20Redeemer};
+use alloc::vec::Vec;
 use scytale_sdk::{decode_payload, encode_payload};
 
 pub fn serialize_datum(datum: &Scy20Datum) -> Result<Vec<u8>, Scy20Error> {
@@ -23,8 +23,8 @@ pub fn deserialize_redeemer(bytes: &[u8]) -> Result<Scy20Redeemer, Scy20Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::vec;
     use crate::types::{Address, TokenId};
+    use alloc::vec;
 
     const TOKEN_ID: TokenId = [1; 32];
     const OWNER: Address = [2; 32];
@@ -75,8 +75,7 @@ mod tests {
 
         for redeemer in redeemers {
             let encoded = serialize_redeemer(&redeemer).expect("redeemer should serialize");
-            let decoded =
-                deserialize_redeemer(&encoded).expect("redeemer should deserialize");
+            let decoded = deserialize_redeemer(&encoded).expect("redeemer should deserialize");
 
             assert_eq!(decoded, redeemer);
         }

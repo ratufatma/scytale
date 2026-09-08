@@ -6,8 +6,7 @@
 //! 3. Clean index rollback during single-block unwind and atomic multi-block chain reorganizations.
 
 use scytale_core::{
-    Address, Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut,
-    TRANSACTION_VERSION_1,
+    Address, Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, TRANSACTION_VERSION_1,
 };
 use scytale_storage::StorageEngine;
 
@@ -54,10 +53,7 @@ fn test_address_tx_index_inbound_outbound() {
     let bob_script = make_p2pkh_script(&addr_bob);
 
     // ── Block 1: Fund Alice with 10,000 quanta via coinbase ──────────────
-    let cb_tx = Transaction::new_coinbase(
-        1,
-        vec![TxOut::new(10_000, alice_script.clone())],
-    );
+    let cb_tx = Transaction::new_coinbase(1, vec![TxOut::new(10_000, alice_script.clone())]);
     let cb_txid = cb_tx.txid();
     let block1 = make_block(Hash256::ZERO, 1_700_000_000, 1, vec![cb_tx]);
 
@@ -107,12 +103,18 @@ fn test_address_tx_index_inbound_outbound() {
         .expect("query alice at height 2 should succeed");
     assert_eq!(alice_records_b2.len(), 2);
 
-    let input_rec = alice_records_b2.iter().find(|r| r.is_input).expect("must contain input record");
+    let input_rec = alice_records_b2
+        .iter()
+        .find(|r| r.is_input)
+        .expect("must contain input record");
     assert_eq!(input_rec.txid, transfer_txid);
     assert_eq!(input_rec.value_quanta, 10_000);
     assert!(!input_rec.is_output);
 
-    let output_rec = alice_records_b2.iter().find(|r| r.is_output).expect("must contain output record");
+    let output_rec = alice_records_b2
+        .iter()
+        .find(|r| r.is_output)
+        .expect("must contain output record");
     assert_eq!(output_rec.txid, transfer_txid);
     assert_eq!(output_rec.value_quanta, 4_000);
     assert!(!output_rec.is_input);

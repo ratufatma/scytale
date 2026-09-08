@@ -1,11 +1,13 @@
 //! P2P Supervisor: Manages child Go P2P daemon and Unix domain socket bridge server.
 
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::broadcast;
+use tokio::time::{self, Duration};
 use tracing::{error, info, warn};
 
 use crate::node::Node;
@@ -15,6 +17,55 @@ use scytale_bridge::{
 use scytale_core::codec::{CanonicalDeserialize, CanonicalSerialize};
 use scytale_core::{Block, Hash256, Transaction};
 use scytale_primitives::{from_hex, to_hex};
+
+pub fn parse_peer_socket_addr(peer_str: &str) -> Option<SocketAddr> {
+    let value = peer_str.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    if let Ok(addr) = value.parse::<SocketAddr>() {
+        return Some(addr);
+    }
+
+    let mut host: Option<String> = None;
+    let mut port: Option<u16> = None;
+    let mut parts = value.split('/').filter(|part| !part.is_empty());
+
+    while let Some(part) = parts.next() {
+        match part {
+            "ip4" | "ip6" => {
+                host = parts.next().map(str::to_owned);
+            }
+            "tcp" => {
+                port = parts.next().and_then(|value| value.parse::<u16>().ok());
+            }
+            _ => {}
+        }
+    }
+
+    let host = host?;
+    let port = port?;
+
+    match host.parse::<IpAddr>() {
+        Ok(ip) => Some(SocketAddr::new(ip, port)),
+        Err(_) => None,
+    }
+}
+
+pub fn is_self_address(peer_str: &str, bind_addr: &SocketAddr) -> bool {
+    let Some(peer_addr) = parse_peer_socket_addr(peer_str) else {
+        return false;
+    };
+
+    if peer_addr.port() != bind_addr.port() {
+        return false;
+    }
+
+    peer_addr.ip().is_loopback()
+        || peer_addr.ip().is_unspecified()
+        || peer_addr.ip() == bind_addr.ip()
+}
 
 /// Manages the Go `scytale-p2p` child process and consensus bridge server.
 pub struct P2pSupervisor {
@@ -126,6 +177,40 @@ impl P2pSupervisor {
         ))
     }
 
+    fn spawn_p2p(&self, bin_path: &Path, sock_path: &Path) -> Result<Child, std::io::Error> {
+        let mut cmd = Command::new(bin_path);
+        cmd.arg("--bridge-sock").arg(sock_path);
+        cmd.arg("--allow-local-peers");
+        if self.fast_sync {
+            cmd.arg("--fast-sync");
+        }
+        if let Some(ref bind) = self.p2p_bind {
+            cmd.arg("--p2p-bind").arg(bind);
+        }
+        for peer in &self.peers {
+            if let Some(ref bind) = self.p2p_bind {
+                let Ok(bind_addr) = bind.parse::<SocketAddr>() else {
+                    cmd.arg("--peer").arg(peer);
+                    continue;
+                };
+                if is_self_address(peer, &bind_addr) {
+                    warn!("Ignoring self-dial peer candidate: {}", peer);
+                    continue;
+                }
+            }
+            cmd.arg("--peer").arg(peer);
+        }
+        if self.no_dns_seeds {
+            cmd.arg("--no-dns-seeds");
+        }
+        for seed in &self.dns_seeds {
+            cmd.arg("--dns-seed").arg(seed);
+        }
+        cmd.stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+    }
+
     /// Spawns the supervisor loop and the child Go daemon process.
     pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let sock_path = self.bridge_socket_path.clone();
@@ -142,31 +227,9 @@ impl P2pSupervisor {
         info!(bridge_socket = %sock_path.display(), "P2P bridge listening on Unix socket");
 
         // Resolve binary and spawn child process
-        match self.resolve_p2p_binary() {
+        let bin_path = match self.resolve_p2p_binary() {
             Ok(bin_path) => {
-                let mut cmd = Command::new(&bin_path);
-                cmd.arg("--bridge-sock").arg(&sock_path);
-                cmd.arg("--allow-local-peers");
-                if self.fast_sync {
-                    cmd.arg("--fast-sync");
-                }
-
-                if let Some(ref bind) = self.p2p_bind {
-                    cmd.arg("--p2p-bind").arg(bind);
-                }
-                for peer in &self.peers {
-                    cmd.arg("--peer").arg(peer);
-                }
-                if self.no_dns_seeds {
-                    cmd.arg("--no-dns-seeds");
-                }
-                for seed in &self.dns_seeds {
-                    cmd.arg("--dns-seed").arg(seed);
-                }
-
-                cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
-
-                match cmd.spawn() {
+                match self.spawn_p2p(&bin_path, &sock_path) {
                     Ok(child) => {
                         info!(pid = child.id(), bin = %bin_path.display(), "spawned Go P2P daemon child process");
                         self.child_process = Some(child);
@@ -175,16 +238,47 @@ impl P2pSupervisor {
                         error!("failed to spawn Go P2P daemon: {e}");
                     }
                 }
+                Some(bin_path)
             }
             Err(e) => {
                 warn!("could not launch child Go P2P daemon: {e}");
+                None
             }
-        }
+        };
 
         let mut shutdown_rx = self.shutdown_sender.subscribe();
+        let mut child_check = time::interval(Duration::from_secs(1));
 
         loop {
             tokio::select! {
+                _ = child_check.tick() => {
+                    if let Some(ref bin_path) = bin_path {
+                        let exited = match self.child_process.as_mut() {
+                            Some(child) => match child.try_wait() {
+                                Ok(Some(status)) => {
+                                    error!(?status, "Go P2P daemon exited; attempting respawn");
+                                    true
+                                }
+                                Ok(None) => false,
+                                Err(e) => {
+                                    error!("failed to check Go P2P daemon: {e}");
+                                    false
+                                }
+                            },
+                            None => true,
+                        };
+                        if exited {
+                            self.child_process = None;
+                            match self.spawn_p2p(bin_path, &sock_path) {
+                                Ok(child) => {
+                                    info!(pid = child.id(), "respawned Go P2P daemon child process");
+                                    self.child_process = Some(child);
+                                }
+                                Err(e) => error!("failed to respawn Go P2P daemon: {e}"),
+                            }
+                        }
+                    }
+                }
                 accept_res = listener.accept() => {
                     match accept_res {
                         Ok((stream, _addr)) => {

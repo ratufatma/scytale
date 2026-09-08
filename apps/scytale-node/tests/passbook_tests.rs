@@ -11,8 +11,7 @@ use scytale_core::{
     TRANSACTION_VERSION_1,
 };
 use scytale_node::{
-    EntryStatus, Node, NodeConfig, Passbook, PassbookAction, PassbookAsset,
-    ProvenanceCategory,
+    EntryStatus, Node, NodeConfig, Passbook, PassbookAction, PassbookAsset, ProvenanceCategory,
 };
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -396,8 +395,11 @@ fn test_restart_preserves_passbook_integrity() {
         assert_eq!(restored_nums, saved_nums, "identical sequential numbering");
         let restored_types: Vec<PassbookAction> =
             restored.entries.iter().map(|e| e.action.clone()).collect();
-        let saved_types: Vec<PassbookAction> =
-            saved_view.entries.iter().map(|e| e.action.clone()).collect();
+        let saved_types: Vec<PassbookAction> = saved_view
+            .entries
+            .iter()
+            .map(|e| e.action.clone())
+            .collect();
         assert_eq!(restored_types, saved_types, "identical entry types");
 
         node2.shutdown().unwrap();
@@ -576,7 +578,10 @@ fn test_passbook_confirmed_vs_pending_balances() {
     let send_val = 1_000_000u64;
     let tx = Transaction::new(
         TRANSACTION_VERSION_1,
-        vec![TxIn::new(OutPoint::new(cb_tx.txid(), 0), USER_LOCK.to_vec())],
+        vec![TxIn::new(
+            OutPoint::new(cb_tx.txid(), 0),
+            USER_LOCK.to_vec(),
+        )],
         vec![
             TxOut::new(send_val, OTHER_LOCK.to_vec()),
             TxOut::new(cb_val - send_val - fee, USER_LOCK.to_vec()),
@@ -627,10 +632,7 @@ fn test_passbook_cryptographic_statement_generation_and_verification() {
 
     let expected_balance =
         calculate_block_reward(1) + calculate_block_reward(2) + calculate_block_reward(3);
-    assert_eq!(
-        statement.confirmed_native_balance_quanta,
-        expected_balance
-    );
+    assert_eq!(statement.confirmed_native_balance_quanta, expected_balance);
 
     // Cryptographic offline verification
     assert!(

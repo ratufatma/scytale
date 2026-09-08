@@ -73,12 +73,12 @@ pub fn verify_transaction_eutxo(
     // 1. Calculate total input value and total output value
     let mut total_in: u64 = 0;
     for input in &tx.inputs {
-        let utxo = utxos.get(&input.previous_output).ok_or(
-            EutxoValidationError::MissingUtxo(
+        let utxo = utxos
+            .get(&input.previous_output)
+            .ok_or(EutxoValidationError::MissingUtxo(
                 input.previous_output.txid,
                 input.previous_output.index,
-            ),
-        )?;
+            ))?;
         total_in = total_in
             .checked_add(utxo.output.value)
             .ok_or(EutxoValidationError::ArithmeticOverflow)?;
@@ -99,8 +99,8 @@ pub fn verify_transaction_eutxo(
         if let Some(OutputLock::Script { script_hash, datum }) =
             OutputLock::from_locking_condition(&utxo.output.locking_condition)
         {
-            let eutxo_in = TxInput::from_tx_in(input)
-                .ok_or(EutxoValidationError::MissingScriptSource)?;
+            let eutxo_in =
+                TxInput::from_tx_in(input).ok_or(EutxoValidationError::MissingScriptSource)?;
 
             let wasm_code = eutxo_in
                 .script_source
@@ -121,14 +121,9 @@ pub fn verify_transaction_eutxo(
             }
 
             let remaining_gas = gas_limit.saturating_sub(total_gas_consumed);
-            let exec_res = ScyVM::execute_validator(
-                wasm_code,
-                &datum,
-                redeemer,
-                &tx_context,
-                remaining_gas,
-            )
-            .map_err(EutxoValidationError::VmExecutionFailed)?;
+            let exec_res =
+                ScyVM::execute_validator(wasm_code, &datum, redeemer, &tx_context, remaining_gas)
+                    .map_err(EutxoValidationError::VmExecutionFailed)?;
 
             if !exec_res.is_valid {
                 return Err(EutxoValidationError::ValidationRejected);

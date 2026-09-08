@@ -51,7 +51,13 @@ async fn serve_favicon_svg() -> impl axum::response::IntoResponse {
         FAVICON_SVG.to_string()
     };
 
-    ([(axum::http::header::CONTENT_TYPE, "image/svg+xml; charset=utf-8")], content)
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "image/svg+xml; charset=utf-8",
+        )],
+        content,
+    )
 }
 
 /// Response payload for `GET /api/v1/status`.
@@ -388,7 +394,12 @@ async fn get_blocks(
     let selected: Vec<&(Block, u64)> = if is_asc {
         filtered.into_iter().skip(offset).take(limit).collect()
     } else {
-        filtered.into_iter().rev().skip(offset).take(limit).collect()
+        filtered
+            .into_iter()
+            .rev()
+            .skip(offset)
+            .take(limit)
+            .collect()
     };
 
     let summaries = selected
@@ -780,7 +791,6 @@ async fn get_utxos(
     Ok(Json(dtos))
 }
 
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitTxRequest {
     pub tx_hex: String,
@@ -851,11 +861,13 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/api/v1/tx/:txid", get(get_transaction))
         .route("/api/v1/mempool", get(get_mempool))
         .route("/api/v1/passbook", get(get_passbook_api_view))
-        .route("/api/v1/passbook/statement", get(get_passbook_api_statement))
+        .route(
+            "/api/v1/passbook/statement",
+            get(get_passbook_api_statement),
+        )
         .route("/api/v1/passbook/:locking_script_hex", get(get_passbook))
         .route("/api/v1/utxos/:locking_script_hex", get(get_utxos))
         .route("/api/v1/provenance/:txid/:index", get(get_provenance))
-
         .layer(cors)
         .with_state(node)
 }

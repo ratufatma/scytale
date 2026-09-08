@@ -10,8 +10,8 @@
 
 use ed25519_dalek::{Signer, SigningKey};
 use scytale_core::{
-    Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxInput, TxOut,
-    TxOutput, UtxoEntry, UtxoSet, TRANSACTION_VERSION_1,
+    Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxInput, TxOut, TxOutput,
+    UtxoEntry, UtxoSet, TRANSACTION_VERSION_1,
 };
 use scytale_node::{Node, NodeConfig};
 use serde::{Deserialize, Serialize};
@@ -113,7 +113,12 @@ fn make_test_node() -> Node {
     node
 }
 
-fn make_spending_tx(outpoint: OutPoint, wasm: Vec<u8>, redeemer: Vec<u8>, out_val: u64) -> Transaction {
+fn make_spending_tx(
+    outpoint: OutPoint,
+    wasm: Vec<u8>,
+    redeemer: Vec<u8>,
+    out_val: u64,
+) -> Transaction {
     let input = TxInput::new(
         *outpoint.txid.as_bytes(),
         outpoint.index,
@@ -133,13 +138,20 @@ fn make_valid_vault_spend(
     wasm: &[u8],
     out_val: u64,
 ) -> Transaction {
-    let placeholder = VaultRedeemer::NormalWithdraw { signature: [0u8; 64] };
+    let placeholder = VaultRedeemer::NormalWithdraw {
+        signature: [0u8; 64],
+    };
     let placeholder_bytes = bincode::serialize(&placeholder).unwrap();
     let draft = make_spending_tx(outpoint, wasm.to_vec(), placeholder_bytes, out_val);
     let tx_hash = draft.compute_hash();
     let sig = signing_key.sign(&tx_hash).to_bytes();
     let real = VaultRedeemer::NormalWithdraw { signature: sig };
-    make_spending_tx(outpoint, wasm.to_vec(), bincode::serialize(&real).unwrap(), out_val)
+    make_spending_tx(
+        outpoint,
+        wasm.to_vec(),
+        bincode::serialize(&real).unwrap(),
+        out_val,
+    )
 }
 
 /// Build a vault-spending transaction with a deliberately forged (invalid) signature.
@@ -150,7 +162,9 @@ fn make_invalid_vault_spend(
     out_val: u64,
 ) -> Transaction {
     // Build a real signature first, then corrupt it before constructing the tx.
-    let placeholder = VaultRedeemer::NormalWithdraw { signature: [0u8; 64] };
+    let placeholder = VaultRedeemer::NormalWithdraw {
+        signature: [0u8; 64],
+    };
     let placeholder_bytes = bincode::serialize(&placeholder).unwrap();
     let draft = make_spending_tx(outpoint, wasm.to_vec(), placeholder_bytes, out_val);
     let tx_hash = draft.compute_hash();
@@ -200,7 +214,15 @@ fn mine_block(
     let mut txs = vec![coinbase];
     txs.extend(non_coinbase);
     // Use minimal difficulty target (regtest-style); version=1, height is tracked by ChainTree
-    let header = BlockHeader::new(1u32, parent_hash, Hash256::ZERO, utxo_root, timestamp, 0x207fffff, 0);
+    let header = BlockHeader::new(
+        1u32,
+        parent_hash,
+        Hash256::ZERO,
+        utxo_root,
+        timestamp,
+        0x207fffff,
+        0,
+    );
     Block::new(header, txs)
 }
 
@@ -229,7 +251,10 @@ fn test_reorg_with_invalid_wasm_contract_spend_is_rejected() {
 
     // ── Block A1: canonical block 1 with a Vault eUTXO output ────────────────
     let script_hash = *blake3::hash(&wasm).as_bytes();
-    let lock = OutputLock::Script { script_hash, datum: datum_bytes.clone() };
+    let lock = OutputLock::Script {
+        script_hash,
+        datum: datum_bytes.clone(),
+    };
     let vault_txout = TxOutput::new(subsidy, lock).to_tx_out();
 
     let cb_a1 = Transaction::new_coinbase(1, vec![vault_txout.clone()]);
@@ -237,7 +262,10 @@ fn test_reorg_with_invalid_wasm_contract_spend_is_rejected() {
 
     let mut staged_a = node.query_utxo_set();
     let block_a1 = mine_block(1, genesis_tip, cb_a1.clone(), vec![], &mut staged_a, 100);
-    assert!(node.submit_external_block(block_a1.clone()).unwrap(), "Block A1 accepted");
+    assert!(
+        node.submit_external_block(block_a1.clone()).unwrap(),
+        "Block A1 accepted"
+    );
     assert_eq!(node.canonical_height(), 1);
     let a1_hash = block_a1.header.hash();
     let staged_after_a1 = staged_a.clone();
@@ -245,19 +273,18 @@ fn test_reorg_with_invalid_wasm_contract_spend_is_rejected() {
     // ── Block A2: extends A1 (plain coinbase) ────────────────────────────────
     let cb_a2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy, vec![0x51])]);
     let block_a2 = mine_block(2, a1_hash, cb_a2, vec![], &mut staged_a, 200);
-    assert!(node.submit_external_block(block_a2.clone()).unwrap(), "Block A2 accepted");
+    assert!(
+        node.submit_external_block(block_a2.clone()).unwrap(),
+        "Block A2 accepted"
+    );
     assert_eq!(node.canonical_height(), 2);
     let tip_a2 = node.canonical_tip();
 
     // ── Challenger Branch B: forks from A1 with FORGED signature spend of Vault ─────────
     // Common ancestor between A2 and B is A1, where the Vault eUTXO is unspent.
     let mut staged_b = staged_after_a1.clone();
-    let invalid_spend_tx = make_invalid_vault_spend(
-        &signing_key,
-        vault_outpoint,
-        &wasm,
-        subsidy - 1_000,
-    );
+    let invalid_spend_tx =
+        make_invalid_vault_spend(&signing_key, vault_outpoint, &wasm, subsidy - 1_000);
     let cb_b2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy, vec![0x51])]);
     let block_b2 = mine_block(
         2,
@@ -277,70 +304,75 @@ fn test_reorg_with_invalid_wasm_contract_spend_is_rejected() {
     );
 
     // Tip MUST remain A2
-    assert_eq!(node.canonical_tip(), tip_a2, "Canonical tip must remain A2 after failed B2 spend");
+    assert_eq!(
+        node.canonical_tip(),
+        tip_a2,
+        "Canonical tip must remain A2 after failed B2 spend"
+    );
     assert_eq!(node.canonical_height(), 2, "Height must remain 2");
 
     // Even if attacker mines B3 on top of B2 to accumulate higher PoW:
     let cb_b3 = Transaction::new_coinbase(3, vec![TxOut::new(subsidy, vec![0x51])]);
-    let block_b3 = mine_block(
-        3,
-        block_b2.header.hash(),
-        cb_b3,
-        vec![],
-        &mut staged_b,
-        300,
-    );
+    let block_b3 = mine_block(3, block_b2.header.hash(), cb_b3, vec![], &mut staged_b, 300);
     let b3_result = node.submit_external_block(block_b3);
     assert!(
         b3_result.is_err(),
         "Block B3 extending invalid branch B must be rejected, but got: {:?}",
         b3_result.ok()
     );
-    assert_eq!(node.canonical_tip(), tip_a2, "Canonical tip must remain A2 after B3 attempt");
-    println!("[OK] Reorg with forged Wasm signature correctly rejected; canonical tip unchanged at A2.");
+    assert_eq!(
+        node.canonical_tip(),
+        tip_a2,
+        "Canonical tip must remain A2 after B3 attempt"
+    );
+    println!(
+        "[OK] Reorg with forged Wasm signature correctly rejected; canonical tip unchanged at A2."
+    );
 
     // ── Positive Scenario: Challenger Branch C with VALID signature spend of Vault ──────
     let mut staged_c = staged_after_a1;
-    let valid_spend_tx = make_valid_vault_spend(
-        &signing_key,
-        vault_outpoint,
-        &wasm,
-        subsidy - 500,
-    );
+    let valid_spend_tx = make_valid_vault_spend(&signing_key, vault_outpoint, &wasm, subsidy - 500);
     let cb_c2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy, vec![0x51])]);
-    let block_c2 = mine_block(
-        2,
-        a1_hash,
-        cb_c2,
-        vec![valid_spend_tx],
-        &mut staged_c,
-        200,
-    );
+    let block_c2 = mine_block(2, a1_hash, cb_c2, vec![valid_spend_tx], &mut staged_c, 200);
     let c2_result = node.submit_external_block(block_c2.clone());
-    assert!(c2_result.is_ok(), "Block C2 must be accepted: {:?}", c2_result.err());
-    assert!(!c2_result.unwrap(), "C2 must not displace A2 yet (equal work, first-seen)");
+    assert!(
+        c2_result.is_ok(),
+        "Block C2 must be accepted: {:?}",
+        c2_result.err()
+    );
+    assert!(
+        !c2_result.unwrap(),
+        "C2 must not displace A2 yet (equal work, first-seen)"
+    );
     assert_eq!(node.canonical_tip(), tip_a2, "Tip stays at A2 before C3");
 
     // Block C3 extends C2 -> cumulative work of Branch C (3) > Canonical tip A2 (2) -> triggers reorg!
     let cb_c3 = Transaction::new_coinbase(3, vec![TxOut::new(subsidy, vec![0x51])]);
-    let block_c3 = mine_block(
-        3,
-        block_c2.header.hash(),
-        cb_c3,
-        vec![],
-        &mut staged_c,
-        300,
-    );
+    let block_c3 = mine_block(3, block_c2.header.hash(), cb_c3, vec![], &mut staged_c, 300);
     let c3_result = node.submit_external_block(block_c3.clone());
-    assert!(c3_result.is_ok(), "Block C3 must be accepted: {:?}", c3_result.err());
-    assert!(c3_result.unwrap(), "C3 must become canonical tip after valid Wasm spend reorg");
-    assert_eq!(node.canonical_height(), 3, "Canonical height must advance to 3");
-    assert_eq!(node.canonical_tip(), block_c3.header.hash(), "Canonical tip must shift to C3");
+    assert!(
+        c3_result.is_ok(),
+        "Block C3 must be accepted: {:?}",
+        c3_result.err()
+    );
+    assert!(
+        c3_result.unwrap(),
+        "C3 must become canonical tip after valid Wasm spend reorg"
+    );
+    assert_eq!(
+        node.canonical_height(),
+        3,
+        "Canonical height must advance to 3"
+    );
+    assert_eq!(
+        node.canonical_tip(),
+        block_c3.header.hash(),
+        "Canonical tip must shift to C3"
+    );
     println!("[OK] Reorg with valid Wasm signature succeeded; canonical tip shifted to C3.");
 
     node.shutdown().unwrap();
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test B: Reorg with VALID Wasm spend must succeed (tip shifts)
@@ -375,7 +407,10 @@ fn test_reorg_with_valid_wasm_contract_spend_triggers_reorg() {
     let cb_a1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy, vec![0x51])]);
     let mut staged_a = node.query_utxo_set();
     let block_a1 = mine_block(1, genesis_tip, cb_a1, vec![], &mut staged_a, 100);
-    assert!(node.submit_external_block(block_a1.clone()).unwrap(), "A1 accepted");
+    assert!(
+        node.submit_external_block(block_a1.clone()).unwrap(),
+        "A1 accepted"
+    );
     let tip_a1 = node.canonical_tip();
     assert_eq!(node.canonical_height(), 1);
 
@@ -384,7 +419,10 @@ fn test_reorg_with_valid_wasm_contract_spend_triggers_reorg() {
     // Crucially, the vault UTXO is created *within* the B-branch, so it is
     // consensually spendable by B2.
     let script_hash = *blake3::hash(&wasm).as_bytes();
-    let lock = OutputLock::Script { script_hash, datum: datum_bytes.clone() };
+    let lock = OutputLock::Script {
+        script_hash,
+        datum: datum_bytes.clone(),
+    };
     let vault_txout = TxOutput::new(subsidy, lock).to_tx_out();
     let cb_b1 = Transaction::new_coinbase(1, vec![vault_txout.clone()]);
     let vault_outpoint = OutPoint::new(cb_b1.txid(), 0);
@@ -408,15 +446,17 @@ fn test_reorg_with_valid_wasm_contract_spend_triggers_reorg() {
     };
     let block_b1 = mine_block(1, genesis_tip, cb_b1, vec![], &mut staged_b, 150);
     let b1_result = node.submit_external_block(block_b1.clone()).unwrap();
-    assert!(!b1_result, "B1 must not become canonical (equal work, first-seen rule)");
+    assert!(
+        !b1_result,
+        "B1 must not become canonical (equal work, first-seen rule)"
+    );
     assert_eq!(node.canonical_tip(), tip_a1, "Tip stays at A1 after B1");
 
     // ── B2: extends B1 with VALID vault spend ─────────────────────────────────
     // B2 has cumulative work = 2W > A1's W → triggers reorg.
     // vault_outpoint is in staged_b (added by mine_block processing of B1's coinbase).
     // The Wasm validator must accept the genuine Ed25519 signature.
-    let valid_spend_tx =
-        make_valid_vault_spend(&signing_key, vault_outpoint, &wasm, subsidy - 500);
+    let valid_spend_tx = make_valid_vault_spend(&signing_key, vault_outpoint, &wasm, subsidy - 500);
 
     let cb_b2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy, vec![0x51])]);
     let block_b2 = mine_block(
@@ -434,15 +474,23 @@ fn test_reorg_with_valid_wasm_contract_spend_triggers_reorg() {
         "Block B2 with valid Wasm signature must be accepted: {:?}",
         b2_result.err()
     );
-    assert!(b2_result.unwrap(), "B2 must become canonical tip (more cumulative work)");
-    assert_eq!(node.canonical_height(), 2, "Canonical height must advance to 2");
+    assert!(
+        b2_result.unwrap(),
+        "B2 must become canonical tip (more cumulative work)"
+    );
+    assert_eq!(
+        node.canonical_height(),
+        2,
+        "Canonical height must advance to 2"
+    );
     assert_ne!(
         node.canonical_tip(),
         tip_a1,
         "Canonical tip must no longer be A1 after reorg to B2"
     );
-    println!("[OK] Reorg with valid Wasm signature succeeded; tip advanced to height 2 (branch B).");
+    println!(
+        "[OK] Reorg with valid Wasm signature succeeded; tip advanced to height 2 (branch B)."
+    );
 
     node.shutdown().unwrap();
 }
-

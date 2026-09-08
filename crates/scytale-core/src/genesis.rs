@@ -140,10 +140,7 @@ mod tests {
             TOTAL_GENESIS_QUANTA + MINING_RESERVE_QUANTA,
             MAX_SUPPLY_QUANTA
         );
-        assert_eq!(
-            MAX_SUPPLY_QUANTA,
-            MAX_SUPPLY_SCY * QUANTA_PER_SCY
-        );
+        assert_eq!(MAX_SUPPLY_QUANTA, MAX_SUPPLY_SCY * QUANTA_PER_SCY);
     }
 
     #[test]

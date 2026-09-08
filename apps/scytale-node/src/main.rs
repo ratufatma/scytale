@@ -56,6 +56,10 @@ struct Cli {
     #[arg(long)]
     miner_payout: Option<String>,
 
+    /// NATS broker URL for the Rust async-nats transport (e.g. nats://116.212.72.89:4222)
+    #[arg(long, visible_alias = "nats-url")]
+    nats: Option<String>,
+
     /// Disable P2P subsystem completely (standalone mode)
     #[arg(long, default_value_t = false)]
     no_p2p: bool,
@@ -130,6 +134,10 @@ enum Commands {
         #[arg(long)]
         miner_payout: Option<String>,
 
+        /// NATS broker URL for the Rust async-nats transport (e.g. nats://116.212.72.89:4222)
+        #[arg(long, visible_alias = "nats-url")]
+        nats: Option<String>,
+
         /// Disable P2P subsystem completely (standalone mode)
         #[arg(long, default_value_t = false)]
         no_p2p: bool,
@@ -172,6 +180,7 @@ struct StartOptions {
     p2p_bin: Option<std::path::PathBuf>,
     target: Option<String>,
     miner_payout: Option<String>,
+    nats: Option<String>,
     no_p2p: bool,
     http_bind: String,
     no_http: bool,
@@ -205,6 +214,7 @@ async fn main() {
             p2p_bin,
             target,
             miner_payout,
+            nats,
             no_p2p,
             http_bind,
             no_http,
@@ -231,6 +241,7 @@ async fn main() {
                     p2p_bin: p2p_bin.clone().or_else(|| cli.p2p_bin.clone()),
                     target: target.clone().or_else(|| cli.target.clone()),
                     miner_payout: miner_payout.clone().or_else(|| cli.miner_payout.clone()),
+                    nats: nats.clone().or_else(|| cli.nats.clone()),
                     no_p2p: *no_p2p || cli.no_p2p,
                     http_bind: http_bind.clone(),
                     no_http: *no_http || cli.no_http,
@@ -260,6 +271,7 @@ async fn main() {
                 p2p_bin: cli.p2p_bin.clone(),
                 target: cli.target.clone(),
                 miner_payout: cli.miner_payout.clone(),
+                nats: cli.nats.clone(),
                 no_p2p: cli.no_p2p,
                 http_bind: cli.http_bind.clone(),
                 no_http: cli.no_http,
@@ -302,6 +314,7 @@ async fn main() {
             socket = %socket,
             p2p_bind = ?opts.p2p_bind,
             peers = ?opts.peers,
+            nats = ?opts.nats,
             http_bind = %opts.http_bind,
             http_enabled = !opts.no_http,
             explorer_url = ?opts.explorer_url,
@@ -356,8 +369,12 @@ async fn main() {
 
                 // Launch native Rust async-nats P2P engine if enabled.
                 let p2p_handle = if !opts.no_p2p {
-                    let nats_url = std::env::var("SCYTALE_NATS_URL")
-                        .unwrap_or_else(|_| "nats://116.212.72.89:4222".to_string());
+                    let nats_url = opts
+                        .nats
+                        .clone()
+                        .or_else(|| std::env::var("SCYTALE_NATS").ok())
+                        .or_else(|| std::env::var("SCYTALE_NATS_URL").ok())
+                        .unwrap_or_else(|| "nats://116.212.72.89:4222".to_string());
                     match P2pEngine::connect(&nats_url, format!("scytale-node-{}", std::process::id())).await
                     {
                         Ok(engine) => {

@@ -97,7 +97,6 @@ fn test_node_state_transitions() {
 fn test_fresh_node_zero_balance_bootstrap() {
     let dir = tempfile::TempDir::new().unwrap();
 
-
     // Fresh node, mining disabled: reaches Running. The only value present is the
     // defined genesis emission; no user or wallet account is credited — a freshly
     // started node holds a spendable balance of 0 SCY associated with any user key.

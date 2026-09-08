@@ -144,10 +144,12 @@ fn test_out_of_fuel_traps_safely() {
     let ctx = dummy_context();
     // Berikan gas_limit yang sangat kecil (hanya 1 fuel unit)
     let res = ScyVM::execute_validator(&wasm, b"datum", b"redeemer", &ctx, 1);
-    assert!(res.is_err(), "eksekusi dengan fuel tidak mencukupi harus gagal");
+    assert!(
+        res.is_err(),
+        "eksekusi dengan fuel tidak mencukupi harus gagal"
+    );
     match res.unwrap_err() {
         VmError::ExecutionTrapped | VmError::OutOfGas => {}
         other => panic!("expected OutOfGas or ExecutionTrapped, got: {:?}", other),
     }
 }
-

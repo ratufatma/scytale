@@ -113,16 +113,10 @@ pub fn start_indexer(target_url: String, api_key: Option<String>) -> IndexerHand
 ///
 /// Dispatches serialized JSON payloads to `target_url` via `ureq::post`.
 /// Retries on network errors up to 3 times with 2-second sleep before discarding.
-fn worker_loop(
-    receiver: Receiver<BlockPayload>,
-    target_url: String,
-    api_key: Option<String>,
-) {
+fn worker_loop(receiver: Receiver<BlockPayload>, target_url: String, api_key: Option<String>) {
     tracing::info!(target_url = %target_url, "scytale indexer worker started");
 
-    let agent = ureq::builder()
-        .timeout(Duration::from_secs(10))
-        .build();
+    let agent = ureq::builder().timeout(Duration::from_secs(10)).build();
 
     while let Ok(payload) = receiver.recv() {
         let mut retries = 0;
@@ -270,10 +264,8 @@ mod tests {
             difficulty_target: 0x1d00ffff,
             nonce: 12345,
         };
-        let coinbase = Transaction::new_coinbase(
-            0,
-            vec![TxOut::new(50_0000_0000, vec![0x01, 0x02, 0x03])],
-        );
+        let coinbase =
+            Transaction::new_coinbase(0, vec![TxOut::new(50_0000_0000, vec![0x01, 0x02, 0x03])]);
         let block = Block::new(header, vec![coinbase]);
 
         let payload = BlockPayload::from_block(&block, 5);
