@@ -223,14 +223,9 @@ fn test_scy20_wasm_transfer_conservation_and_balance_duplication() {
     };
     let tampered_bytes = serialize_redeemer(&tampered_redeemer).unwrap();
 
-    let res_tampered = ScyVM::execute_validator(
-        &wasm_bytes,
-        &datum_bytes,
-        &tampered_bytes,
-        &ctx,
-        1_000_000,
-    )
-    .expect("ScyVM execution should succeed");
+    let res_tampered =
+        ScyVM::execute_validator(&wasm_bytes, &datum_bytes, &tampered_bytes, &ctx, 1_000_000)
+            .expect("ScyVM execution should succeed");
 
     assert!(
         !res_tampered.is_valid,

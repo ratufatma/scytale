@@ -178,7 +178,10 @@ async fn test_http_tx_endpoint() {
     assert_eq!(tx["is_coinbase"], true);
     assert_eq!(tx["status"], "Confirmed");
     assert_eq!(tx["block_height"], 0);
-    assert_eq!(tx["total_output_quanta"], scytale_core::genesis::TOTAL_GENESIS_QUANTA);
+    assert_eq!(
+        tx["total_output_quanta"],
+        scytale_core::genesis::TOTAL_GENESIS_QUANTA
+    );
     assert_eq!(tx["total_output_scy"], "13020000.00000000");
 
     // 2. Non-existent transaction returns 404
@@ -215,7 +218,10 @@ async fn test_http_passbook_endpoint() {
     let body_bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
     let pb: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(pb["account_lock_hex"], founder_lock);
-    assert_eq!(pb["confirmed_balance_quanta"], scytale_core::genesis::GENESIS_FOUNDER_QUANTA);
+    assert_eq!(
+        pb["confirmed_balance_quanta"],
+        scytale_core::genesis::GENESIS_FOUNDER_QUANTA
+    );
     assert_eq!(pb["total_entries"], 1);
 
     // Empty passbook for unused lock
@@ -482,15 +488,21 @@ async fn test_http_passbook_api_and_statement_endpoints() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/v1/passbook?address={}&limit=1", founder_address))
+                .uri(format!(
+                    "/api/v1/passbook?address={}&limit=1",
+                    founder_address
+                ))
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(response_limit.status(), StatusCode::OK);
-    let body_bytes = to_bytes(response_limit.into_body(), 1024 * 1024).await.unwrap();
-    let view_limit: scytale_node::passbook::PassbookView = serde_json::from_slice(&body_bytes).unwrap();
+    let body_bytes = to_bytes(response_limit.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let view_limit: scytale_node::passbook::PassbookView =
+        serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(view_limit.entries.len(), 1);
 
     // 3. GET /api/v1/passbook with invalid address fails
@@ -511,19 +523,22 @@ async fn test_http_passbook_api_and_statement_endpoints() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri(format!("/api/v1/passbook/statement?address={}", founder_address))
+                .uri(format!(
+                    "/api/v1/passbook/statement?address={}",
+                    founder_address
+                ))
                 .body(Body::empty())
                 .unwrap(),
         )
         .await
         .unwrap();
     assert_eq!(response_statement.status(), StatusCode::OK);
-    let body_bytes = to_bytes(response_statement.into_body(), 1024 * 1024).await.unwrap();
-    let statement: scytale_node::passbook::PassbookStatement = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(
-        statement.account.to_bech32().unwrap(),
-        founder_address
-    );
+    let body_bytes = to_bytes(response_statement.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
+    let statement: scytale_node::passbook::PassbookStatement =
+        serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(statement.account.to_bech32().unwrap(), founder_address);
     assert_eq!(
         statement.confirmed_native_balance_quanta,
         scytale_core::genesis::GENESIS_FOUNDER_QUANTA

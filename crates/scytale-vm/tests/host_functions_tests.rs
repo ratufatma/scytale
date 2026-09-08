@@ -94,7 +94,7 @@ fn build_crypto_test_wasm(test_mode: &str) -> Vec<u8> {
                 0x20, 0x04, // local.get 4
                 0x20, 0x05, // local.get 5
                 0x10, 0x00, // call 0 (ed25519_verify)
-                0x0b,       // end
+                0x0b, // end
             ]);
         }
         "blake3" => {
@@ -102,19 +102,19 @@ fn build_crypto_test_wasm(test_mode: &str) -> Vec<u8> {
             // (hashes redeemer, writes 32B result into datum_ptr + 32)
             // Then compare datum_ptr[0..8] with (datum_ptr + 32)[0..8] (i64 comparison)
             code_body.extend_from_slice(&[
-                0x20, 0x02,             // local.get 2 (redeemer_ptr)
-                0x20, 0x03,             // local.get 3 (redeemer_len)
-                0x20, 0x00,             // local.get 0 (datum_ptr)
-                0x41, 0x20,             // i32.const 32
-                0x6a,                   // i32.add (datum_ptr + 32)
-                0x10, 0x01,             // call 1 (scytale_crypto_blake3)
+                0x20, 0x02, // local.get 2 (redeemer_ptr)
+                0x20, 0x03, // local.get 3 (redeemer_len)
+                0x20, 0x00, // local.get 0 (datum_ptr)
+                0x41, 0x20, // i32.const 32
+                0x6a, // i32.add (datum_ptr + 32)
+                0x10, 0x01, // call 1 (scytale_crypto_blake3)
                 // Compare i64 at datum_ptr with i64 at datum_ptr + 32
-                0x20, 0x00,             // local.get 0
-                0x29, 0x03, 0x00,       // i64.load offset=0
-                0x20, 0x00,             // local.get 0
-                0x29, 0x03, 0x20,       // i64.load offset=32
-                0x51,                   // i64.eq
-                0x0b,                   // end
+                0x20, 0x00, // local.get 0
+                0x29, 0x03, 0x00, // i64.load offset=0
+                0x20, 0x00, // local.get 0
+                0x29, 0x03, 0x20, // i64.load offset=32
+                0x51, // i64.eq
+                0x0b, // end
             ]);
         }
         _ => panic!("Unknown test mode"),
@@ -163,45 +163,41 @@ fn test_host_function_ed25519_verify_valid_and_invalid() {
     let sig_bytes = signature.to_bytes();
 
     // 1. Valid signature
-    let result_valid = ScyVM::execute_validator(
-        &wasm,
-        &public_key,
-        &sig_bytes,
-        &ctx,
-        1_000_000,
-    )
-    .expect("Execution should succeed");
+    let result_valid = ScyVM::execute_validator(&wasm, &public_key, &sig_bytes, &ctx, 1_000_000)
+        .expect("Execution should succeed");
 
-    assert!(result_valid.is_valid, "Valid Ed25519 signature must return is_valid=true");
-    assert!(result_valid.gas_consumed >= 200, "Should consume at least 200 fuel for Ed25519 verify");
+    assert!(
+        result_valid.is_valid,
+        "Valid Ed25519 signature must return is_valid=true"
+    );
+    assert!(
+        result_valid.gas_consumed >= 200,
+        "Should consume at least 200 fuel for Ed25519 verify"
+    );
 
     // 2. Tampered signature
     let mut tampered_sig = sig_bytes;
     tampered_sig[0] ^= 0xff;
 
-    let result_tampered = ScyVM::execute_validator(
-        &wasm,
-        &public_key,
-        &tampered_sig,
-        &ctx,
-        1_000_000,
-    )
-    .expect("Execution should succeed");
+    let result_tampered =
+        ScyVM::execute_validator(&wasm, &public_key, &tampered_sig, &ctx, 1_000_000)
+            .expect("Execution should succeed");
 
-    assert!(!result_tampered.is_valid, "Tampered signature must return is_valid=false");
+    assert!(
+        !result_tampered.is_valid,
+        "Tampered signature must return is_valid=false"
+    );
 
     // 3. Wrong public key
     let wrong_pubkey = [0x12u8; 32];
-    let result_wrong_pk = ScyVM::execute_validator(
-        &wasm,
-        &wrong_pubkey,
-        &sig_bytes,
-        &ctx,
-        1_000_000,
-    )
-    .expect("Execution should succeed");
+    let result_wrong_pk =
+        ScyVM::execute_validator(&wasm, &wrong_pubkey, &sig_bytes, &ctx, 1_000_000)
+            .expect("Execution should succeed");
 
-    assert!(!result_wrong_pk.is_valid, "Wrong public key must return is_valid=false");
+    assert!(
+        !result_wrong_pk.is_valid,
+        "Wrong public key must return is_valid=false"
+    );
 }
 
 #[test]
@@ -217,15 +213,15 @@ fn test_host_function_blake3_hashing() {
 
     let ctx = dummy_context();
 
-    let result = ScyVM::execute_validator(
-        &wasm,
-        &datum,
-        payload,
-        &ctx,
-        1_000_000,
-    )
-    .expect("Execution should succeed");
+    let result = ScyVM::execute_validator(&wasm, &datum, payload, &ctx, 1_000_000)
+        .expect("Execution should succeed");
 
-    assert!(result.is_valid, "BLAKE3 hash output must match expected digest");
-    assert!(result.gas_consumed > 15, "Gas consumed should include BLAKE3 fuel");
+    assert!(
+        result.is_valid,
+        "BLAKE3 hash output must match expected digest"
+    );
+    assert!(
+        result.gas_consumed > 15,
+        "Gas consumed should include BLAKE3 fuel"
+    );
 }

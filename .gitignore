@@ -1,5 +1,9 @@
 # Rust build artifacts
 /target/
+*.wasm
+*.tar.gz
+*.log
+/tmp/
 **/*.rs.bk
 Cargo.lock.tmp
 

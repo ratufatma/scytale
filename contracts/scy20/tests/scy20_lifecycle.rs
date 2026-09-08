@@ -1,8 +1,8 @@
 use ed25519_dalek::{Signer, SigningKey};
 use scy20::codec::{deserialize_datum, deserialize_redeemer, serialize_datum, serialize_redeemer};
 use scy20::{
-    validate_scy20_execution, Address, Scy20Datum, Scy20Error, Scy20Redeemer,
-    TokenId, TokenMetadata, TxContext,
+    validate_scy20_execution, Address, Scy20Datum, Scy20Error, Scy20Redeemer, TokenId,
+    TokenMetadata, TxContext,
 };
 
 fn make_keypair(seed: u8) -> (SigningKey, Address) {

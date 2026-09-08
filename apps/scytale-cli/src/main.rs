@@ -8,7 +8,7 @@ pub mod wallet;
 
 use clap::{Args, Parser, Subcommand};
 use client::{send_node_request, CliClientError};
-use contract::{ContractArgs, handle_contract};
+use contract::{handle_contract, ContractArgs};
 use ed25519_dalek::Signer;
 use identity::IdentityStore;
 use scytale_bridge::{NodeRequest, NodeResponse};
@@ -159,7 +159,6 @@ pub enum Commands {
     /// Developer tooling for eUTXO WebAssembly smart contracts (inspect, build, deploy, call)
     Contract(ContractArgs),
 }
-
 
 #[derive(Args, Debug, PartialEq, Eq)]
 pub struct WalletArgs {
@@ -417,9 +416,9 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 }
                 url.push_str(&format!("&limit={limit}"));
 
-                let resp = ureq::get(&url)
-                    .call()
-                    .map_err(|e| CliClientError::User(format!("HTTP request failed to {url}: {e}")))?;
+                let resp = ureq::get(&url).call().map_err(|e| {
+                    CliClientError::User(format!("HTTP request failed to {url}: {e}"))
+                })?;
 
                 let view: scytale_node::passbook::PassbookView = resp.into_json().map_err(|e| {
                     CliClientError::User(format!("Failed to parse PassbookView JSON response: {e}"))
@@ -438,13 +437,16 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                     address
                 );
 
-                let resp = ureq::get(&url)
-                    .call()
-                    .map_err(|e| CliClientError::User(format!("HTTP request failed to {url}: {e}")))?;
-
-                let statement: scytale_node::passbook::PassbookStatement = resp.into_json().map_err(|e| {
-                    CliClientError::User(format!("Failed to parse PassbookStatement JSON response: {e}"))
+                let resp = ureq::get(&url).call().map_err(|e| {
+                    CliClientError::User(format!("HTTP request failed to {url}: {e}"))
                 })?;
+
+                let statement: scytale_node::passbook::PassbookStatement =
+                    resp.into_json().map_err(|e| {
+                        CliClientError::User(format!(
+                            "Failed to parse PassbookStatement JSON response: {e}"
+                        ))
+                    })?;
 
                 if let Some(output_path) = output {
                     let json_str = serde_json::to_string_pretty(&statement).map_err(|e| {
@@ -473,9 +475,11 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 }
             }
             None => {
-                let lock_hex = store.resolve_locking_script(args.lock.as_deref()).map_err(|e| {
-                    CliClientError::User(format!("Could not resolve account lock: {e}"))
-                })?;
+                let lock_hex = store
+                    .resolve_locking_script(args.lock.as_deref())
+                    .map_err(|e| {
+                        CliClientError::User(format!("Could not resolve account lock: {e}"))
+                    })?;
 
                 let resp = send_node_request(
                     &cli.socket,
@@ -574,7 +578,9 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
             let is_start = args.start || args.action.as_deref() == Some("start");
             let is_stop = args.stop || args.action.as_deref() == Some("stop");
             if !is_start && !is_stop {
-                eprintln!("Specify either `start` or `stop` (or `--start` / `--stop`) to control mining.");
+                eprintln!(
+                    "Specify either `start` or `stop` (or `--start` / `--stop`) to control mining."
+                );
                 return Ok(());
             }
 
@@ -658,9 +664,8 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
             } => {
                 let path = file.unwrap_or_else(WalletFile::default_path);
                 if mnemonic {
-                    let (wallet, phrase) =
-                        WalletFile::generate_with_mnemonic(&path, force, words)
-                            .map_err(CliClientError::Wallet)?;
+                    let (wallet, phrase) = WalletFile::generate_with_mnemonic(&path, force, words)
+                        .map_err(CliClientError::Wallet)?;
                     formatter::print_wallet_mnemonic_created(
                         &path,
                         &wallet.public_key,

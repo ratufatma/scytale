@@ -480,7 +480,6 @@ async fn test_ipc_request_response_roundtrip() {
         other => panic!("Unexpected response for GetPassbook: {other:?}"),
     }
 
-
     // 3. Toggle Mining On and Off
     let resp = client::send_node_request(&sock_path, NodeRequest::SetMining { enabled: true })
         .await
@@ -559,7 +558,6 @@ async fn test_ipc_request_response_roundtrip() {
         }
         other => panic!("Unexpected response for TraceProvenance: {other:?}"),
     }
-
 
     // 7. Stop Node
     let resp = client::send_node_request(&sock_path, NodeRequest::StopNode)
@@ -652,7 +650,10 @@ fn test_passbook_subcommand_parsing_and_table_rendering() {
                 verify,
             }) => {
                 assert_eq!(address, "scy1qtestaccount");
-                assert_eq!(output, Some(std::path::PathBuf::from("/tmp/statement.json")));
+                assert_eq!(
+                    output,
+                    Some(std::path::PathBuf::from("/tmp/statement.json"))
+                );
                 assert!(verify);
             }
             _ => panic!("Expected TestPassbookSubcommand::Statement"),

@@ -330,23 +330,33 @@ impl StorageEngine {
                             let entry = UtxoEntry::from_canonical_bytes(guard.value())
                                 .map_err(|e| StorageError::serialization(e.to_string()))?;
                             Some(entry.output)
-                        } else if let Some(tx_bytes) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
+                        } else if let Some(tx_bytes) =
+                            tx_tbl.get(input.previous_output.txid.as_bytes())?
+                        {
                             let prev_tx = Transaction::from_canonical_bytes(tx_bytes.value())
                                 .map_err(|e| StorageError::serialization(e.to_string()))?;
-                            prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                            prev_tx
+                                .outputs
+                                .get(input.previous_output.index as usize)
+                                .cloned()
                         } else {
                             None
                         };
 
                         if let Some(spent_out) = spent_output {
-                            if let Some(addr) = extract_address_from_locking_condition(&spent_out.locking_condition) {
-                                block_addr_records.entry(addr).or_default().push(AddressTxRecord {
-                                    txid,
-                                    is_input: true,
-                                    is_output: false,
-                                    value_quanta: spent_out.value,
-                                    token_id: None,
-                                });
+                            if let Some(addr) =
+                                extract_address_from_locking_condition(&spent_out.locking_condition)
+                            {
+                                block_addr_records
+                                    .entry(addr)
+                                    .or_default()
+                                    .push(AddressTxRecord {
+                                        txid,
+                                        is_input: true,
+                                        is_output: false,
+                                        value_quanta: spent_out.value,
+                                        token_id: None,
+                                    });
                             }
                         }
 
@@ -357,14 +367,19 @@ impl StorageEngine {
                 // Create new UTXOs for all non-OP_RETURN outputs and record address index
                 for (idx, output) in tx.outputs.iter().enumerate() {
                     // Record output in ADDRESS_TX_INDEX if address is resolvable
-                    if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
-                        block_addr_records.entry(addr).or_default().push(AddressTxRecord {
-                            txid,
-                            is_input: false,
-                            is_output: true,
-                            value_quanta: output.value,
-                            token_id: None,
-                        });
+                    if let Some(addr) =
+                        extract_address_from_locking_condition(&output.locking_condition)
+                    {
+                        block_addr_records
+                            .entry(addr)
+                            .or_default()
+                            .push(AddressTxRecord {
+                                txid,
+                                is_input: false,
+                                is_output: true,
+                                value_quanta: output.value,
+                                token_id: None,
+                            });
                     }
 
                     // Consensus rule: OP_RETURN outputs (0x6a) are data carriers and omitted from UTXOS table
@@ -435,23 +450,38 @@ impl StorageEngine {
     ) -> Result<(), StorageError> {
         let mut touched_addrs = HashSet::new();
 
-        let block_tx_map: HashMap<Hash256, &Transaction> =
-            block.transactions.iter().map(|tx| (tx.txid(), tx)).collect();
+        let block_tx_map: HashMap<Hash256, &Transaction> = block
+            .transactions
+            .iter()
+            .map(|tx| (tx.txid(), tx))
+            .collect();
 
         for tx in &block.transactions {
             for output in &tx.outputs {
-                if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
+                if let Some(addr) =
+                    extract_address_from_locking_condition(&output.locking_condition)
+                {
                     touched_addrs.insert(addr);
                 }
             }
 
             if !tx.is_coinbase() {
                 for input in &tx.inputs {
-                    let prev_output = if let Some(local_tx) = block_tx_map.get(&input.previous_output.txid) {
-                        local_tx.outputs.get(input.previous_output.index as usize).cloned()
-                    } else if let Some(tx_guard) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
+                    let prev_output = if let Some(local_tx) =
+                        block_tx_map.get(&input.previous_output.txid)
+                    {
+                        local_tx
+                            .outputs
+                            .get(input.previous_output.index as usize)
+                            .cloned()
+                    } else if let Some(tx_guard) =
+                        tx_tbl.get(input.previous_output.txid.as_bytes())?
+                    {
                         if let Ok(prev_tx) = Transaction::from_canonical_bytes(tx_guard.value()) {
-                            prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                            prev_tx
+                                .outputs
+                                .get(input.previous_output.index as usize)
+                                .cloned()
                         } else {
                             None
                         }
@@ -460,7 +490,9 @@ impl StorageEngine {
                     };
 
                     if let Some(out) = prev_output {
-                        if let Some(addr) = extract_address_from_locking_condition(&out.locking_condition) {
+                        if let Some(addr) =
+                            extract_address_from_locking_condition(&out.locking_condition)
+                        {
                             touched_addrs.insert(addr);
                         }
                     }
@@ -487,12 +519,7 @@ impl StorageEngine {
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
 
-            Self::remove_block_address_records_internal(
-                &mut addr_idx_tbl,
-                &tx_tbl,
-                block,
-                height,
-            )?;
+            Self::remove_block_address_records_internal(&mut addr_idx_tbl, &tx_tbl, block, height)?;
 
             for tx in &block.transactions {
                 let txid = tx.txid();
@@ -580,7 +607,8 @@ impl StorageEngine {
                     .map_err(|e| StorageError::serialization(e.to_string()))?;
                 blk_tbl.insert(block_hash.as_bytes(), block_bytes.as_slice())?;
 
-                let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> = HashMap::new();
+                let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> =
+                    HashMap::new();
 
                 for tx in &block.transactions {
                     let txid = tx.txid();
@@ -595,23 +623,33 @@ impl StorageEngine {
                                 let entry = UtxoEntry::from_canonical_bytes(guard.value())
                                     .map_err(|e| StorageError::serialization(e.to_string()))?;
                                 Some(entry.output)
-                            } else if let Some(tx_bytes) = tx_tbl.get(input.previous_output.txid.as_bytes())? {
-                                let prev_tx = Transaction::from_canonical_bytes(tx_bytes.value())
-                                    .map_err(|e| StorageError::serialization(e.to_string()))?;
-                                prev_tx.outputs.get(input.previous_output.index as usize).cloned()
+                            } else if let Some(tx_bytes) =
+                                tx_tbl.get(input.previous_output.txid.as_bytes())?
+                            {
+                                let prev_tx =
+                                    Transaction::from_canonical_bytes(tx_bytes.value())
+                                        .map_err(|e| StorageError::serialization(e.to_string()))?;
+                                prev_tx
+                                    .outputs
+                                    .get(input.previous_output.index as usize)
+                                    .cloned()
                             } else {
                                 None
                             };
 
                             if let Some(spent_out) = spent_output {
-                                if let Some(addr) = extract_address_from_locking_condition(&spent_out.locking_condition) {
-                                    block_addr_records.entry(addr).or_default().push(AddressTxRecord {
-                                        txid,
-                                        is_input: true,
-                                        is_output: false,
-                                        value_quanta: spent_out.value,
-                                        token_id: None,
-                                    });
+                                if let Some(addr) = extract_address_from_locking_condition(
+                                    &spent_out.locking_condition,
+                                ) {
+                                    block_addr_records.entry(addr).or_default().push(
+                                        AddressTxRecord {
+                                            txid,
+                                            is_input: true,
+                                            is_output: false,
+                                            value_quanta: spent_out.value,
+                                            token_id: None,
+                                        },
+                                    );
                                 }
                             }
 
@@ -619,14 +657,19 @@ impl StorageEngine {
                         }
                     }
                     for (idx, output) in tx.outputs.iter().enumerate() {
-                        if let Some(addr) = extract_address_from_locking_condition(&output.locking_condition) {
-                            block_addr_records.entry(addr).or_default().push(AddressTxRecord {
-                                txid,
-                                is_input: false,
-                                is_output: true,
-                                value_quanta: output.value,
-                                token_id: None,
-                            });
+                        if let Some(addr) =
+                            extract_address_from_locking_condition(&output.locking_condition)
+                        {
+                            block_addr_records
+                                .entry(addr)
+                                .or_default()
+                                .push(AddressTxRecord {
+                                    txid,
+                                    is_input: false,
+                                    is_output: true,
+                                    value_quanta: output.value,
+                                    token_id: None,
+                                });
                         }
 
                         if output.locking_condition.first() == Some(&0x6a) {

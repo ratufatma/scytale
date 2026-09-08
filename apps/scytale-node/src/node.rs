@@ -10,8 +10,9 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_core::{
-    AuthorizationError, AuthorizationVerifier, Block, Hash256, OutPoint, OutputLock, Transaction,
-    TxOut, UtxoSet, EutxoValidationError, verify_transaction_eutxo, MAX_TX_GAS, MAX_BLOCK_GAS,
+    verify_transaction_eutxo, AuthorizationError, AuthorizationVerifier, Block,
+    EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet,
+    MAX_BLOCK_GAS, MAX_TX_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
 use scytale_mining::{build_template, run_pow_search};
@@ -289,7 +290,6 @@ impl Node {
         scytale_core::genesis::build_genesis_block(config.genesis_difficulty_target)
     }
 
-
     /// Returns a fresh chain tree seeded with a placeholder genesis (used before recovery).
     fn empty_chain(config: &NodeConfig) -> scytale_consensus::ChainTree {
         scytale_consensus::ChainTree::new(Self::make_genesis(config))
@@ -377,18 +377,11 @@ impl Node {
             }
 
             match chain.process_block_with_verifier(block.clone(), &mut utxos, &NodeBlockVerifier) {
-
                 Ok(Some(reorg)) => {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        commit_block(
-                            &self.storage,
-                            &block,
-                            height,
-                            work,
-                            self.indexer.as_deref(),
-                        )?;
+                        commit_block(&self.storage, &block, height, work, self.indexer.as_deref())?;
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -449,13 +442,8 @@ impl Node {
         for tx in &block.transactions {
             if !tx.is_coinbase() {
                 Self::verify_transaction_scripts(tx, height, staged_utxos)?;
-                let tx_gas = verify_transaction_eutxo(
-                    tx,
-                    block_time,
-                    staged_utxos,
-                    MAX_TX_GAS,
-                )
-                .map_err(NodeError::EutxoValidation)?;
+                let tx_gas = verify_transaction_eutxo(tx, block_time, staged_utxos, MAX_TX_GAS)
+                    .map_err(NodeError::EutxoValidation)?;
                 block_gas_consumed = block_gas_consumed.saturating_add(tx_gas);
                 if block_gas_consumed > MAX_BLOCK_GAS {
                     return Err(NodeError::EutxoValidation(
@@ -475,11 +463,7 @@ impl Node {
                     let op = OutPoint::new(txid, idx as u32);
                     staged_utxos.insert(
                         op,
-                        scytale_core::UtxoEntry::new(
-                            output.clone(),
-                            height,
-                            tx.is_coinbase(),
-                        ),
+                        scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
                     );
                 }
             }
@@ -592,7 +576,6 @@ impl Node {
         }
 
         Ok(())
-
     }
 
     /// Returns a shared handle to the embedded storage for downstream inspection.
@@ -915,7 +898,11 @@ impl Node {
 
             // Skip ScriptEngine evaluation if the locking condition is an eUTXO smart contract (OutputLock::Script).
             // These inputs are validated deterministically by ScyVM via verify_transaction_eutxo.
-            if utxo.output.locking_condition.starts_with(&OutputLock::MAGIC_PREFIX) {
+            if utxo
+                .output
+                .locking_condition
+                .starts_with(&OutputLock::MAGIC_PREFIX)
+            {
                 if let Some(OutputLock::Script { .. }) =
                     OutputLock::from_locking_condition(&utxo.output.locking_condition)
                 {
@@ -943,6 +930,19 @@ impl Node {
     /// resolution, authorization, and value conservation). Read-only with respect
     /// to the canonical ledger; the transaction remains unconfirmed until mined.
     pub fn submit_transaction(&self, tx: Transaction) -> Result<Hash256, NodeError> {
+        self.submit_transaction_internal(tx, true)
+    }
+
+    /// Admits a transaction received from the network without rebroadcasting it.
+    pub fn submit_network_transaction(&self, tx: Transaction) -> Result<Hash256, NodeError> {
+        self.submit_transaction_internal(tx, false)
+    }
+
+    fn submit_transaction_internal(
+        &self,
+        tx: Transaction,
+        broadcast: bool,
+    ) -> Result<Hash256, NodeError> {
         let height = self.canonical_height();
         let utxos = self.shared.utxo_set.lock().unwrap();
         Self::verify_transaction_scripts(&tx, height, &utxos)?;
@@ -957,7 +957,8 @@ impl Node {
         let verifier = PermissiveVerifier;
         let txid = mempool.admit_transaction(tx.clone(), &utxos, &verifier, now)?;
 
-        if let Ok(bytes) = tx.to_canonical_bytes() {
+        if broadcast {
+            if let Ok(bytes) = tx.to_canonical_bytes() {
             let _ = self
                 .shared
                 .p2p_event_tx
@@ -965,6 +966,7 @@ impl Node {
                     tx_hex: scytale_primitives::to_hex(&bytes),
                     txid_hex: txid.to_string(),
                 });
+                    }
         }
 
         Ok(txid)
@@ -1101,7 +1103,14 @@ fn mining_worker_loop(
     cancel: Arc<AtomicBool>,
     indexer: Option<Arc<IndexerHandle>>,
 ) {
-    let mut compact_target = initial_target;
+    let mining_target_override = std::env::var("SCYTALE_MINING_TARGET").ok().and_then(|value| {
+        value
+            .strip_prefix("0x")
+            .map(|hex| u32::from_str_radix(hex, 16))
+            .unwrap_or_else(|| value.parse::<u32>())
+            .ok()
+    });
+    let mut compact_target = mining_target_override.unwrap_or(initial_target);
     let mut current_nonce: u64 = 0;
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -1116,7 +1125,7 @@ fn mining_worker_loop(
             }
             let tip = chain.canonical_tip();
             if let Some(node) = chain.get_node(&tip) {
-                compact_target = node.block.header.difficulty_target;
+                compact_target = mining_target_override.unwrap_or(node.block.header.difficulty_target);
             }
 
             let utxos = shared.utxo_set.lock().unwrap();
@@ -1191,13 +1200,7 @@ fn mining_worker_loop(
                         "mined new block successfully committed"
                     );
                     if reorg.disconnected_blocks.is_empty() {
-                        let _ = commit_block(
-                            &storage,
-                            &block,
-                            height,
-                            work,
-                            indexer.as_deref(),
-                        );
+                        let _ = commit_block(&storage, &block, height, work, indexer.as_deref());
                     } else {
                         let connected_meta = reorg
                             .connected_blocks

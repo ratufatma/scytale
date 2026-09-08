@@ -191,8 +191,8 @@ pub fn validate_scy20_execution(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::{string::ToString, vec};
     use crate::types::Address;
+    use alloc::{string::ToString, vec};
     use ed25519_dalek::{Signer, SigningKey};
 
     const TOKEN_ID: TokenId = [1; 32];

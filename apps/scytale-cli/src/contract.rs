@@ -84,11 +84,7 @@ pub struct DeployArgs {
     pub fee: u64,
 
     /// Node HTTP Gateway URL to broadcast the deployment transaction
-    #[arg(
-        long,
-        alias = "rpc-url",
-        default_value = "http://127.0.0.1:8332"
-    )]
+    #[arg(long, alias = "rpc-url", default_value = "http://127.0.0.1:8332")]
     pub node_url: String,
 
     /// Dry-run mode: simulate transaction construction without broadcasting to the network
@@ -143,11 +139,7 @@ pub struct CallArgs {
     pub input_amount: u64,
 
     /// Node HTTP Gateway URL to broadcast the spend transaction
-    #[arg(
-        long,
-        alias = "rpc-url",
-        default_value = "http://127.0.0.1:8332"
-    )]
+    #[arg(long, alias = "rpc-url", default_value = "http://127.0.0.1:8332")]
     pub node_url: String,
 }
 
@@ -209,9 +201,14 @@ pub struct SubmitTxResponse {
 }
 
 /// Sends a signed transaction to the node HTTP gateway at `POST /api/v1/tx`.
-pub fn broadcast_transaction(node_url: &str, tx: &Transaction) -> Result<SubmitTxResponse, CliClientError> {
+pub fn broadcast_transaction(
+    node_url: &str,
+    tx: &Transaction,
+) -> Result<SubmitTxResponse, CliClientError> {
     let tx_bytes = tx.to_canonical_bytes().map_err(|e| {
-        CliClientError::User(format!("Failed to serialize transaction to canonical bytes: {e}"))
+        CliClientError::User(format!(
+            "Failed to serialize transaction to canonical bytes: {e}"
+        ))
     })?;
     let tx_hex = hex::encode(&tx_bytes);
     let url = format!("{}/api/v1/tx", node_url.trim_end_matches('/'));
@@ -229,14 +226,12 @@ pub fn broadcast_transaction(node_url: &str, tx: &Transaction) -> Result<SubmitT
             )),
             ureq::Error::Status(code, r) => {
                 let err_body = r.into_string().unwrap_or_default();
-                let err_msg = if let Ok(json_err) = serde_json::from_str::<serde_json::Value>(&err_body) {
-                    json_err["error"]
-                        .as_str()
-                        .unwrap_or(&err_body)
-                        .to_string()
-                } else {
-                    err_body
-                };
+                let err_msg =
+                    if let Ok(json_err) = serde_json::from_str::<serde_json::Value>(&err_body) {
+                        json_err["error"].as_str().unwrap_or(&err_body).to_string()
+                    } else {
+                        err_body
+                    };
                 CliClientError::User(format!(
                     "Mempool submission rejected by node (HTTP {code}):\n  Reason: {err_msg}"
                 ))
@@ -244,7 +239,9 @@ pub fn broadcast_transaction(node_url: &str, tx: &Transaction) -> Result<SubmitT
         })?;
 
     let submit_resp: SubmitTxResponse = resp.into_json().map_err(|e| {
-        CliClientError::User(format!("Failed to parse submit response JSON from node: {e}"))
+        CliClientError::User(format!(
+            "Failed to parse submit response JSON from node: {e}"
+        ))
     })?;
     Ok(submit_resp)
 }
@@ -393,7 +390,9 @@ pub fn cmd_build(args: BuildArgs) -> Result<(), CliClientError> {
         println!();
         println!("  Next steps:");
         println!("    scytale-cli contract inspect --wasm <path>.wasm");
-        println!("    scytale-cli contract deploy  --wasm <path>.wasm --datum <hex> --amount <quanta>");
+        println!(
+            "    scytale-cli contract deploy  --wasm <path>.wasm --datum <hex> --amount <quanta>"
+        );
     } else {
         return Err(CliClientError::User(
             "Build failed. Check cargo output above.".to_string(),
@@ -652,8 +651,7 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
         crate::wallet::build_p2pkh_locking_script(addr.hash())
     } else {
         let clean_to = clean_hex(&args.to);
-        hex::decode(clean_to)
-            .map_err(|e| CliClientError::User(format!("Invalid --to hex: {e}")))?
+        hex::decode(clean_to).map_err(|e| CliClientError::User(format!("Invalid --to hex: {e}")))?
     };
 
     let signature_bytes = if let Some(sig_hex) = &args.signature {
@@ -671,9 +669,7 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
     // 3. Determine input and output amounts
     let input_amount = if args.input_amount > 0 {
         args.input_amount
-    } else if let Some(fetched) =
-        fetch_tx_output_value(&node_url, txid_hex, output_index)
-    {
+    } else if let Some(fetched) = fetch_tx_output_value(&node_url, txid_hex, output_index) {
         fetched
     } else if args.amount + args.fee > 0 {
         args.amount + args.fee
@@ -732,8 +728,7 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        let tx_context =
-            create_tx_context(&spending_tx, current_time, input_amount, output_amount);
+        let tx_context = create_tx_context(&spending_tx, current_time, input_amount, output_amount);
 
         println!("  [*] Executing ScyVM sandbox...");
         println!("      block_time   = {} (unix timestamp)", current_time);
@@ -748,10 +743,7 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
             MAX_TX_GAS,
         )
         .map_err(|e| {
-            CliClientError::User(format!(
-                "ScyVM execution trapped during dry-run: {:?}",
-                e
-            ))
+            CliClientError::User(format!("ScyVM execution trapped during dry-run: {:?}", e))
         })?;
 
         fuel_consumed = exec_result.gas_consumed;
@@ -869,7 +861,10 @@ pub mod tests {
         data2.push(0x01);
         let hash1 = hex::encode(blake3::hash(&data1).as_bytes());
         let hash2 = hex::encode(blake3::hash(&data2).as_bytes());
-        assert_ne!(hash1, hash2, "Different content must yield different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Different content must yield different hashes"
+        );
     }
 
     #[test]
@@ -882,9 +877,7 @@ pub mod tests {
 
     #[test]
     fn test_call_utxo_parse_invalid() {
-        let result = "invalid_utxo_format"
-            .splitn(2, ':')
-            .collect::<Vec<_>>();
+        let result = "invalid_utxo_format".splitn(2, ':').collect::<Vec<_>>();
         assert_eq!(result.len(), 1); // no colon separator
     }
 
@@ -946,8 +939,14 @@ pub mod tests {
 
     #[test]
     fn test_format_quanta() {
-        assert_eq!(format_quanta(100_000_000), "100000000 quanta (1.00000000 SCY)");
-        assert_eq!(format_quanta(50_000_000), "50000000 quanta (0.50000000 SCY)");
+        assert_eq!(
+            format_quanta(100_000_000),
+            "100000000 quanta (1.00000000 SCY)"
+        );
+        assert_eq!(
+            format_quanta(50_000_000),
+            "50000000 quanta (0.50000000 SCY)"
+        );
     }
 
     #[test]
@@ -968,6 +967,9 @@ pub mod tests {
 
         // Dry-run with nonexistent wallet should gracefully preview without error
         let result = deploy_contract(args);
-        assert!(result.is_ok(), "Offline dry-run deploy preview should succeed");
+        assert!(
+            result.is_ok(),
+            "Offline dry-run deploy preview should succeed"
+        );
     }
 }

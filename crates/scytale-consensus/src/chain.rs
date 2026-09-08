@@ -101,7 +101,6 @@ impl ChainTree {
 
     /// Sets the maximum reorganization depth allowed during fork resolution.
     pub fn with_max_reorg_depth(mut self, max_reorg_depth: u64) -> Self {
-
         self.max_reorg_depth = max_reorg_depth;
         self
     }

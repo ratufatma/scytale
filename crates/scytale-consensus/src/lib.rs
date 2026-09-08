@@ -59,7 +59,10 @@ mod tests {
         assert_eq!(calculate_block_reward(0), 10 * QUANTA_PER_SCY);
         assert_eq!(calculate_block_reward(1), 10 * QUANTA_PER_SCY);
         assert_eq!(calculate_block_reward(HALVING_INTERVAL), 5 * QUANTA_PER_SCY);
-        assert_eq!(calculate_block_reward(MINING_REWARD_END_HEIGHT - 1), 5 * QUANTA_PER_SCY);
+        assert_eq!(
+            calculate_block_reward(MINING_REWARD_END_HEIGHT - 1),
+            5 * QUANTA_PER_SCY
+        );
         assert_eq!(calculate_block_reward(MINING_REWARD_END_HEIGHT), 0);
         assert_eq!(calculate_block_reward(MINING_REWARD_END_HEIGHT + 100), 0);
     }
@@ -76,4 +79,3 @@ mod tests {
         assert_eq!(MINING_RESERVE_QUANTA, 28_980_000 * QUANTA_PER_SCY);
     }
 }
-
