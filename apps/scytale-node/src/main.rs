@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand};
 use scytale_consensus::INITIAL_REWARD;
 use scytale_core::QUANTA_PER_SCY;
-use scytale_node::{IpcServer, Node, NodeConfig, P2pSupervisor, DEFAULT_SOCKET_PATH};
+use scytale_node::{IpcServer, Node, NodeConfig, P2pEngine, DEFAULT_SOCKET_PATH};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -161,6 +162,7 @@ enum Commands {
     Status,
 }
 
+#[allow(dead_code)]
 struct StartOptions {
     mine: bool,
     explorer_url: Option<String>,
@@ -313,9 +315,10 @@ async fn main() {
         );
 
         // If explorer-url is present, initialize indexer and pass handle down into node state
-        let indexer_handle = opts.explorer_url.as_ref().map(|url| {
-            scytale_node::indexer::start_indexer(url.clone(), opts.indexer_key.clone())
-        });
+        let indexer_handle = opts
+            .explorer_url
+            .as_ref()
+            .map(|url| scytale_node::indexer::start_indexer(url.clone(), opts.indexer_key.clone()));
 
         let res = tokio::task::spawn_blocking(move || {
             let mut node = Node::open(config)?;
@@ -338,8 +341,12 @@ async fn main() {
                 );
 
                 let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
-                let ipc_server =
-                    IpcServer::new(&socket, Arc::clone(&node), shutdown_tx.clone());
+                let ipc_server = IpcServer::with_p2p_bind(
+                    &socket,
+                    Arc::clone(&node),
+                    shutdown_tx.clone(),
+                    opts.p2p_bind.clone(),
+                );
 
                 let ipc_handle = tokio::spawn(async move {
                     if let Err(e) = ipc_server.run().await {
@@ -347,24 +354,50 @@ async fn main() {
                     }
                 });
 
-                // Launch P2P Supervisor if not disabled
-                let p2p_handle = if !opts.no_p2p && (opts.p2p_bind.is_some() || !opts.peers.is_empty() || !opts.dns_seeds.is_empty()) {
-                    let bridge_sock = node.config().data_dir.join("p2p_bridge.sock");
-                    let mut p2p_supervisor = P2pSupervisor::new(
-                        bridge_sock,
-                        opts.p2p_bind.clone(),
-                        opts.peers.clone(),
-                        opts.p2p_bin.clone(),
-                        Arc::clone(&node),
-                        shutdown_tx.clone(),
-                    );
-                    p2p_supervisor.set_fast_sync(opts.fast_sync);
-                    p2p_supervisor.set_dns_seeds(opts.dns_seeds.clone(), opts.no_dns_seeds);
-                    Some(tokio::spawn(async move {
-                        if let Err(e) = p2p_supervisor.run().await {
-                            tracing::error!("P2P supervisor error: {e}");
+                // Launch native Rust async-nats P2P engine if enabled.
+                let p2p_handle = if !opts.no_p2p {
+                    let nats_url = std::env::var("SCYTALE_NATS_URL")
+                        .unwrap_or_else(|_| "nats://116.212.72.89:4222".to_string());
+                    match P2pEngine::connect(&nats_url, format!("scytale-node-{}", std::process::id())).await
+                    {
+                        Ok(engine) => {
+                            let block_engine = engine.clone();
+                            let tx_engine = engine.clone();
+                            let heartbeat_engine = engine.clone();
+                            let (block_tx, _block_rx) = mpsc::channel::<Vec<u8>>(128);
+                            let (tx_tx, _tx_rx) = mpsc::channel::<Vec<u8>>(128);
+
+                            let block_listener = tokio::spawn(async move {
+                                if let Err(e) = block_engine.listen_blocks(block_tx).await {
+                                    tracing::error!("block listener error: {e}");
+                                }
+                            });
+                            let tx_listener = tokio::spawn(async move {
+                                if let Err(e) = tx_engine.listen_transactions(tx_tx).await {
+                                    tracing::error!("transaction listener error: {e}");
+                                }
+                            });
+                            let heartbeat_task = tokio::spawn(async move {
+                                let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                                loop {
+                                    interval.tick().await;
+                                    if let Err(e) = heartbeat_engine
+                                        .publish_heartbeat(0, [0; 32])
+                                        .await
+                                    {
+                                        tracing::warn!("heartbeat publish failed: {e}");
+                                        break;
+                                    }
+                                }
+                            });
+
+                            Some((engine, block_listener, tx_listener, heartbeat_task))
                         }
-                    }))
+                        Err(e) => {
+                            tracing::warn!("native P2P engine failed to connect: {e}");
+                            None
+                        }
+                    }
                 } else {
                     None
                 };
@@ -407,8 +440,13 @@ async fn main() {
                     Err(e) => tracing::error!("shutdown task failed to join: {e}"),
                 }
                 let _ = ipc_handle.await;
-                if let Some(h) = p2p_handle {
-                    let _ = h.await;
+                if let Some((engine, block_listener, tx_listener, heartbeat_task)) = p2p_handle {
+                    if let Err(e) = engine.shutdown().await {
+                        tracing::warn!("P2P engine shutdown failed: {e}");
+                    }
+                    let _ = block_listener.await;
+                    let _ = tx_listener.await;
+                    heartbeat_task.abort();
                 }
                 if let Some(h) = http_handle {
                     let _ = h.await;
