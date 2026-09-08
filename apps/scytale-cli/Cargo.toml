@@ -16,6 +16,7 @@ scytale-script = { path = "../../crates/scytale-script" }
 scytale-bridge = { path = "../../crates/scytale-bridge" }
 scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
 scytale-vm = { path = "../../crates/scytale-vm" }
+scytale-account = { path = "../../crates/scytale-account" }
 blake3 = { workspace = true }
 ed25519-dalek = { version = "2.1", default-features = false, features = ["rand_core"] }
 rand = "0.8"
@@ -28,6 +29,7 @@ bincode = { workspace = true }
 hex = { workspace = true }
 bip39 = { workspace = true }
 ureq = { workspace = true }
+rpassword = "7.3"
 scytale-node = { path = "../scytale-node" }
 
 [dev-dependencies]

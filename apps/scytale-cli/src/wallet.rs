@@ -4,6 +4,7 @@
 //! strict POSIX file permissions (0600), and ScytaleScript P2PKH template builders.
 
 use ed25519_dalek::SigningKey;
+use scytale_account::{decrypt_key, EncryptedKeyEnvelope};
 use scytale_core::Address;
 use scytale_primitives::{from_hex, to_hex};
 use scytale_script::{builder::ScriptBuilder, opcode::OpCode};
@@ -34,6 +35,8 @@ pub enum WalletError {
     DataPayloadTooLarge { size: usize, max: usize },
     #[error("Mnemonic error: {0}")]
     Mnemonic(String),
+    #[error("PIN vault error: {0}")]
+    Vault(String),
 }
 
 /// Persistent non-custodial wallet file representation.
@@ -46,6 +49,12 @@ pub struct WalletFile {
     pub public_key: String,
     #[serde(alias = "p2pkh_address")]
     pub address: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_number: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passbook_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub encrypted_key: Option<EncryptedKeyEnvelope>,
 }
 
 impl WalletFile {
@@ -84,6 +93,9 @@ impl WalletFile {
             private_key: to_hex(&privkey_bytes),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
+            account_number: None,
+            passbook_id: None,
+            encrypted_key: None,
         };
 
         wallet.save_to(path)?;
@@ -133,6 +145,9 @@ impl WalletFile {
             private_key: to_hex(&privkey_bytes),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
+            account_number: None,
+            passbook_id: None,
+            encrypted_key: None,
         };
 
         wallet.save_to(path)?;
@@ -172,6 +187,9 @@ impl WalletFile {
             private_key: to_hex(&privkey_bytes),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
+            account_number: None,
+            passbook_id: None,
+            encrypted_key: None,
         };
 
         wallet.save_to(path)?;
@@ -230,6 +248,25 @@ impl WalletFile {
         }
         let mut seed = [0u8; 32];
         seed.copy_from_slice(&bytes);
+        Ok(SigningKey::from_bytes(&seed))
+    }
+
+    pub fn signing_key_with_pin(&self, pin: &str) -> Result<SigningKey, WalletError> {
+        let key_bytes: Vec<u8> = if let Some(envelope) = &self.encrypted_key {
+            decrypt_key(envelope, pin)
+                .map_err(|error| WalletError::Vault(error.to_string()))?
+                .to_vec()
+        } else {
+            from_hex(&self.private_key).map_err(|e| WalletError::Hex(e.to_string()))?
+        };
+        if key_bytes.len() != 32 {
+            return Err(WalletError::InvalidKeyLength {
+                expected: 32,
+                found: key_bytes.len(),
+            });
+        }
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(&key_bytes);
         Ok(SigningKey::from_bytes(&seed))
     }
 

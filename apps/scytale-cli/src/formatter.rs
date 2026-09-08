@@ -245,6 +245,33 @@ pub fn print_wallet_created(path: &std::path::Path, pubkey: &str, address: &str)
     println!("============================================================");
 }
 
+pub fn print_human_wallet_created(account: &str, registered: bool) {
+    println!("========================================");
+    println!("Dompet Berhasil Dibuat");
+    println!("Nomor Rekening Anda : {account}");
+    println!(
+        "Status Jaringan     : {}",
+        if registered {
+            "Aktif & Terdaftar"
+        } else {
+            "Nomor rekening lokal (belum tersinkron ke jaringan)"
+        }
+    );
+    println!("========================================");
+}
+
+pub fn print_wallet_dev_details(path: &std::path::Path, wallet: &crate::wallet::WalletFile) {
+    println!("Developer Details");
+    println!("Wallet File       : {}", path.display());
+    println!("Passbook ID       : {}", wallet.passbook_id.as_deref().unwrap_or(&wallet.address));
+    println!("Public Key Hex    : {}", wallet.public_key);
+    if let Some(envelope) = &wallet.encrypted_key {
+        println!("Salt Argon2id     : {}", hex::encode(envelope.salt));
+        println!("Nonce             : {}", hex::encode(envelope.nonce));
+        println!("Envelope Size     : {} bytes", envelope.ciphertext.len());
+    }
+}
+
 /// Prints a formatted summary when a new wallet is generated with a BIP-39 mnemonic.
 pub fn print_wallet_mnemonic_created(
     path: &std::path::Path,

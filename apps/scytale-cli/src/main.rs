@@ -11,6 +11,7 @@ use client::{send_node_request, CliClientError};
 use contract::{handle_contract, ContractArgs};
 use ed25519_dalek::Signer;
 use identity::IdentityStore;
+use scytale_account::{derive_candidate, encrypt_key};
 use scytale_bridge::{NodeRequest, NodeResponse};
 use scytale_core::{Hash256, OutPoint, Transaction, TxIn, TxOut, TRANSACTION_VERSION_1};
 use scytale_primitives::from_hex;
@@ -37,6 +38,11 @@ pub struct Cli {
     )]
     pub socket: String,
 
+    #[arg(long, global = true)]
+    pub dev: bool,
+
+    #[arg(long, global = true)]
+    pub raw: bool,
     #[arg(
         long,
         global = true,
@@ -135,7 +141,11 @@ pub enum Commands {
         /// Path to wallet JSON file (defaults to ~/.scytale/wallet.json)
         #[arg(long)]
         wallet_file: Option<PathBuf>,
+
+        #[arg(long)]
+        pin: Option<String>,
     },
+
 
     /// Create, sign, and submit a transaction with an OP_RETURN data carrier output
     #[command(name = "embed-data")]
@@ -186,6 +196,9 @@ pub enum WalletSubcommands {
         /// Number of words for BIP-39 mnemonic (12 or 24, default: 12)
         #[arg(long, default_value_t = 12)]
         words: usize,
+
+        #[arg(long)]
+        pin: Option<String>,
     },
 
     /// Restore an existing wallet from a BIP-39 mnemonic phrase
@@ -323,6 +336,87 @@ async fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
+}
+
+#[derive(serde::Deserialize)]
+struct AliasBindHttpResponse {
+    account_number: String,
+    passbook_id: String,
+}
+
+#[derive(serde::Deserialize)]
+struct AliasResolveHttpResponse {
+    passbook_id: String,
+}
+
+fn collect_pin(pin: Option<String>, confirm: bool) -> Result<String, CliClientError> {
+    let supplied = pin.is_some();
+    let pin = match pin {
+        Some(pin) => pin,
+        None => rpassword::prompt_password("Masukkan PIN 6 Angka: ")
+            .map_err(|error| CliClientError::User(format!("Gagal membaca PIN: {error}")))?,
+    };
+    scytale_account::PinCode::new(&pin)
+        .map_err(|error| CliClientError::User(error.to_string()))?;
+    if confirm && !supplied {
+        let repeated = rpassword::prompt_password("Konfirmasi PIN 6 Angka: ")
+            .map_err(|error| CliClientError::User(format!("Gagal membaca PIN: {error}")))?;
+        if pin != repeated {
+            return Err(CliClientError::User("PIN tidak cocok".to_string()));
+        }
+    }
+    Ok(pin)
+}
+
+fn register_account(wallet: &mut WalletFile, node_url: &str) -> Result<bool, CliClientError> {
+    let key_id = from_hex(&wallet.public_key)
+        .map_err(|error| CliClientError::User(format!("Invalid public key: {error}")))?;
+    let passbook_id = wallet.address.clone();
+    let agent = ureq::AgentBuilder::new().build();
+    for attempt in 0..10u32 {
+        let candidate = derive_candidate(&key_id, &passbook_id, attempt);
+        let url = format!("{}/api/v1/alias/bind", node_url.trim_end_matches('/'));
+        let payload = serde_json::json!({
+            "passbook_id": passbook_id,
+            "candidate": candidate.as_str(),
+            "signature": []
+        });
+        match agent.post(&url).send_json(payload) {
+            Ok(response) => {
+                let bound: AliasBindHttpResponse = response.into_json().map_err(|error| {
+                    CliClientError::User(format!("Gagal membaca respons pendaftaran: {error}"))
+                })?;
+                wallet.account_number = Some(bound.account_number);
+                wallet.passbook_id = Some(bound.passbook_id);
+                return Ok(true);
+            }
+            Err(ureq::Error::Status(409, _)) => continue,
+            Err(ureq::Error::Transport(_)) => return Ok(false),
+            Err(error) => {
+                return Err(CliClientError::User(format!(
+                    "Pendaftaran nomor rekening gagal: {error}"
+                )))
+            }
+        }
+    }
+    Err(CliClientError::User(
+        "Nomor rekening bentrok setelah 10 percobaan".to_string(),
+    ))
+}
+
+fn resolve_account(node_url: &str, account: &str) -> Result<String, CliClientError> {
+    let url = format!(
+        "{}/api/v1/alias/resolve/{}",
+        node_url.trim_end_matches('/'),
+        account
+    );
+    let response = ureq::get(&url)
+        .call()
+        .map_err(|error| CliClientError::User(format!("Gagal resolve {account}: {error}")))?;
+    let resolved: AliasResolveHttpResponse = response
+        .into_json()
+        .map_err(|error| CliClientError::User(format!("Respons resolve tidak valid: {error}")))?;
+    Ok(resolved.passbook_id)
 }
 
 async fn execute(cli: Cli) -> Result<(), CliClientError> {
@@ -661,21 +755,34 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 force,
                 mnemonic,
                 words,
+                pin,
             } => {
                 let path = file.unwrap_or_else(WalletFile::default_path);
-                if mnemonic {
+                let pin = collect_pin(pin, true)?;
+                let mut wallet = if mnemonic {
                     let (wallet, phrase) = WalletFile::generate_with_mnemonic(&path, force, words)
                         .map_err(CliClientError::Wallet)?;
-                    formatter::print_wallet_mnemonic_created(
-                        &path,
-                        &wallet.public_key,
-                        &wallet.address,
-                        &phrase,
-                    );
+                    if cli.dev || cli.raw {
+                        println!("Recovery mnemonic: {phrase}");
+                    }
+                    wallet
                 } else {
-                    let wallet =
-                        WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?;
-                    formatter::print_wallet_created(&path, &wallet.public_key, &wallet.address);
+                    WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?
+                };
+                let key_id = from_hex(&wallet.private_key)
+                    .map_err(|error| CliClientError::User(format!("Invalid private key: {error}")))?;
+                wallet.encrypted_key = Some(
+                    encrypt_key(&key_id, &pin)
+                        .map_err(|error| CliClientError::User(error.to_string()))?,
+                );
+                let registered = register_account(&mut wallet, &cli.node_url)?;
+                wallet.save_to(&path).map_err(CliClientError::Wallet)?;
+                formatter::print_human_wallet_created(
+                    wallet.account_number.as_deref().unwrap_or("Lokal"),
+                    registered,
+                );
+                if cli.dev || cli.raw {
+                    formatter::print_wallet_dev_details(&path, &wallet);
                 }
             }
             WalletSubcommands::Restore {
@@ -738,11 +845,17 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
             amount,
             fee,
             wallet_file,
+            pin,
         } => {
             let path = wallet_file.unwrap_or_else(WalletFile::default_path);
             let wallet = WalletFile::load_from(&path).map_err(CliClientError::Wallet)?;
 
-            let recipient_addr = scytale_core::Address::parse(&to).map_err(|e| {
+            let resolved_to = if to.starts_with("SCY-") {
+                resolve_account(&cli.node_url, &to)?
+            } else {
+                to.clone()
+            };
+            let recipient_addr = scytale_core::Address::parse(&resolved_to).map_err(|e| {
                 CliClientError::User(format!("Invalid recipient address '{to}': {e}"))
             })?;
             let recipient_lock = wallet::build_p2pkh_locking_script(recipient_addr.hash());
@@ -812,7 +925,9 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
 
             let mut tx = Transaction::new(TRANSACTION_VERSION_1, inputs, outputs, 0);
 
-            let signing_key = wallet.signing_key().map_err(CliClientError::Wallet)?;
+            let signing_key = wallet
+                .signing_key_with_pin(&collect_pin(pin, false)?)
+                .map_err(CliClientError::Wallet)?;
             let pubkey_bytes = wallet
                 .verifying_key_bytes()
                 .map_err(CliClientError::Wallet)?;
