@@ -182,7 +182,7 @@ async fn test_http_tx_endpoint() {
         tx["total_output_quanta"],
         scytale_core::genesis::TOTAL_GENESIS_QUANTA
     );
-    assert_eq!(tx["total_output_scy"], "13020000.00000000");
+    assert_eq!(tx["total_output_scy"], "66000000.00000000");
 
     // 2. Non-existent transaction returns 404
     let response = app

@@ -73,11 +73,11 @@ fn generate_entry(role: &str, percent: u8, scy: u64, quanta: u64) -> GenesisKeyE
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let founder = generate_entry("Founder Allocation", 21, 8_820_000, 882_000_000_000_000);
+    let founder = generate_entry("Founder Allocation", 30, 19_800_000, 1_980_000_000_000_000);
 
-    let treasury = generate_entry("Development / Treasury", 5, 2_100_000, 210_000_000_000_000);
+    let treasury = generate_entry("Development / Treasury", 20, 13_200_000, 1_320_000_000_000_000);
 
-    let community = generate_entry("Ecosystem / Community", 5, 2_100_000, 210_000_000_000_000);
+    let community = generate_entry("Ecosystem / Community", 50, 33_000_000, 3_300_000_000_000_000);
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -86,8 +86,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let keys_file = GenesisKeysFile {
         generated_at_epoch: now,
-        total_allocation_scy: 13_020_000,
-        total_allocation_quanta: 1_302_000_000_000_000,
+        total_allocation_scy: 66_000_000,
+        total_allocation_quanta: 6_600_000_000_000_000,
         allocations: vec![founder.clone(), treasury.clone(), community.clone()],
     };
 

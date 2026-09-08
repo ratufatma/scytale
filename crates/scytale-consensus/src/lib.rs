@@ -25,7 +25,7 @@ pub use work::{block_work, CumulativeWork};
 pub const INITIAL_REWARD: Quanta = 10 * QUANTA_PER_SCY; // 10 SCY (1,000,000,000 quanta)
 pub const HALVING_INTERVAL: u64 = 2_100_000;
 
-/// Public Proof-of-Work Mining Reserve: 69% of 42,000,000 SCY (28,980,000 SCY / 2,898,000,000,000,000 quanta).
+/// Public Proof-of-Work Mining Reserve: 28,980,000 SCY / 2,898,000,000,000,000 quanta.
 pub const MINING_RESERVE_QUANTA: Quanta = 2_898_000_000_000_000;
 
 /// Terminal block height where the mining emission reserve is fully exhausted:
@@ -37,7 +37,8 @@ pub const MINING_RESERVE_QUANTA: Quanta = 2_898_000_000_000_000;
 pub const MINING_REWARD_END_HEIGHT: u64 = 3_696_000;
 
 /// Computes the block subsidy based on block height.
-/// Enforces deterministic reward cessation at height 3,696,000 to maintain the 42M SCY hard cap.
+/// Enforces deterministic reward cessation at height 3,696,000 to maintain the
+/// 94,980,000 SCY hard cap (66,000,000 SCY Genesis allocation plus mining reserve).
 pub fn calculate_block_reward(height: u64) -> Quanta {
     if height >= MINING_REWARD_END_HEIGHT {
         return 0;

@@ -1,12 +1,12 @@
 //! Canonical Genesis Block and Initial Tokenomics Allocation for Scytale.
 //!
 //! Enforces:
-//! - Total Maximum Supply: 42,000,000 SCY (4,200,000,000,000,000 quanta)
-//! - Founder Allocation: 21% (8,820,000 SCY / 882,000,000,000,000 quanta)
-//! - Developer Fund: 5% (2,100,000 SCY / 210,000,000,000,000 quanta)
-//! - Community Reserve: 5% (2,100,000 SCY / 210,000,000,000,000 quanta)
-//! - Total Genesis Supply: 31% (13,020,000 SCY / 1,302,000,000,000,000 quanta)
-//! - Proof-of-Work Mining Reserve: 69% (28,980,000 SCY / 2,898,000,000,000,000 quanta)
+//! - Total Maximum Supply: 94,980,000 SCY (9,498,000,000,000,000 quanta)
+//! - Founder Allocation: 30% of Genesis (19,800,000 SCY / 1,980,000,000,000,000 quanta)
+//! - Developer Fund: 20% of Genesis (13,200,000 SCY / 1,320,000,000,000,000 quanta)
+//! - Community Reserve: 50% of Genesis (33,000,000 SCY / 3,300,000,000,000,000 quanta)
+//! - Total Genesis Supply: 66,000,000 SCY / 6,600,000,000,000,000 quanta
+//! - Proof-of-Work Mining Reserve: 28,980,000 SCY / 2,898,000,000,000,000 quanta
 
 use crate::block::{Block, BlockHeader};
 use crate::transaction::Transaction;
@@ -15,24 +15,24 @@ use crate::Quanta;
 use scytale_primitives::{from_hex, Hash256, OutPoint, TxOut};
 
 /// Maximum overall supply ceiling in SCY.
-pub const MAX_SUPPLY_SCY: u64 = 42_000_000;
+pub const MAX_SUPPLY_SCY: u64 = 94_980_000;
 
 /// Maximum overall supply ceiling in integer quanta (4,200,000,000,000,000 quanta).
-pub const MAX_SUPPLY_QUANTA: Quanta = 4_200_000_000_000_000;
+pub const MAX_SUPPLY_QUANTA: Quanta = 9_498_000_000_000_000;
 
-/// Founder Allocation quota (21% / 8,820,000 SCY).
-pub const GENESIS_FOUNDER_QUANTA: Quanta = 882_000_000_000_000;
+/// Founder Allocation quota (30% of Genesis / 19,800,000 SCY).
+pub const GENESIS_FOUNDER_QUANTA: Quanta = 1_980_000_000_000_000;
 
-/// Developer Fund Allocation quota (5% / 2,100,000 SCY).
-pub const GENESIS_DEVELOPER_QUANTA: Quanta = 210_000_000_000_000;
+/// Developer Fund Allocation quota (20% of Genesis / 13,200,000 SCY).
+pub const GENESIS_DEVELOPER_QUANTA: Quanta = 1_320_000_000_000_000;
 
-/// Community Reserve Allocation quota (5% / 2,100,000 SCY).
-pub const GENESIS_COMMUNITY_QUANTA: Quanta = 210_000_000_000_000;
+/// Community Reserve Allocation quota (50% of Genesis / 33,000,000 SCY).
+pub const GENESIS_COMMUNITY_QUANTA: Quanta = 3_300_000_000_000_000;
 
-/// Total Genesis Allocation quota (31% / 13,020,000 SCY).
-pub const TOTAL_GENESIS_QUANTA: Quanta = 1_302_000_000_000_000;
+/// Total Genesis Allocation quota (66,000,000 SCY).
+pub const TOTAL_GENESIS_QUANTA: Quanta = 6_600_000_000_000_000;
 
-/// Remaining Public Mining Emission Reserve quota (69% / 28,980,000 SCY).
+/// Remaining Public Mining Emission Reserve quota (28,980,000 SCY).
 pub const MINING_RESERVE_QUANTA: Quanta = 2_898_000_000_000_000;
 
 /// Official Founder Bech32 address.
@@ -75,9 +75,9 @@ pub fn community_locking_script() -> Vec<u8> {
 }
 
 /// Constructs the canonical Genesis Bootstrap Transaction (Height 0) with exactly 3 outputs:
-/// - Output 0: Founder Allocation (21% / 8,820,000 SCY)
-/// - Output 1: Developer Fund (5% / 2,100,000 SCY)
-/// - Output 2: Community Reserve (5% / 2,100,000 SCY)
+/// - Output 0: Founder Allocation (19,800,000 SCY)
+/// - Output 1: Developer Fund (13,200,000 SCY)
+/// - Output 2: Community Reserve (33,000,000 SCY)
 pub fn build_genesis_coinbase() -> Transaction {
     let outputs = vec![
         TxOut::new(GENESIS_FOUNDER_QUANTA, founder_locking_script()),
@@ -160,5 +160,26 @@ mod tests {
         let expected_root = compute_genesis_utxo_root(cb);
         assert_eq!(block.header.utxo_root, expected_root);
         assert_eq!(block.header.previous_block_hash, Hash256::ZERO);
+    }
+
+    #[test]
+    fn test_genesis_identity_for_66m_supply() {
+        let block = build_genesis_block(0x1d00_ffff);
+
+        println!("genesis_utxo_root=0x{}", block.header.utxo_root);
+        println!(
+            "genesis_transaction_commitment=0x{}",
+            block.header.transaction_commitment
+        );
+        println!("genesis_block_hash=0x{}", block.header.hash());
+
+        assert_eq!(
+            block.header.utxo_root.to_string(),
+            "788a95511c82fd90a11cfa02f898e5c95a1f8e0c2d3c4aeaf6fd2b9a9e9ced03"
+        );
+        assert_eq!(
+            block.header.hash().to_string(),
+            "29fcbdf356b45667cf1fbc6c2d9bc7b7103c379473598f22ea14327e7e59cab8"
+        );
     }
 }
