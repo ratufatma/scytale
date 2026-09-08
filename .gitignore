@@ -50,4 +50,9 @@ explorer/.turbo/
 .genesis_keys.json
 *.key.json
 
+# Python wrapper (apps/scytale-py)
+apps/scytale-py/.venv/
+apps/scytale-py/**/__pycache__/
+*.py[cod]
+
 
