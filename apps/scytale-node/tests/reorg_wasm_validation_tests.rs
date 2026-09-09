@@ -369,6 +369,11 @@ fn test_reorg_with_invalid_wasm_contract_spend_is_rejected() {
         block_c3.header.hash(),
         "Canonical tip must shift to C3"
     );
+    assert_eq!(
+        node.storage_handle().compute_utxo_root().unwrap(),
+        node.query_utxo_set().compute_utxo_root(),
+        "Persisted UTXO state must match the in-memory state after reorg"
+    );
     println!("[OK] Reorg with valid Wasm signature succeeded; canonical tip shifted to C3.");
 
     node.shutdown().unwrap();

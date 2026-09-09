@@ -412,6 +412,16 @@ impl Node {
                             .collect::<Vec<_>>();
                         self.storage
                             .apply_reorganization(&reorg.disconnected_blocks, &connected_meta)?;
+                        self.storage.replace_utxo_set(&utxos)?;
+                        tracing::info!(
+                            common_ancestor = %reorg.disconnected_blocks.last()
+                                .map(|block| block.header.previous_block_hash)
+                                .unwrap_or_else(|| block.header.previous_block_hash),
+                            disconnected = reorg.disconnected_blocks.len(),
+                            connected = reorg.connected_blocks.len(),
+                            new_tip = %reorg.new_tip,
+                            "chain reorganization committed"
+                        );
                         if let Some(indexer) = self.indexer.as_deref() {
                             for (b, h, _) in &connected_meta {
                                 let payload = BlockPayload::from_block(b, *h);
@@ -606,6 +616,29 @@ impl Node {
     /// The active canonical chain height.
     pub fn canonical_height(&self) -> u64 {
         self.shared.chain_tree.lock().unwrap().canonical_height()
+    }
+
+    /// Returns the configured genesis hash used to identify this network.
+    pub fn genesis_hash(&self) -> Hash256 {
+        let chain = self.shared.chain_tree.lock().unwrap();
+        chain
+            .get_path_from_genesis(&chain.canonical_tip())
+            .ok()
+            .and_then(|path| path.first().map(|node| node.hash))
+            .unwrap_or(Hash256::ZERO)
+    }
+
+    pub fn mark_syncing(&self) {
+        self.set_state(NodeState::Syncing);
+    }
+
+    pub fn mark_running(&self) {
+        self.set_state(NodeState::Running);
+    }
+
+    /// Looks up a persisted block by hash for the network sync responder.
+    pub fn get_block(&self, hash: &Hash256) -> Result<Option<Block>, NodeError> {
+        Ok(self.storage.get_block(hash)?)
     }
 
     /// The current node runtime state.

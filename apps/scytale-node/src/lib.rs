@@ -14,7 +14,12 @@ pub use error::{NodeError, NodeState};
 pub use http_gateway::{run_http_gateway, DEFAULT_HTTP_BIND};
 pub use indexer::{start_indexer, BlockPayload, IndexerHandle};
 pub use ipc::{IpcServer, DEFAULT_SOCKET_PATH};
-pub use network::P2pEngine;
+pub use network::{
+    decode, encode, validate_hello, BlockRequest, BlocksResponse, HeadersResponse, Heartbeat,
+    Hello, LocatorRequest, P2pEngine, PeerRegistry, RateLimiter, BLOCKS_SUBJECT, HEARTBEAT_SUBJECT,
+    HELLO_SUBJECT, MAX_SYNC_ITEMS, PROTOCOL_VERSION, SYNC_BLOCKS_SUBJECT, SYNC_HEADERS_SUBJECT,
+    SYNC_LOCATOR_SUBJECT, TRANSACTIONS_SUBJECT,
+};
 pub use node::{commit_block, Node, PermissiveVerifier};
 pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookAction, PassbookAsset, PassbookEntry, PassbookError,

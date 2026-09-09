@@ -41,7 +41,6 @@ impl IpcServer {
         }
     }
 
-
     /// Runs the IPC listener loop until cancellation.
     pub async fn run(self) -> Result<(), std::io::Error> {
         let path = &self.socket_path;

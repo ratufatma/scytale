@@ -33,7 +33,7 @@ pub enum BridgeMessage {
 // Node CLI <-> Daemon Local IPC Protocol
 // ─────────────────────────────────────────────────────────────────────────────
 
-    /// Requests sent from `scytale-cli` to `scytale-node`.
+/// Requests sent from `scytale-cli` to `scytale-node`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NodeRequest {
     /// Query node runtime state, chain tip, height, mempool count, and mining status.

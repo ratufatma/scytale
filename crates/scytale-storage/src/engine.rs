@@ -721,6 +721,33 @@ impl StorageEngine {
         Ok(())
     }
 
+    /// Replaces the persisted UTXO snapshot after a consensus-validated reorg.
+    ///
+    /// The consensus layer computes the complete post-reorg UTXO set before this
+    /// method is called. Replacing the table in one write transaction prevents
+    /// stale spent outputs from surviving a disconnect/connect sequence.
+    pub fn replace_utxo_set(&self, utxo_set: &UtxoSet) -> Result<(), StorageError> {
+        let write_tx = self.db.begin_write()?;
+        {
+            let mut table = write_tx.open_table(tables::UTXOS)?;
+            let keys: Vec<[u8; 36]> = table
+                .iter()?
+                .map(|entry| entry.map(|(key, _)| *key.value()))
+                .collect::<Result<_, _>>()?;
+            for key in keys {
+                table.remove(&key)?;
+            }
+            for (outpoint, entry) in utxo_set.entries() {
+                let bytes = entry
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                table.insert(&outpoint_to_key(outpoint), bytes.as_slice())?;
+            }
+        }
+        write_tx.commit()?;
+        Ok(())
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     // Address Index Queries (Passbook)
     // ─────────────────────────────────────────────────────────────────────
