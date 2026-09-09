@@ -1,4 +1,4 @@
-//! Scytale Bridge: IPC framing and event exchange for CLI, Node daemon, and P2P bridge.
+//! Scytale Bridge: IPC framing and event exchange for CLI and Node daemon.
 
 use scytale_core::{Block, Hash, Transaction};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ pub enum BridgeError {
     Io(#[from] std::io::Error),
 }
 
-/// Messages exchanged across the IPC bridge between Rust Core and Go P2P.
+/// Messages exchanged across the local node IPC boundary.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BridgeMessage {
     /// Broadcast a newly discovered local or relayed transaction to peers.
@@ -33,7 +33,7 @@ pub enum BridgeMessage {
 // Node CLI <-> Daemon Local IPC Protocol
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Requests sent from `scytale-cli` to `scytale-node`.
+    /// Requests sent from `scytale-cli` to `scytale-node`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum NodeRequest {
     /// Query node runtime state, chain tip, height, mempool count, and mining status.
@@ -57,8 +57,6 @@ pub enum NodeRequest {
         #[serde(default)]
         max_depth: Option<usize>,
     },
-    /// Dynamically connect to a network peer at runtime.
-    ConnectPeer { addr: String },
     /// Request graceful shutdown of the node daemon.
     StopNode,
     /// Query all active unspent transaction outputs matching a locking condition script.
@@ -192,97 +190,17 @@ pub struct ProvenanceTraceDto {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Rust Node <-> Go P2P Daemon Bridge Protocol
+// Node network event protocol
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// RPC requests sent from the Go P2P daemon to the Rust node supervisor.
+/// Asynchronous broadcast events emitted from the Rust node to the NATS network layer.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "payload")]
-pub enum P2pBridgeRequest {
-    /// Submit raw canonical block bytes (hex) received from a network peer.
-    SubmitBlock { block_hex: String },
-    /// Submit raw canonical transaction bytes (hex) received from a network peer.
-    SubmitTransaction { tx_hex: String },
-    /// Request block locator hashes (exponential spacing from canonical tip to genesis).
-    GetBlockLocator,
-    /// Request all canonical chain block hashes in ascending order (genesis to tip).
-    GetCanonicalHashes,
-    /// Request raw block bytes (hex) by 32-byte hash.
-    GetBlockByHash { hash_hex: String },
-    /// Request raw transaction bytes (hex) by 32-byte hash.
-    GetTransactionByHash { hash_hex: String },
-    /// Request an exported snapshot chunk for a target block hash.
-    ExportSnapshotChunk {
-        block_hash_hex: String,
-        chunk_index: u32,
-        chunk_size: u32,
-    },
-    /// Apply an authenticated UTXO snapshot to local storage.
-    ApplySnapshot {
-        block_hash_hex: String,
-        entries: Vec<UtxoWireEntryDto>,
-    },
-    /// Update the count of connected network peers.
-    UpdatePeerCount { count: usize },
-}
-
-/// RPC responses sent from the Rust node supervisor to the Go P2P daemon.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", content = "payload")]
-pub enum P2pBridgeResponse {
-    /// Operation succeeded.
-    Ok,
-    /// Operation failed with an error message.
-    Error { message: String },
-    /// Block locator hash list response.
-    BlockLocator { hashes_hex: Vec<String> },
-    /// Full canonical chain block hash list response.
-    CanonicalHashes { hashes_hex: Vec<String> },
-    /// Block data response (None if not found).
-    BlockData { block_hex: Option<String> },
-    /// Transaction data response (None if not found).
-    TransactionData { tx_hex: Option<String> },
-    /// Snapshot chunk data response.
-    SnapshotChunk {
-        block_hash_hex: String,
-        chunk_index: u32,
-        total_chunks: u32,
-        entries: Vec<UtxoWireEntryDto>,
-    },
-    /// Snapshot applied response.
-    SnapshotApplied {
-        block_hash_hex: String,
-        utxo_count: usize,
-    },
-}
-
-/// Asynchronous broadcast events emitted from the Rust node to the Go P2P daemon.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type", content = "payload")]
-pub enum P2pBridgeEvent {
+pub enum NetworkEvent {
     /// Broadcast a newly mined or validated canonical block to network peers.
     BroadcastBlock { block_hex: String, hash_hex: String },
     /// Broadcast a newly admitted transaction to network peers.
     BroadcastTransaction { tx_hex: String, txid_hex: String },
-    /// Instruct the P2P daemon to connect to a new peer address dynamically.
-    ConnectPeer { addr: String },
-}
-
-/// Message envelope multiplexed across the Go-Rust bridge Unix domain socket.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind")]
-pub enum P2pBridgeMessage {
-    Request {
-        id: u64,
-        request: P2pBridgeRequest,
-    },
-    Response {
-        id: u64,
-        response: P2pBridgeResponse,
-    },
-    Event {
-        event: P2pBridgeEvent,
-    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -349,16 +267,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_p2p_bridge_framing_roundtrip() {
-        let msg = P2pBridgeMessage::Request {
-            id: 42,
-            request: P2pBridgeRequest::GetBlockLocator,
+    async fn test_network_event_framing_roundtrip() {
+        let msg = NetworkEvent::BroadcastBlock {
+            block_hex: "deadbeef".to_owned(),
+            hash_hex: "0123".to_owned(),
         };
         let mut buffer = Vec::new();
         write_ipc_message(&mut buffer, &msg).await.unwrap();
 
         let mut cursor = tokio::io::BufReader::new(buffer.as_slice());
-        let decoded: Option<P2pBridgeMessage> = read_ipc_message(&mut cursor).await.unwrap();
+        let decoded: Option<NetworkEvent> = read_ipc_message(&mut cursor).await.unwrap();
         assert_eq!(decoded, Some(msg));
     }
 }

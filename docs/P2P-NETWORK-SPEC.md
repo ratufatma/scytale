@@ -1,364 +1,214 @@
-# Scytale P2P Network Specification
+# Scytale Node Networking Specification
 
-This document defines the formal specification for the **Peer-to-Peer (P2P) Networking Layer** in Scytale. It establishes the architectural separation between the **Go-based P2P networking subsystem** and the **Rust-based core protocol/ledger engine**, defining peer discovery, connection lifecycles, transaction/block propagation, initial chain synchronization, and fault isolation.
+**Status:** Partial / implementation-aligned
+**Canonical implementation:** `apps/scytale-node/src/network/`
+**Node wiring:** `apps/scytale-node/src/main.rs`
 
----
+This document describes the networking behavior that exists in the current
+checkout. It does not treat the historical Go wire protocol or DNS seeder
+plans as active features.
 
-## 1. Purpose & Architectural Mandate
+## 1. Current Architecture
 
-The P2P network layer provides the decentralized communications backbone for Scytale:
+The current node has one active network transport:
 
-- **Peer Discovery & Topology Management:** Locates, connects, and maintains connections across distributed nodes.
-- **Data Transport:** Disseminates unconfirmed transactions and newly mined blocks across the network.
-- **Initial Chain Synchronization (Sync):** Facilitates high-throughput historical block retrieval for newly joined or restarting nodes.
-- **Network Shielding:** Rejects malformed transport frames and rate-limits abusive peers before wasting consensus computation.
+| Path | Status | Implementation |
+|---|---|---|
+| NATS transport | Active when network mode is enabled and the broker is reachable | `network::P2pEngine` |
+| HTTP gateway | Active application API, not peer transport | `http_gateway.rs` |
+| Unix IPC | Active CLI/node control channel | `ipc.rs`, `scytale-bridge` |
 
-> **Foundational Axiom:** *The network layer transports protocol data; the consensus engine independently determines whether that data is valid.*
-
-```text
-                  Scytale Architectural Boundary
-┌─────────────────────────────────────────────────────────────────┐
-│                      Go P2P Network Layer                       │
-│  - Peer Discovery, Connection Pooling, Framing, Relay Routing   │
-└────────────────────────────────┬────────────────────────────────┘
-                                 │
-                   (Protocol Message Boundary)
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   Rust Protocol Engine                          │
-│  - Consensus, UTXO State, Storage (redb), Mempool, Mining       │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 2. Technology Partitioning: Go & Rust
-
-Scytale enforces a clean, multi-language architectural division:
-
-| Domain | Language / Runtime | Architectural Rationale |
-| :--- | :--- | :--- |
-| **P2P Networking Subsystem** | **Go** | Concurrency primitives (goroutines/channels), high-throughput I/O multiplexing, long-lived peer connection management, and mature networking ecosystems. |
-| **Core Protocol & Ledger Engine** | **Rust** | Memory safety without garbage collection pauses, bit-level deterministic execution, zero-copy serialization, and redb ACID storage integration. |
-
-- **Language Independence:** The Scytale wire protocol is strictly language-independent. The wire format can be consumed by any compliant client regardless of programming language.
-- `P2P Library / Framework: TBD` (Libp2p vs. custom TCP/QUIC daemon).
-- `Transport Protocol: TBD` (TCP, QUIC, or multiplexed streams).
-
----
-
-## 3. Strict Boundary of Authority
-
-The P2P network subsystem is **strictly a transport conduit**:
-
-### The Network Layer CANNOT:
-- Declare a transaction or block valid.
-- Elect or switch the canonical chain tip.
-- Apply mutations to the `UTXO_SET` or `CHAIN_STATE`.
-- Create new currency or alter monetary issuance rules.
-
-All semantic validation, Proof-of-Work checks, signature evaluations, and UTXO state transitions occur exclusively within the **Rust consensus engine**.
-
----
-
-## 4. Peer Identity vs. Asset Ownership
-
-Scytale enforces strict cryptographic isolation between network identity and ledger value ownership:
-
-$$\text{P2P Peer Identity} \ne \text{SCY Asset Ownership Keys}$$
-
-- **Peer Identity:** Used solely to identify transport endpoints, authenticate secure sessions, route messages, and maintain connection reputation scores.
-- **Zero Asset Coupling:** A peer's network key carries zero monetary value and cannot authorize transaction spending.
-- `Peer Identity Format: TBD` (e.g., Ed25519 / Secp256k1 network public key digests).
-
----
-
-## 5. Peer Discovery Mechanics
-
-Nodes discover peers through multiple redundant channels:
+The active startup path is:
 
 ```text
-                        Peer Discovery Sources
-                                   │
-         ┌─────────────────────────┼─────────────────────────┐
-         ▼                         ▼                         ▼
-Configured Static Peers     DNS Bootstrap Nodes       Peer Exchange (PEX)
-         │                         │                         │
-         └─────────────────────────┼─────────────────────────┘
-                                   ▼
-                       Discovered Address Pool
-                                   ↓
-                         Outbound Dialer Loop
+scytale-node
+    |
+    +-- Node::open / Node::start
+    +-- IPC server on Unix socket
+    +-- NATS P2pEngine, unless --no-p2p
+          |
+          +-- subscribe to block subject
+          +-- subscribe to transaction subject
+          +-- publish locally produced blocks and transactions
+          +-- publish periodic heartbeat messages
 ```
 
-- **Specification Status:** `Peer Discovery Mechanism: TBD`, `Bootstrap Nodes: TBD`, `Address Discovery: TBD`.
+The transport layer carries bytes. The Rust node remains responsible for
+canonical decoding, consensus validation, UTXO transitions, mempool admission,
+and chain selection.
 
----
+## 2. Active NATS Transport
 
-## 6. Peer Connection Lifecycle
+`P2pEngine::connect` receives a NATS URL and a node identifier. Before opening
+the async NATS connection it resolves the broker address and checks TCP
+reachability with a two-second timeout.
 
-A connection transitions through explicit operational phases:
+### Configuration
+
+The node accepts:
 
 ```text
-              [ Disconnected ]
-                     │
-                     ▼ Dial / Accept
-              [ Connecting ]
-                     │
-                     ▼ TCP / Transport Handshake
-              [ Connected ]
-                     │
-                     ▼ Protocol Handshake (Version, Genesis, Height)
-              [ Handshake Pending ]
-                     │
-                     ▼ Capabilities Verified & Genesis Matched
-              [ Active / Ready ] <───> [ Normal Relay & Sync ]
-                     │
-                     ▼ Error / Timeout / Ban
-              [ Closing ]
-                     │
-                     ▼ Socket Teardown
-              [ Disconnected ]
+--nats <URL>
+SCYTALE_NATS
+SCYTALE_NATS_URL
 ```
 
----
-
-## 7. Protocol Handshake & Network Isolation
-
-Upon establishing a transport connection, nodes must immediately exchange a canonical Handshake message before routing application traffic:
+Precedence is command-line `--nats`, then `SCYTALE_NATS`, then
+`SCYTALE_NATS_URL`, then the compiled default:
 
 ```text
-Handshake Payload:
-├── protocol_version      : Active Wire Protocol Version
-├── network_identifier    : Network ID (Mainnet / Testnet / Devnet)
-├── peer_identity         : Ephemeral or Static Peer ID
-├── best_block_id         : BLAKE3 Hash of Local Canonical Tip
-├── best_height           : Local Chain Height
-├── genesis_hash          : Genesis Block Hash (Must Match Exactly)
-└── capability_flags      : Service Flags (Full Node, Archive, Relay)
+nats://116.212.72.89:4222
 ```
 
-- **Incompatible Networks:** If `network_identifier` or `genesis_hash` does not match, the connection is terminated immediately to prevent cross-network contamination.
-- `Handshake Message Format: TBD`.
+Use `--no-p2p` to skip the NATS startup path. If P2P is enabled but the broker
+cannot be reached, the node logs the connection failure and continues according
+to the startup error handling in `main.rs`; a local standalone node can still
+be run with `--no-p2p`.
 
----
+### Subjects
 
-## 8. Message Categories & Wire Types
+The current subjects are constants in `apps/scytale-node/src/network/message.rs`:
 
-The protocol defines four distinct message domains:
+| Subject | Payload | Consumer |
+|---|---|---|
+| `scytale.v1.blocks.new` | Canonical serialized block bytes | node block listener |
+| `scytale.v1.mempool.tx` | Canonical serialized transaction bytes | node transaction listener |
+| `scytale.v1.nodes.heartbeat` | Bincode-encoded `Heartbeat` | heartbeat consumers |
+
+The block and transaction subjects currently carry raw payloads. They do not
+carry an inventory message, request/response envelope, peer score, or
+per-message authentication envelope in `P2pEngine`.
+
+### Heartbeat
+
+The heartbeat structure is:
 
 ```text
-Scytale Wire Message Suite
-├── 1. Peer Control
-│   ├── Handshake / HandshakeAck
-│   ├── Ping / Pong (Liveness & Latency Probing)
-│   └── Disconnect (Reason Codes)
-│
-├── 2. Initial Chain Synchronization
-│   ├── GetChainLocator (Sparse Block Hash Locator)
-│   ├── ChainHeadersResponse (Sequential Block Headers)
-│   ├── GetBlockData (Full Block Request)
-│   └── BlockDataResponse (Raw Canonical Block Payload)
-│
-├── 3. Transaction Propagation
-│   ├── TxAnnouncement (Inv / TxID Announcement)
-│   ├── GetTxData (Request Specific TxIDs)
-│   └── TxDataResponse (Canonical Serialized Transaction)
-│
-└── 4. Block Propagation
-    ├── BlockAnnouncement (Header / BlockID Announcement)
-    ├── GetBlockData (Request Specific BlockID)
-    └── BlockDataResponse (Canonical Serialized Block)
+Heartbeat {
+    node_id: String,
+    height: u64,
+    best_hash: [u8; 32],
+}
 ```
 
-- `Wire Message Names: TBD`, `Wire Encoding: TBD` (Compact binary framing).
+It is serialized with `bincode`. A heartbeat is advisory metadata; it is not a
+proof that the sender's chain is valid or heavier.
 
----
+## 3. Receive and Validation Flow
 
-## 9. Transaction Propagation (Relay)
-
-Transactions propagate across the network using a two-phase announcement-and-request flow to conserve bandwidth:
+### Block ingress
 
 ```text
-Node A (Origin / Relay)                            Node B (Peer)
-      │                                                  │
-      ├─────── TxAnnouncement (TxID: 0x8a3f...) ────────>│
-      │                                                  │
-      │                                      Already in Mempool or Spent?
-      │                                      ├── YES: Ignore
-      │                                      └── NO : Request Payload
-      │                                                  │
-      │<────── GetTxData (TxID: 0x8a3f...) ──────────────┤
-      │                                                  │
-      ├─────── TxDataResponse (Raw Tx Payload) ─────────>│
-      │                                                  │
-      │                                      [ Rust Engine Verification ]
-      │                                      ├── INVALID: Discard & Penalize
-      │                                      └── VALID  : Admit to Mempool
-      │                                                   & Relay to Peers
+NATS block subject
+    -> bytes received by P2pEngine
+    -> Block::from_canonical_bytes
+    -> Node::submit_external_block
+    -> consensus, PoW, parent, transaction, and utxo_root validation
+    -> canonical commit or side-branch handling
 ```
 
-- Cross-References: [`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md) and [`docs/MEMPOOL-SPEC.md`](MEMPOOL-SPEC.md).
+Invalid bytes are rejected before they enter the consensus path. A valid block
+is not trusted merely because it arrived through NATS.
 
----
-
-## 10. Block Propagation
-
-Newly discovered blocks are announced immediately to minimize stale mining rates:
+### Transaction ingress
 
 ```text
-Mined Block Discovered
-           ↓
-Broadcast BlockAnnouncement to Peers
-           ↓
-Peers Request Full Block Payload (if not already received)
-           ↓
-Peers Stream Raw Block Payload
-           ↓
-Rust Consensus Engine Executes Full Validation
-           ├── VALID   ──> Commit to redb, Advance Tip, Relay to Neighbors
-           └── INVALID ──> Drop Block, Penalize Peer
+NATS transaction subject
+    -> bytes received by P2pEngine
+    -> Transaction::from_canonical_bytes
+    -> Node::submit_network_transaction
+    -> authorization and UTXO/mempool validation
+    -> mempool admission
 ```
 
-- Cross-References: [`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md) and [`docs/CHAIN-SELECTION-SPEC.md`](CHAIN-SELECTION-SPEC.md).
+A transaction that fails decoding or mempool validation is not admitted.
 
----
+### Local egress
 
-## 11. Initial Chain Synchronization (IBD)
-
-A newly initialized or out-of-sync node executes the Initial Block Download workflow:
+Node events are received through `Node::subscribe_p2p_events`. The active NATS
+wiring publishes block and transaction bytes using:
 
 ```text
-Fresh Node Launch
-       ↓
-Connect to Peers & Handshake
-       ↓
-Evaluate Peer Tips & Cumulative Work
-       ↓
-Generate Chain Locator (Logarithmic History of Known Blocks)
-       ↓
-Request Sequential Block Headers from Heaviest Peer
-       ↓
-Verify Header Proof-of-Work & Difficulty Adjustments
-       ↓
-Batch Download Full Block Payloads
-       ↓
-Sequentially Apply & Validate UTXO State Transitions
-       ↓
-Local Tip Catches Up to Network Tip -> Transition to Active Relay
+P2pEngine::broadcast_block
+P2pEngine::broadcast_transaction
 ```
 
-- **Unverified Metadata:** A peer's declared height is treated as **unverified advisory metadata** until its constituent blocks are mathematically validated.
+The local event is generated by the node; NATS does not decide whether a block
+becomes canonical.
 
----
+## 4. IPC and Event Boundary
 
-## 12. Chain Locator & Ancestor Discovery
+Unix IPC is reserved for local CLI-to-node requests and responses. Network
+events are represented by `scytale-bridge::NetworkEvent`; the node publishes
+local block and transaction events to the active NATS transport. IPC does not
+provide peer discovery or runtime peer connection commands.
 
-To discover where a remote peer's branch diverges without transmitting entire chain histories, the syncing node sends a **Chain Locator**:
 
-$$\text{ChainLocator} = [ H_{\text{tip}}, H_{\text{tip}-1}, H_{\text{tip}-2}, \dots, H_{\text{tip}-8}, H_{\text{tip}-16}, H_{\text{tip}-32}, \dots, \text{Genesis} ]$$
+## 5. Peer and Discovery Scope
 
-- The remote peer scans the locator from newest to oldest to identify the latest shared common ancestor block.
-- `Chain Locator Structure: TBD`.
+The current active NATS engine does not implement:
 
----
+- TCP peer socket management;
+- protocol version or genesis handshake;
+- inventory announcement/request exchanges;
+- peer exchange (PEX);
+- DNS seed resolution;
+- per-peer reputation or ban scoring;
+- per-peer rate limiting;
+- a complete header/block Initial Block Download protocol;
+- authenticated peer identity;
+- network-level encryption or message signatures.
 
-## 13. Resource Limits & Flood Protection
+Peer address, DNS seeder, and TCP bind flags are not part of the active node
+configuration. Network mode is configured with `--nats` or its environment
+variable equivalents; use `--no-p2p` for an isolated local node.
 
-To guarantee resilience against denial-of-service (DoS) attacks:
+## 6. Fault and Trust Boundaries
 
-| Resource Boundary | Specification Status | Protection Target |
-| :--- | :--- | :--- |
-| **`Maximum Message Frame Size`** | `TBD` | Prevents memory allocation attacks on transport sockets. |
-| **`Peer Request Rate Limits`** | `TBD` | Prevents I/O starvation from spamming inventory queries. |
-| **`Inbound / Outbound Peer Limits`**| `TBD` | Manages node socket and memory resource budgets. |
-| **`Relay Rate Policy`** | `TBD` | Suppresses transaction flooding across P2P links. |
+The transport is untrusted input. The node must:
 
----
+1. decode canonical bytes with fail-closed behavior;
+2. validate transactions through the mempool and authorization rules;
+3. validate blocks through consensus and `utxo_root` checks;
+4. commit only accepted state transitions;
+5. avoid treating heartbeat height or hash as verified chain state.
 
-## 14. Invalid Data & Peer Misbehavior Scoring
+NATS broker availability is an operational dependency for network mode. A broker
+failure is not equivalent to a consensus failure. Operators who need an
+isolated local node should use `--no-p2p` and a separate data directory.
 
-Scytale distinguishes between transport framing errors and ledger validation failures:
+## 7. Shutdown
 
-```text
-Incoming Data
-      │
-      ├── Malformed Wire Framing / Protocol Violation
-      │         ↓
-      │    Immediate Disconnect / Connection Reset
-      │
-      └── Syntactically Valid Frame Carrying Invalid Ledger Object
-                ↓
-           Sent to Rust Engine for Semantic Verification
-                ↓
-           Consensus Failure (Invalid PoW, Double Spend, Bad Sig)
-                ↓
-           Increment Peer Misbehavior Score
-                ↓
-           Score Exceeds Threshold?
-             ├── NO  ──> Log Warning & Suppress Object
-             └── YES ──> Ban Peer IP for Configured Duration
+`P2pEngine::shutdown` flushes the NATS client. The node shutdown path also
+signals its broadcast channel to listeners.
+
+## 8. Tests and Verification
+
+Current direct coverage includes:
+
+- `apps/scytale-node/src/network/message.rs`: heartbeat bincode round-trip.
+- node integration tests covering external block and transaction handling.
+- bridge serialization and node transport tests.
+
+Recommended verification commands:
+
+```bash
+cargo test -p scytale-node
+cargo test -p scytale-bridge
+cargo check -p scytale-node
 ```
 
-- `Peer Misbehavior Scoring: TBD`, `Ban / Disconnect Policy: TBD`.
+A future full peer-network specification should be added only together with an
+actual transport implementation and integration tests for handshake, discovery,
+relay, abuse controls, and synchronization.
 
----
+## 9. Related Documents
 
-## 15. The Rust ↔ Go Inter-Process Communication (IPC) Boundary
-
-The runtime boundary between the Go P2P subsystem and the Rust Protocol Engine is designed with explicit isolation:
-
-```text
-┌───────────────────────────┐                 ┌───────────────────────────┐
-│     Go P2P Subsystem      │                 │   Rust Protocol Engine    │
-│                           │                 │                           │
-│ - Peer Message Ingress    │ ── (Inbound) ──>│ - Consensus Validation    │
-│ - Wire Frame Deserializer │                 │ - State Transition Engine │
-│ - Peer Message Egress     │<── (Outbound) ──│ - Miner / Mempool Events  │
-└───────────────────────────┘                 └───────────────────────────┘
-```
-
-### Architecture Invariants:
-- **Loose Coupling:** The Go daemon and Rust engine communicate over an explicit high-performance message boundary.
-- **Specification Status:** `Rust ↔ Go Transport Boundary: TBD`, `IPC / RPC Mechanism: TBD`, `Message ABI: TBD` (Domain socket, IPC channel, or shared memory buffer).
-
----
-
-## 16. Network Degradation & Offline Node Resilience
-
-If all P2P connections drop (network partition / local offline mode):
-- The node remains completely stable, preserving its local canonical `redb` state.
-- Local RPC services (Passbook balance queries, historical lookups) continue functioning over active local state.
-- Upon reconnection, the node resumes discovery, performs sync reconciliation, and re-attaches to the global mesh.
-
----
-
-## 17. Open Questions & Pending Specifications
-
-The following implementation domains remain designated as **TBD**:
-
-| Parameter / Policy | Status | Scope |
-| :--- | :--- | :--- |
-| **P2P Library / Framework** | `TBD` | Choice of Go networking library (Libp2p vs. bespoke socket multiplexer). |
-| **Rust ↔ Go IPC Mechanism** | `TBD` | Mechanism for inter-process messaging between Go and Rust. |
-| **Wire Protocol Encoding** | `TBD` | Binary serialization format for P2P transport frames. |
-| **Peer Identity Format** | `TBD` | Cryptographic public key schema for network peer IDs. |
-| **Network Identifier Format** | `TBD` | Magic byte sequence separating Mainnet, Testnet, and Devnet. |
-| **Peer Misbehavior Scoring** | `TBD` | Formal point scoring system and ban duration thresholds. |
-| **P2P Privacy Model** | `TBD` | Analysis of IP broadcast privacy and transaction relay obfuscation. |
-
----
-
-## 18. Cross-Specification References
-
-- **[`docs/ARCHITECTURE.md`](ARCHITECTURE.md)**: System crate hierarchy and modular partitioning.
-- **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Block structures and validation invariants.
-- **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)**: Transaction encoding and TxID derivation.
-- **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)**: UTXO state transitions and double-spend rules.
-- **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work threshold verification.
-- **[`docs/CHAIN-SELECTION-SPEC.md`](CHAIN-SELECTION-SPEC.md)**: Cumulative work evaluation during initial synchronization.
-- **[`docs/MEMPOOL-SPEC.md`](MEMPOOL-SPEC.md)**: Transaction admission pipeline.
-- **[`docs/STORAGE-SPEC.md`](STORAGE-SPEC.md)**: Canonical state persistence in `redb`.
-- **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Network genesis root matching.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: Fixed supply limits and economic invariants.
+- [Node Lifecycle](NODE-LIFECYCLE-SPEC.md)
+- [Consensus](CONSENSUS-SPEC.md)
+- [Block Specification](BLOCK-SPEC.md)
+- [Transaction Specification](TRANSACTION-SPEC.md)
+- [Mempool](MEMPOOL-SPEC.md)
+- [Storage](STORAGE-SPEC.md)
+- [Protocol Reference](PROTOCOL-REFERENCE.md)
+- [Implementation Status](IMPLEMENTATION-STATUS.md)

@@ -524,18 +524,7 @@ async fn test_ipc_request_response_roundtrip() {
     assert!(matches!(resp, NodeResponse::TransactionSubmitted { .. }));
     assert_eq!(node.mempool_len(), 1);
 
-    // 5. Connect Peer via IPC
-    let resp = client::send_node_request(
-        &sock_path,
-        NodeRequest::ConnectPeer {
-            addr: "127.0.0.1:9002".into(),
-        },
-    )
-    .await
-    .unwrap();
-    assert!(matches!(resp, NodeResponse::Success { .. }));
-
-    // 6. Trace Provenance on Genesis coinbase (txid from block 0)
+    // 5. Trace Provenance on Genesis coinbase (txid from block 0)
     let chain = node.query_canonical_chain().unwrap();
     let genesis_txid = chain[0].0.transactions[0].txid();
     let resp = client::send_node_request(

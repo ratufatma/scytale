@@ -5,8 +5,7 @@
 - **Deterministic UTXO Model** with authenticated state commitment (`utxo_root` in 120-Byte BlockHeader).
 - **Proof-of-Work (PoW)** consensus powered by CPU-friendly BLAKE3 hashing.
 - **Deterministic Zero-Float Fee Market** with integer-only arithmetic.
-- **Go P2P Wire Network** with binary chunked Fast Sync streaming (`getsnap` / `snapshot`).
-- **Autonomous DNS Seeder** daemon for dynamic cold-start peer bootstrapping.
+- **NATS network transport** for block and transaction broadcast.
 
 ---
 
@@ -26,21 +25,10 @@ scytale/
 │   ├── scytale-consensus/            # PoW validation, BLAKE3 target, emissions & reorg rules
 │   ├── scytale-mempool/              # Transaction mempool & priority fee market
 │   ├── scytale-mining/               # CPU miner worker, template builder & coinbase generation
-│   └── scytale-bridge/               # Zero-copy binary IPC bridge between Rust and Go
+│   └── scytale-bridge/               # IPC framing and network event types
 ├── apps/
-│   ├── scytale-node/                 # Full node daemon, HTTP RPC gateway & supervisor
+│   ├── scytale-node/                 # Full node daemon, HTTP RPC gateway & NATS transport
 │   └── scytale-cli/                  # Wallet management, keygen, balance & miner operator CLI
-├── network/                          # High-performance Go P2P subsystem
-│   ├── cmd/
-│   │   ├── scytale-p2p/              # P2P wire daemon subprocess
-│   │   └── scytale-seeder/           # Autonomous DNS seeder daemon
-│   └── internal/
-│       ├── bridge/                   # Unix domain socket IPC framing
-│       ├── gossip/                   # Transaction and block gossip relay
-│       ├── peer/                     # Peer state machine & dynamic DNS seed resolver
-│       ├── seeder/                   # Authoritative DNS server (:53) & health crawler
-│       ├── sync/                     # Block sync state machine & out-of-order snapshot assembler
-│       └── wire/                     # Binary frame codec & checksum verification
 ├── web/
 │   └── explorer/                     # Embedded live block explorer and RPC dashboard
 ├── scripts/                          # Automated cluster verification & chaos test suites
@@ -53,7 +41,6 @@ scytale/
 
 ### Prerequisites
 - **Rust**: 1.75+ (2021 edition)
-- **Go**: 1.22+ (for P2P networking & DNS seeder daemon)
 - **Docker & Docker Compose**: (optional, for multi-node cluster verification)
 
 ### Build & Check
@@ -63,8 +50,6 @@ cargo check --workspace
 cargo build --workspace
 cargo test --workspace
 
-# Build & test Go P2P network subsystem
-cd network && go test -v -race ./... && cd ..
 ```
 
 ### Run Node
@@ -74,35 +59,15 @@ cargo run -p scytale-node -- --help
 
 ---
 
-## 📖 Documentation
+## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Protocol Constants Registry](docs/PROTOCOL-CONSTANTS.md)
-- [Consensus Specification](docs/CONSENSUS-SPEC.md)
-- [Node Lifecycle Specification](docs/NODE-LIFECYCLE-SPEC.md)
-- [Ledger Specification](docs/LEDGER-SPEC.md)
-- [Storage Architecture Specification](docs/STORAGE-SPEC.md)
-- [Mempool Specification](docs/MEMPOOL-SPEC.md)
-- [P2P Networking Specification](docs/P2P-NETWORK-SPEC.md)
-- [Automatic Mining Lifecycle Specification](docs/MINING-LIFECYCLE-SPEC.md)
-- [Chain Selection & Reorganization Specification](docs/CHAIN-SELECTION-SPEC.md)
-- [Block Specification](docs/BLOCK-SPEC.md)
-- [Proof-of-Work Specification](docs/POW-SPEC.md)
-- [Difficulty Adjustment Specification](docs/DIFFICULTY-SPEC.md)
-- [Transaction Specification](docs/TRANSACTION-SPEC.md)
-- [UTXO Specification](docs/UTXO-SPEC.md)
-- [Value Provenance Specification](docs/VALUE-PROVENANCE-SPEC.md)
-- [Authorization Specification](docs/AUTHORIZATION-SPEC.md)
-- [Hashing and Serialization Specification](docs/HASHING-AND-SERIALIZATION-SPEC.md)
-- [Economic Model](docs/ECONOMIC-MODEL.md)
-- [Monetary Policy](docs/MONETARY-POLICY.md)
-- [Genesis Specification](docs/GENESIS-SPEC.md)
-- [Genesis Allocation Specification](docs/GENESIS-ALLOCATION.md)
-- [Passbook Concept](docs/PASSBOOK-CONCEPT.md)
-- [Testing Strategy & QA Framework](docs/TESTING-STRATEGY.md)
-- [Security & Threat Model](docs/SECURITY-THREAT-MODEL.md)
-- [Autonomous DNS Seeder & Cloudflare NS Delegation](docs/DNS-SEEDER-DEPLOYMENT-GUIDE.md)
-- [Consolidated Milestone Specification: Tasks 32–38](docs/TASKS_32_TO_38.md)
+Use the [documentation index](docs/README.md) as the single entry point.
+
+- [Developer Guide](docs/DEVELOPER-GUIDE.md)
+- [Protocol Reference](docs/PROTOCOL-REFERENCE.md)
+- [Implementation Status](docs/IMPLEMENTATION-STATUS.md)
+- [Audit Matrix](docs/AUDIT-MATRIX.md)
+- [Historical working documents](docs/archive/work-history/README.md)
 
 ## CLI Operator Guide
 
@@ -152,21 +117,19 @@ target/release/scytale-node start \
 	--mine
 ```
 
-For a network node, enable P2P and provide one or more peers:
+For a network node, configure the NATS broker with `--nats`:
 
 ```bash
 target/release/scytale-node start \
 	--data-dir .scytale \
 	--socket /tmp/scytale.sock \
-	--p2p-bind 0.0.0.0:9001 \
 	--http-bind 0.0.0.0:8332 \
-	--peer node.example.com:9001 \
+	--nats nats://127.0.0.1:4222 \
 	--mine
 ```
 
-The default P2P bind is `0.0.0.0:8333`. Because the HTTP gateway and P2P
-listener bind all interfaces by default, restrict access with a firewall or
-explicit bind addresses when running on an internet-facing host. The gateway
+Because the HTTP gateway binds an interface, restrict access with a firewall or
+an explicit bind address when running on an internet-facing host. The gateway
 also exposes transaction submission, so it should not be treated as a
 read-only public endpoint.
 
@@ -189,7 +152,6 @@ The payout configuration belongs to the node process and is not changed by
 scytale-cli status
 scytale-cli mine start
 scytale-cli mine stop
-scytale-cli peer connect 127.0.0.1:9002
 scytale-cli stop
 ```
 

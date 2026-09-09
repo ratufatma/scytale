@@ -13,7 +13,6 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.10
     ports:
-      - "9001:9001"
       - "8332:8332"
     command:
       - "scytale-node"
@@ -22,16 +21,10 @@ services:
       - "--socket"
       - "/run/scytale/node.sock"
       - "start"
-      - "--p2p-bind"
-      - "0.0.0.0:9001"
       - "--http-bind"
       - "0.0.0.0:8332"
       - "--target"
       - "0x217fffff"
-      - "--dns-seed"
-      - "seed.myratu.com"
-      - "--peer"
-      - "seed.myratu.com:9001"
       - "--mine"
       - "--miner-payout"
       - "010203"
@@ -47,7 +40,6 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.20
     ports:
-      - "9002:9002"
       - "8333:8333"
     depends_on:
       - node-1
@@ -58,12 +50,8 @@ services:
       - "--socket"
       - "/run/scytale/node.sock"
       - "start"
-      - "--p2p-bind"
-      - "0.0.0.0:9002"
       - "--http-bind"
       - "0.0.0.0:8333"
-      - "--peer"
-      - "172.28.0.10:9001"
       - "--target"
       - "0x217fffff"
 
@@ -78,7 +66,6 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.30
     ports:
-      - "9003:9003"
       - "8334:8334"
     depends_on:
       - node-1
@@ -89,12 +76,8 @@ services:
       - "--socket"
       - "/run/scytale/node.sock"
       - "start"
-      - "--p2p-bind"
-      - "0.0.0.0:9003"
       - "--http-bind"
       - "0.0.0.0:8334"
-      - "--peer"
-      - "172.28.0.10:9001"
       - "--target"
       - "0x217fffff"
 
@@ -102,13 +85,10 @@ services:
     image: scytale:latest
     container_name: scytale-node4
     hostname: node4
-    profiles:
-      - fastsync
     networks:
       scytale-net:
         ipv4_address: 172.28.0.40
     ports:
-      - "9004:9004"
       - "8335:8335"
     depends_on:
       - node-2
@@ -119,68 +99,8 @@ services:
       - "--socket"
       - "/run/scytale/node.sock"
       - "start"
-      - "--p2p-bind"
-      - "0.0.0.0:9004"
       - "--http-bind"
       - "0.0.0.0:8335"
-      - "--peer"
-      - "172.28.0.20:9002"
-      - "--target"
-      - "0x217fffff"
-      - "--fast-sync"
-
-  seeder:
-    image: scytale:latest
-    container_name: scytale-seeder
-    hostname: seeder
-    profiles:
-      - seeder
-      - coldstart
-    networks:
-      scytale-net:
-        ipv4_address: 172.28.0.5
-    ports:
-      - "1053:53/udp"
-      - "1053:53/tcp"
-    command:
-      - "scytale-seeder"
-      - "--domain=seed.scytale.org"
-      - "--nameserver=ns1.seed.scytale.org"
-      - "--listen=:53"
-      - "--p2p-port=9001"
-      - "--seeds=172.28.0.10:9001,172.28.0.20:9002"
-      - "--data-file=/data/seeder_nodes.json"
-      - "--workers=4"
-      - "--probe-interval=10s"
-
-  node-coldstart:
-    image: scytale:latest
-    container_name: scytale-node-coldstart
-    hostname: node-coldstart
-    profiles:
-      - coldstart
-    dns:
-      - 172.28.0.5
-    networks:
-      scytale-net:
-        ipv4_address: 172.28.0.50
-    ports:
-      - "9005:9005"
-      - "8336:8336"
-    depends_on:
-      - seeder
-      - node-1
-    command:
-      - "scytale-node"
-      - "--data-dir"
-      - "/data"
-      - "--socket"
-      - "/run/scytale/node.sock"
-      - "start"
-      - "--p2p-bind"
-      - "0.0.0.0:9005"
-      - "--http-bind"
-      - "0.0.0.0:8336"
       - "--target"
       - "0x217fffff"
 

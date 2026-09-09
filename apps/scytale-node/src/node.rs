@@ -27,7 +27,7 @@ use std::sync::{
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use scytale_bridge::{P2pBridgeEvent, UtxoWireEntryDto};
+use scytale_bridge::{NetworkEvent, UtxoWireEntryDto};
 use scytale_core::codec::CanonicalSerialize;
 use tokio::sync::broadcast;
 
@@ -79,7 +79,7 @@ struct Shared {
     chain_tree: Mutex<scytale_consensus::ChainTree>,
     utxo_set: Mutex<UtxoSet>,
     mempool: Mutex<Mempool>,
-    p2p_event_tx: broadcast::Sender<P2pBridgeEvent>,
+    p2p_event_tx: broadcast::Sender<NetworkEvent>,
 }
 
 /// Runtime orchestrator coordinating all Scytale subsystems.
@@ -712,12 +712,12 @@ impl Node {
     }
 
     /// Subscribes to asynchronous P2P network broadcast events (mined blocks, admitted transactions).
-    pub fn subscribe_p2p_events(&self) -> broadcast::Receiver<P2pBridgeEvent> {
+    pub fn subscribe_p2p_events(&self) -> broadcast::Receiver<NetworkEvent> {
         self.shared.p2p_event_tx.subscribe()
     }
 
     /// Computes the block locator hashes (exponential spacing from canonical tip to genesis)
-    /// used to negotiate Initial Block Download (IBD) synchronization with peers.
+    /// used to negotiate Initial Block Download (IBD) synchronization over NATS.
     pub fn get_block_locator(&self) -> Result<Vec<Hash256>, NodeError> {
         let chain = self.query_canonical_chain()?;
         if chain.is_empty() {
@@ -755,14 +755,6 @@ impl Node {
     pub fn get_canonical_hashes(&self) -> Result<Vec<Hash256>, NodeError> {
         let chain = self.query_canonical_chain()?;
         Ok(chain.into_iter().map(|(b, _)| b.header.hash()).collect())
-    }
-
-    /// Emits a dynamic peer connection command to the supervised P2P daemon.
-    pub fn connect_peer(&self, addr: String) {
-        let _ = self
-            .shared
-            .p2p_event_tx
-            .send(P2pBridgeEvent::ConnectPeer { addr });
     }
 
     /// Returns the number of currently connected network peers.
@@ -974,14 +966,14 @@ impl Node {
 
         if broadcast {
             if let Ok(bytes) = tx.to_canonical_bytes() {
-            let _ = self
-                .shared
-                .p2p_event_tx
-                .send(P2pBridgeEvent::BroadcastTransaction {
-                    tx_hex: scytale_primitives::to_hex(&bytes),
-                    txid_hex: txid.to_string(),
-                });
-                    }
+                let _ = self
+                    .shared
+                    .p2p_event_tx
+                    .send(NetworkEvent::BroadcastTransaction {
+                        tx_hex: scytale_primitives::to_hex(&bytes),
+                        txid_hex: txid.to_string(),
+                    });
+            }
         }
 
         Ok(txid)
@@ -1118,13 +1110,15 @@ fn mining_worker_loop(
     cancel: Arc<AtomicBool>,
     indexer: Option<Arc<IndexerHandle>>,
 ) {
-    let mining_target_override = std::env::var("SCYTALE_MINING_TARGET").ok().and_then(|value| {
-        value
-            .strip_prefix("0x")
-            .map(|hex| u32::from_str_radix(hex, 16))
-            .unwrap_or_else(|| value.parse::<u32>())
-            .ok()
-    });
+    let mining_target_override = std::env::var("SCYTALE_MINING_TARGET")
+        .ok()
+        .and_then(|value| {
+            value
+                .strip_prefix("0x")
+                .map(|hex| u32::from_str_radix(hex, 16))
+                .unwrap_or_else(|| value.parse::<u32>())
+                .ok()
+        });
     let mut compact_target = mining_target_override.unwrap_or(initial_target);
     let mut current_nonce: u64 = 0;
     loop {
@@ -1140,7 +1134,8 @@ fn mining_worker_loop(
             }
             let tip = chain.canonical_tip();
             if let Some(node) = chain.get_node(&tip) {
-                compact_target = mining_target_override.unwrap_or(node.block.header.difficulty_target);
+                compact_target =
+                    mining_target_override.unwrap_or(node.block.header.difficulty_target);
             }
 
             let utxos = shared.utxo_set.lock().unwrap();
@@ -1252,7 +1247,7 @@ fn mining_worker_loop(
                     drop(mempool);
 
                     if let Ok(bytes) = block.to_canonical_bytes() {
-                        let _ = shared.p2p_event_tx.send(P2pBridgeEvent::BroadcastBlock {
+                        let _ = shared.p2p_event_tx.send(NetworkEvent::BroadcastBlock {
                             block_hex: scytale_primitives::to_hex(&bytes),
                             hash_hex: block.header.hash().to_string(),
                         });

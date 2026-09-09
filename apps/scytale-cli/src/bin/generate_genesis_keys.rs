@@ -75,9 +75,19 @@ fn generate_entry(role: &str, percent: u8, scy: u64, quanta: u64) -> GenesisKeyE
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let founder = generate_entry("Founder Allocation", 30, 19_800_000, 1_980_000_000_000_000);
 
-    let treasury = generate_entry("Development / Treasury", 20, 13_200_000, 1_320_000_000_000_000);
+    let treasury = generate_entry(
+        "Development / Treasury",
+        20,
+        13_200_000,
+        1_320_000_000_000_000,
+    );
 
-    let community = generate_entry("Ecosystem / Community", 50, 33_000_000, 3_300_000_000_000_000);
+    let community = generate_entry(
+        "Ecosystem / Community",
+        50,
+        33_000_000,
+        3_300_000_000_000_000,
+    );
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

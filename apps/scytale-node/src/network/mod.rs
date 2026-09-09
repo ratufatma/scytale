@@ -59,13 +59,13 @@ impl P2pEngine {
             host_port.to_string()
         };
 
-        let mut resolved = host_port
-            .to_socket_addrs()
-            .map_err(|err| P2pError::BrokerUnreachable(format!("invalid NATS address {nats_url}: {err}")))?;
+        let mut resolved = host_port.to_socket_addrs().map_err(|err| {
+            P2pError::BrokerUnreachable(format!("invalid NATS address {nats_url}: {err}"))
+        })?;
 
-        resolved
-            .next()
-            .ok_or_else(|| P2pError::BrokerUnreachable(format!("no socket address resolved for {nats_url}")))
+        resolved.next().ok_or_else(|| {
+            P2pError::BrokerUnreachable(format!("no socket address resolved for {nats_url}"))
+        })
     }
 
     pub async fn listen_blocks(&self, sender: mpsc::Sender<Vec<u8>>) -> NetworkResult<()> {
@@ -99,7 +99,13 @@ impl P2pEngine {
             best_hash,
         };
         self.client
-            .publish(HEARTBEAT_SUBJECT, heartbeat.encode().map_err(|err| P2pError::Operation(err.to_string()))?.into())
+            .publish(
+                HEARTBEAT_SUBJECT,
+                heartbeat
+                    .encode()
+                    .map_err(|err| P2pError::Operation(err.to_string()))?
+                    .into(),
+            )
             .await
             .map_err(|err| P2pError::Operation(err.to_string()))?;
         Ok(())

@@ -8,7 +8,6 @@ use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 
 use crate::node::Node;
-use crate::p2p_supervisor::is_self_address;
 use crate::passbook::{
     EntryStatus, Passbook, PassbookAction, PassbookView, ProvenanceCategory, ProvenanceStep,
 };
@@ -27,7 +26,6 @@ pub struct IpcServer {
     socket_path: PathBuf,
     node: Arc<Node>,
     shutdown_sender: broadcast::Sender<()>,
-    p2p_bind: Option<String>,
 }
 
 impl IpcServer {
@@ -40,23 +38,9 @@ impl IpcServer {
             socket_path: socket_path.into(),
             node,
             shutdown_sender,
-            p2p_bind: None,
         }
     }
 
-    pub fn with_p2p_bind(
-        socket_path: impl Into<PathBuf>,
-        node: Arc<Node>,
-        shutdown_sender: broadcast::Sender<()>,
-        p2p_bind: Option<String>,
-    ) -> Self {
-        Self {
-            socket_path: socket_path.into(),
-            node,
-            shutdown_sender,
-            p2p_bind,
-        }
-    }
 
     /// Runs the IPC listener loop until cancellation.
     pub async fn run(self) -> Result<(), std::io::Error> {
@@ -82,9 +66,8 @@ impl IpcServer {
                         Ok((stream, _addr)) => {
                             let node = Arc::clone(&self.node);
                             let shutdown_tx = self.shutdown_sender.clone();
-                            let p2p_bind = self.p2p_bind.clone();
                             tokio::spawn(async move {
-                                if let Err(e) = handle_client(stream, node, shutdown_tx, p2p_bind).await {
+                                if let Err(e) = handle_client(stream, node, shutdown_tx).await {
                                     error!("IPC client handling error: {e}");
                                 }
                             });
@@ -112,13 +95,12 @@ async fn handle_client(
     stream: UnixStream,
     node: Arc<Node>,
     shutdown_tx: broadcast::Sender<()>,
-    p2p_bind: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let (reader, mut writer) = stream.into_split();
     let mut buf_reader = tokio::io::BufReader::new(reader);
 
     while let Some(req) = read_ipc_message::<_, NodeRequest>(&mut buf_reader).await? {
-        let resp = process_request(req, &node, &shutdown_tx, p2p_bind.as_deref()).await;
+        let resp = process_request(req, &node, &shutdown_tx).await;
         write_ipc_message(&mut writer, &resp).await?;
     }
     Ok(())
@@ -128,7 +110,6 @@ async fn process_request(
     req: NodeRequest,
     node: &Node,
     shutdown_tx: &broadcast::Sender<()>,
-    p2p_bind: Option<&str>,
 ) -> NodeResponse {
     match req {
         NodeRequest::GetStatus => NodeResponse::Status {
@@ -239,28 +220,6 @@ async fn process_request(
                 Err(e) => NodeResponse::Error {
                     message: e.to_string(),
                 },
-            }
-        }
-
-        NodeRequest::ConnectPeer { addr } => {
-            if let Some(bind) = p2p_bind {
-                let Ok(bind_addr) = bind.parse::<std::net::SocketAddr>() else {
-                    return NodeResponse::Error {
-                        message: format!("Invalid local P2P bind address '{bind}': expected host:port"),
-                    };
-                };
-                if is_self_address(&addr, &bind_addr) {
-                    return NodeResponse::Error {
-                        message: format!(
-                            "Cannot connect to self: matches local bind address ({bind}) for peer {addr}"
-                        ),
-                    };
-                }
-            }
-
-            node.connect_peer(addr.clone());
-            NodeResponse::Success {
-                message: format!("Initiated peer connection to {addr}"),
             }
         }
 

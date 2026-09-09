@@ -117,9 +117,6 @@ pub enum Commands {
         max_depth: Option<usize>,
     },
 
-    /// Manage network peer connections
-    Peer(PeerArgs),
-
     /// Manage non-custodial Ed25519 local wallet keys and P2PKH addresses
     Wallet(WalletArgs),
 
@@ -220,21 +217,6 @@ pub enum WalletSubcommands {
         /// Path to wallet JSON file (defaults to ~/.scytale/wallet.json)
         #[arg(short, long)]
         file: Option<PathBuf>,
-    },
-}
-
-#[derive(Args, Debug, PartialEq, Eq)]
-pub struct PeerArgs {
-    #[command(subcommand)]
-    pub action: PeerSubcommands,
-}
-
-#[derive(Subcommand, Debug, PartialEq, Eq)]
-pub enum PeerSubcommands {
-    /// Dynamically connect to a remote network peer address (e.g. 127.0.0.1:9002)
-    Connect {
-        /// Peer TCP address host:port
-        addr: String,
     },
 }
 
@@ -717,22 +699,6 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 other => eprintln!("Unexpected response: {other:?}"),
             }
         }
-
-        Commands::Peer(args) => match args.action {
-            PeerSubcommands::Connect { addr } => {
-                let resp =
-                    send_node_request(&cli.socket, NodeRequest::ConnectPeer { addr }).await?;
-                match resp {
-                    NodeResponse::Success { message } => {
-                        println!("{message}");
-                    }
-                    NodeResponse::Error { message } => {
-                        eprintln!("Peer connect error: {message}");
-                    }
-                    other => eprintln!("Unexpected response: {other:?}"),
-                }
-            }
-        },
 
         Commands::Stop => {
             let resp = send_node_request(&cli.socket, NodeRequest::StopNode).await?;

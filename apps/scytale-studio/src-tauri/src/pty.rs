@@ -7,7 +7,8 @@ use tauri::{AppHandle, Emitter, State};
 fn workspace_root() -> std::path::PathBuf {
     let mut candidate = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
     loop {
-        if candidate.join("Cargo.toml").is_file() && candidate.join("apps/scytale-studio").is_dir() {
+        if candidate.join("Cargo.toml").is_file() && candidate.join("apps/scytale-studio").is_dir()
+        {
             return candidate;
         }
         if !candidate.pop() {
@@ -43,7 +44,12 @@ impl PtyState {
         let child = pair.slave.spawn_command(command)?;
         let mut reader = pair.master.try_clone_reader()?;
         let master = Arc::new(Mutex::new(pair.master));
-        let writer = Arc::new(Mutex::new(master.lock().map_err(|_| "PTY master poisoned")?.take_writer()?));
+        let writer = Arc::new(Mutex::new(
+            master
+                .lock()
+                .map_err(|_| "PTY master poisoned")?
+                .take_writer()?,
+        ));
         let app_handle = app.clone();
 
         std::thread::spawn(move || {
@@ -67,14 +73,22 @@ impl PtyState {
 
 #[tauri::command]
 pub fn pty_write(state: State<'_, PtyState>, data: String) -> Result<(), String> {
-    let mut writer = state.writer.lock().map_err(|_| "PTY writer poisoned".to_string())?;
-    writer.write_all(data.as_bytes()).map_err(|error| error.to_string())?;
+    let mut writer = state
+        .writer
+        .lock()
+        .map_err(|_| "PTY writer poisoned".to_string())?;
+    writer
+        .write_all(data.as_bytes())
+        .map_err(|error| error.to_string())?;
     writer.flush().map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub fn pty_resize(state: State<'_, PtyState>, cols: u16, rows: u16) -> Result<(), String> {
-    let master = state.master.lock().map_err(|_| "PTY master poisoned".to_string())?;
+    let master = state
+        .master
+        .lock()
+        .map_err(|_| "PTY master poisoned".to_string())?;
     master
         .resize(PtySize {
             rows,

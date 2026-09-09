@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use scytale_bridge::P2pBridgeEvent;
+use scytale_bridge::NetworkEvent;
 use scytale_consensus::INITIAL_REWARD;
 use scytale_core::{Block, CanonicalDeserialize, Transaction, QUANTA_PER_SCY};
 use scytale_node::{IpcServer, Node, NodeConfig, P2pEngine, DEFAULT_SOCKET_PATH};
@@ -37,18 +37,6 @@ struct Cli {
     #[arg(long)]
     indexer_key: Option<String>,
 
-    /// TCP bind address for Go P2P daemon (e.g. 0.0.0.0:8333)
-    #[arg(long, default_value = "0.0.0.0:8333")]
-    p2p_bind: Option<String>,
-
-    /// Peer address(es) to dial for P2P network sync (can be repeated)
-    #[arg(long = "peer", visible_aliases = ["seeds", "seed", "peers", "seed-nodes"], action = clap::ArgAction::Append)]
-    peers: Vec<String>,
-
-    /// Custom path to the scytale-p2p binary
-    #[arg(long)]
-    p2p_bin: Option<std::path::PathBuf>,
-
     /// Target difficulty for testnet/local testing (compact format, e.g. 0x207fffff)
     #[arg(long)]
     target: Option<String>,
@@ -72,18 +60,6 @@ struct Cli {
     /// Disable HTTP gateway completely
     #[arg(long, default_value_t = false)]
     no_http: bool,
-
-    /// Enable UTXO snapshot fast sync mode
-    #[arg(long, default_value_t = false)]
-    fast_sync: bool,
-
-    /// DNS seed domain(s) to query for peer discovery (can be repeated)
-    #[arg(long = "dns-seed", visible_aliases = ["dns-seeds", "dns_seed", "dns_seeds"], action = clap::ArgAction::Append)]
-    dns_seeds: Vec<String>,
-
-    /// Disable DNS seed resolution for P2P network discovery
-    #[arg(long, default_value_t = false)]
-    no_dns_seeds: bool,
 
     /// Maximum allowed reorganization depth before rejecting a competing branch
     #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
@@ -115,18 +91,6 @@ enum Commands {
         #[arg(long)]
         indexer_key: Option<String>,
 
-        /// TCP bind address for Go P2P daemon (e.g. 0.0.0.0:8333)
-        #[arg(long, default_value = "0.0.0.0:8333")]
-        p2p_bind: Option<String>,
-
-        /// Peer address(es) to dial for P2P network sync (can be repeated)
-        #[arg(long = "peer", visible_aliases = ["seeds", "seed", "peers", "seed-nodes"], action = clap::ArgAction::Append)]
-        peers: Vec<String>,
-
-        /// Custom path to the scytale-p2p binary
-        #[arg(long)]
-        p2p_bin: Option<std::path::PathBuf>,
-
         /// Target difficulty for testnet/local testing (compact format, e.g. 0x207fffff)
         #[arg(long)]
         target: Option<String>,
@@ -151,18 +115,6 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         no_http: bool,
 
-        /// Enable UTXO snapshot fast sync mode
-        #[arg(long, default_value_t = false)]
-        fast_sync: bool,
-
-        /// DNS seed domain(s) to query for peer discovery (can be repeated)
-        #[arg(long = "dns-seed", visible_aliases = ["dns-seeds", "dns_seed", "dns_seeds"], action = clap::ArgAction::Append)]
-        dns_seeds: Vec<String>,
-
-        /// Disable DNS seed resolution for P2P network discovery
-        #[arg(long, default_value_t = false)]
-        no_dns_seeds: bool,
-
         /// Maximum allowed reorganization depth before rejecting a competing branch
         #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
         max_reorg_depth: u64,
@@ -176,18 +128,12 @@ struct StartOptions {
     mine: bool,
     explorer_url: Option<String>,
     indexer_key: Option<String>,
-    p2p_bind: Option<String>,
-    peers: Vec<String>,
-    p2p_bin: Option<std::path::PathBuf>,
     target: Option<String>,
     miner_payout: Option<String>,
     nats: Option<String>,
     no_p2p: bool,
     http_bind: String,
     no_http: bool,
-    fast_sync: bool,
-    dns_seeds: Vec<String>,
-    no_dns_seeds: bool,
     max_reorg_depth: u64,
 }
 
@@ -210,26 +156,16 @@ async fn main() {
             mine,
             explorer_url,
             indexer_key,
-            p2p_bind,
-            peers,
-            p2p_bin,
             target,
             miner_payout,
             nats,
             no_p2p,
             http_bind,
             no_http,
-            fast_sync,
-            dns_seeds,
-            no_dns_seeds,
             max_reorg_depth,
         }) => {
             let final_data_dir = data_dir.clone().unwrap_or_else(|| cli.data_dir.clone());
             let final_socket = socket.clone().unwrap_or_else(|| cli.socket.clone());
-            let mut all_peers = cli.peers.clone();
-            all_peers.extend(peers.clone());
-            let mut all_dns = cli.dns_seeds.clone();
-            all_dns.extend(dns_seeds.clone());
             (
                 final_data_dir.clone(),
                 final_socket.clone(),
@@ -237,18 +173,12 @@ async fn main() {
                     mine: *mine || cli.mine,
                     explorer_url: explorer_url.clone().or_else(|| cli.explorer_url.clone()),
                     indexer_key: indexer_key.clone().or_else(|| cli.indexer_key.clone()),
-                    p2p_bind: p2p_bind.clone().or_else(|| cli.p2p_bind.clone()),
-                    peers: all_peers,
-                    p2p_bin: p2p_bin.clone().or_else(|| cli.p2p_bin.clone()),
                     target: target.clone().or_else(|| cli.target.clone()),
                     miner_payout: miner_payout.clone().or_else(|| cli.miner_payout.clone()),
                     nats: nats.clone().or_else(|| cli.nats.clone()),
                     no_p2p: *no_p2p || cli.no_p2p,
                     http_bind: http_bind.clone(),
                     no_http: *no_http || cli.no_http,
-                    fast_sync: *fast_sync || cli.fast_sync,
-                    dns_seeds: all_dns,
-                    no_dns_seeds: *no_dns_seeds || cli.no_dns_seeds,
                     max_reorg_depth: *max_reorg_depth,
                 }),
             )
@@ -267,18 +197,12 @@ async fn main() {
                 mine: cli.mine,
                 explorer_url: cli.explorer_url.clone(),
                 indexer_key: cli.indexer_key.clone(),
-                p2p_bind: cli.p2p_bind.clone(),
-                peers: cli.peers.clone(),
-                p2p_bin: cli.p2p_bin.clone(),
                 target: cli.target.clone(),
                 miner_payout: cli.miner_payout.clone(),
                 nats: cli.nats.clone(),
                 no_p2p: cli.no_p2p,
                 http_bind: cli.http_bind.clone(),
                 no_http: cli.no_http,
-                fast_sync: cli.fast_sync,
-                dns_seeds: cli.dns_seeds.clone(),
-                no_dns_seeds: cli.no_dns_seeds,
                 max_reorg_depth: cli.max_reorg_depth,
             }),
         ),
@@ -313,8 +237,6 @@ async fn main() {
             data_dir = %config.data_dir.display(),
             mining = config.mining_enabled,
             socket = %socket,
-            p2p_bind = ?opts.p2p_bind,
-            peers = ?opts.peers,
             nats = ?opts.nats,
             http_bind = %opts.http_bind,
             http_enabled = !opts.no_http,
@@ -355,11 +277,10 @@ async fn main() {
                 );
 
                 let (shutdown_tx, mut shutdown_rx) = tokio::sync::broadcast::channel(1);
-                let ipc_server = IpcServer::with_p2p_bind(
+                let ipc_server = IpcServer::new(
                     &socket,
                     Arc::clone(&node),
                     shutdown_tx.clone(),
-                    opts.p2p_bind.clone(),
                 );
 
                 let ipc_handle = tokio::spawn(async move {
@@ -376,7 +297,11 @@ async fn main() {
                         .or_else(|| std::env::var("SCYTALE_NATS").ok())
                         .or_else(|| std::env::var("SCYTALE_NATS_URL").ok())
                         .unwrap_or_else(|| "nats://116.212.72.89:4222".to_string());
-                    match P2pEngine::connect(&nats_url, format!("scytale-node-{}", std::process::id())).await
+                    match P2pEngine::connect(
+                        &nats_url,
+                        format!("scytale-node-{}", std::process::id()),
+                    )
+                    .await
                     {
                         Ok(engine) => {
                             let block_engine = engine.clone();
@@ -396,7 +321,8 @@ async fn main() {
                                     match Block::from_canonical_bytes(&payload) {
                                         Ok(block) => {
                                             let block_hash = block.header.hash();
-                                            match block_processor_node.submit_external_block(block) {
+                                            match block_processor_node.submit_external_block(block)
+                                            {
                                                 Ok(true) => tracing::info!(
                                                     block_hash = %block_hash,
                                                     height = block_processor_node.canonical_height(),
@@ -429,16 +355,18 @@ async fn main() {
                             let tx_processor = tokio::spawn(async move {
                                 while let Some(payload) = tx_rx.recv().await {
                                     match Transaction::from_canonical_bytes(&payload) {
-                                        Ok(tx) => match tx_processor_node.submit_network_transaction(tx) {
-                                            Ok(txid) => tracing::info!(
-                                                txid = %txid,
-                                                "received transaction from NATS and admitted to mempool"
-                                            ),
-                                            Err(e) => tracing::warn!(
-                                                error = %e,
-                                                "received transaction from NATS but rejected by mempool"
-                                            ),
-                                        },
+                                        Ok(tx) => {
+                                            match tx_processor_node.submit_network_transaction(tx) {
+                                                Ok(txid) => tracing::info!(
+                                                    txid = %txid,
+                                                    "received transaction from NATS and admitted to mempool"
+                                                ),
+                                                Err(e) => tracing::warn!(
+                                                    error = %e,
+                                                    "received transaction from NATS but rejected by mempool"
+                                                ),
+                                            }
+                                        }
                                         Err(e) => tracing::warn!(
                                             error = %e,
                                             "received invalid transaction payload from NATS"
@@ -451,41 +379,53 @@ async fn main() {
                             let broadcast_task = tokio::spawn(async move {
                                 loop {
                                     match p2p_events.recv().await {
-                                        Ok(P2pBridgeEvent::BroadcastTransaction { tx_hex, .. }) => {
-                                            match scytale_primitives::from_hex(&tx_hex) {
-                                                Ok(bytes) => {
-                                                    if let Err(e) = broadcast_engine.broadcast_transaction(&bytes).await {
-                                                        tracing::warn!(error = %e, "failed to broadcast transaction over NATS");
-                                                    }
+                                        Ok(NetworkEvent::BroadcastTransaction {
+                                            tx_hex, ..
+                                        }) => match scytale_primitives::from_hex(&tx_hex) {
+                                            Ok(bytes) => {
+                                                if let Err(e) = broadcast_engine
+                                                    .broadcast_transaction(&bytes)
+                                                    .await
+                                                {
+                                                    tracing::warn!(error = %e, "failed to broadcast transaction over NATS");
                                                 }
-                                                Err(e) => tracing::warn!(error = %e, "invalid transaction event hex"),
                                             }
-                                        }
-                                        Ok(P2pBridgeEvent::BroadcastBlock { block_hex, .. }) => {
-                                            match scytale_primitives::from_hex(&block_hex) {
-                                                Ok(bytes) => {
-                                                    if let Err(e) = broadcast_engine.broadcast_block(&bytes).await {
-                                                        tracing::warn!(error = %e, "failed to broadcast block over NATS");
-                                                    }
+                                            Err(e) => {
+                                                tracing::warn!(error = %e, "invalid transaction event hex")
+                                            }
+                                        },
+                                        Ok(NetworkEvent::BroadcastBlock {
+                                            block_hex, ..
+                                        }) => match scytale_primitives::from_hex(&block_hex) {
+                                            Ok(bytes) => {
+                                                if let Err(e) =
+                                                    broadcast_engine.broadcast_block(&bytes).await
+                                                {
+                                                    tracing::warn!(error = %e, "failed to broadcast block over NATS");
                                                 }
-                                                Err(e) => tracing::warn!(error = %e, "invalid block event hex"),
                                             }
-                                        }
-                                        Ok(P2pBridgeEvent::ConnectPeer { .. }) => {}
-                                        Err(tokio::sync::broadcast::error::RecvError::Lagged(count)) => {
+                                            Err(e) => {
+                                                tracing::warn!(error = %e, "invalid block event hex")
+                                            }
+                                        },
+                                        Err(tokio::sync::broadcast::error::RecvError::Lagged(
+                                            count,
+                                        )) => {
                                             tracing::warn!(count, "P2P event broadcaster lagged")
                                         }
-                                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                            break
+                                        }
                                     }
                                 }
                             });
                             let heartbeat_task = tokio::spawn(async move {
-                                let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+                                let mut interval =
+                                    tokio::time::interval(std::time::Duration::from_secs(15));
                                 loop {
                                     interval.tick().await;
-                                    if let Err(e) = heartbeat_engine
-                                        .publish_heartbeat(0, [0; 32])
-                                        .await
+                                    if let Err(e) =
+                                        heartbeat_engine.publish_heartbeat(0, [0; 32]).await
                                     {
                                         tracing::warn!("heartbeat publish failed: {e}");
                                         break;

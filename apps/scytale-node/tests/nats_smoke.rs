@@ -27,7 +27,9 @@ async fn nats_smoke_test() -> Result<(), Box<dyn std::error::Error>> {
 
     let subject = "scytale.v1.nodes.heartbeat";
     let mut sub = client.subscribe(subject.to_string()).await?;
-    client.publish(subject, b"smoke-test".to_vec().into()).await?;
+    client
+        .publish(subject, b"smoke-test".to_vec().into())
+        .await?;
     client.flush().await?;
 
     match tokio::time::timeout(Duration::from_secs(3), sub.next()).await {

@@ -14,7 +14,7 @@ The **Node Lifecycle** acts as the supreme runtime orchestrator of the Scytale d
                     ┌────────────────┼────────────────┐
                     │                │                │
                  Storage         Consensus           P2P
-                 (redb)        (PoW / Chain)         (Go)
+                 (redb)        (PoW / Chain)        (NATS)
                     │                │                │
                     └────────────────┼────────────────┘
                                      │
@@ -44,7 +44,7 @@ To prevent synchronization drift and race conditions, Scytale enforces strict ow
 | **`Storage Engine (redb)`** | Durably persists canonical chain state, UTXO set, blocks, and indexes. | **Source of Truth** for committed state. |
 | **`Consensus Engine`** | Validates headers, PoW, transactions, and state transitions. | **Rule Authority** for validity checks. |
 | **`Mempool`** | Manages local, ephemeral unconfirmed transaction queues. | **Pending State** only (Non-canonical). |
-| **`P2P Subsystem (Go)`** | Discovers peers, manages sockets, and transports wire messages. | **Transport Conduit** only. |
+| **`NATS Transport`** | Publishes and receives network blocks and transactions. | **Transport Conduit** only. |
 | **`Autonomous Miner`** | Iterates nonce search over candidate block templates. | **Transient Worker** (Non-canonical). |
 | **`Node Orchestrator`** | Manages lifecycles, event flows, and subsystem coordination. | **Coordinator** (Zero consensus authority). |
 
@@ -101,7 +101,7 @@ To guarantee deterministic bootstrapping, subsystems initialize in a strict, lin
                                        ↓
 6. [ Mempool Subsystem ]       ──> Initialize pending queue (or re-admit persisted txs)
                                        ↓
-7. [ P2P Networking Daemon ]   ──> Spawn Go networking layer & bind listening ports
+7. [ NATS Networking ]          ──> Connect to the configured broker
                                        ↓
 8. [ Initial Chain Sync (IBD)] ──> Discover peer tips, download & apply missing blocks
                                        ↓
@@ -131,9 +131,9 @@ To guarantee deterministic bootstrapping, subsystems initialize in a strict, lin
 - Instantiates ephemeral pending transaction cache.
 - If persistence is enabled, reads candidate records from disk, re-validates each against the current `UTXO_SET`, and drops any conflicting or obsolete spends.
 
-### 5.4 P2P Initialization (`docs/P2P-NETWORK-SPEC.md`)
-- Launches Go P2P subsystem over the IPC runtime boundary.
-- Initiates peer discovery via configured seeds/bootstrap nodes and executes network handshakes.
+### 5.4 NATS Initialization (`docs/P2P-NETWORK-SPEC.md`)
+- Connects the NATS transport when network mode is enabled.
+- Subscribes to block and transaction subjects and publishes local events.
 
 ---
 
@@ -274,7 +274,7 @@ When a shutdown signal (`SIGINT`, `SIGTERM`, or CLI stop) is received:
                                     ↓
 3. [ Mempool Flush ]                ──> (Optional) Persist pending transaction queue to disk
                                     ↓
-4. [ P2P Teardown ]                 ──> Broadcast disconnect notices & close network sockets
+4. [ NATS Teardown ]                ──> Flush the client and close subscriptions
                                     ↓
 5. [ Storage Flush & Close ]        ──> Flush dirty buffers to disk & close redb handles
                                     ↓
@@ -355,7 +355,7 @@ The following implementation parameters remain designated as **TBD**:
 
 - **[`docs/ARCHITECTURE.md`](ARCHITECTURE.md)**: System-level crate and workspace hierarchy.
 - **[`docs/STORAGE-SPEC.md`](STORAGE-SPEC.md)**: `redb` database lifecycle and atomic transaction guarantees.
-- **[`docs/P2P-NETWORK-SPEC.md`](P2P-NETWORK-SPEC.md)**: Go networking subsystem and IPC message boundary.
+- **[`docs/P2P-NETWORK-SPEC.md`](P2P-NETWORK-SPEC.md)**: NATS transport and IPC message boundary.
 - **[`docs/MEMPOOL-SPEC.md`](MEMPOOL-SPEC.md)**: Memory pool admission and eviction rules.
 - **[`docs/MINING-LIFECYCLE-SPEC.md`](MINING-LIFECYCLE-SPEC.md)**: Autonomous miner worker lifecycle and candidate refreshing.
 - **[`docs/CHAIN-SELECTION-SPEC.md`](CHAIN-SELECTION-SPEC.md)**: Canonical chain determination and reorg pipeline.
