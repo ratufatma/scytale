@@ -30,7 +30,7 @@ $$\text{Miner Revenue} = \text{Block Subsidy (Emission)} + \sum \text{Transactio
 - **Subsidy Decay:** Follows a predictable geometric halving schedule parameterized by block height:
   - Initial block subsidy: 10 SCY ($1,000,000,000\text{ quanta}$).
   - Halving interval: every 2,100,000 blocks.
-  - Final target cap: 42,000,000 SCY ($4,200,000,000,000,000\text{ quanta}$), after which block subsidy ceases ($0$), shifting miner incentives entirely to transaction fees.
+  - Final target cap: 94,980,000 SCY ($9,498,000,000,000,000\text{ quanta}$), after which block subsidy ceases ($0$), shifting miner incentives entirely to transaction fees.
 
 ---
 

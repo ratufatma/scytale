@@ -50,14 +50,14 @@ Ticker / Symbol          : SCY
 Smallest Accounting Unit : quanta
 Denomination Rate        : 1 SCY = 100,000,000 quanta (10^8 quanta)
 
-Maximum Supply Ceiling   : 42,000,000 SCY (4,200,000,000,000,000 quanta)
+Maximum Supply Ceiling   : 94,980,000 SCY (9,498,000,000,000,000 quanta)
 
-Genesis Allocation (25%) : 10,500,000 SCY (1,050,000,000,000,000 quanta)
-├── Founder Allocation   : 15% ( 6,300,000 SCY / 630,000,000,000,000 quanta) [One-time]
-├── Treasury / Dev       :  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
-└── Community / Ecosystem:  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
+Genesis Allocation (69.49%): 66,000,000 SCY (6,600,000,000,000,000 quanta)
+├── Founder Allocation   : 30% of genesis (19,800,000 SCY / 1,980,000,000,000,000 quanta) [One-time]
+├── Treasury / Dev       : 20% of genesis (13,200,000 SCY / 1,320,000,000,000,000 quanta)
+└── Community / Ecosystem: 50% of genesis (33,000,000 SCY / 3,300,000,000,000,000 quanta)
 
-Mining Reserve (75%)     : 31,500,000 SCY (3,150,000,000,000,000 quanta)
+Mining Reserve (30.51%)  : 28,980,000 SCY (2,898,000,000,000,000 quanta)
 
 Initial Block Reward     : 10 SCY / block (1,000,000,000 quanta / block)
 Target Block Interval    : 60 seconds

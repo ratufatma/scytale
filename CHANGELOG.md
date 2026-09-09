@@ -5,6 +5,15 @@ All notable changes to the **Scytale** Layer-1 Blockchain Protocol are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Changed the node HTTP gateway default bind from `127.0.0.1:8332` to
+  `0.0.0.0:8332`.
+- Added a default P2P bind of `0.0.0.0:8333` to the node CLI.
+- Updated operator documentation with the new bind behavior and exposure
+  precautions.
+
 ---
 
 ## [v0.3.3-devnet] - 2026-09-05

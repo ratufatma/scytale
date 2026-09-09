@@ -61,7 +61,7 @@ This document defines the formal **Testing Strategy and Verification Framework**
 - **Focus:** Mathematical verification of unbreakable protocol rules.
 - **Mandatory Invariant Suites:**
   - **Double-Spend Rejection:** Submitting two valid transactions referencing the same input `OutPoint` guarantees that exactly one is accepted and the other rejected.
-  - **Monetary Supply Ceiling:** Proving that no sequence of valid blocks can cause total circulating quanta to exceed $42,000,000\text{ SCY}$ ($4.2 \times 10^{15}\text{ quanta}$).
+  - **Monetary Supply Ceiling:** Proving that no sequence of valid blocks can cause total circulating quanta to exceed $94,980,000\text{ SCY}$ ($9.498 \times 10^{15}\text{ quanta}$).
   - **Zero Arbitrary Minting:** Proving that non-coinbase transactions cannot generate unbacked value.
   - **Heaviest Chain Convergence:** Proving that when presented with two competing valid branches, the node deterministically selects the branch with the greatest cumulative Proof-of-Work.
 

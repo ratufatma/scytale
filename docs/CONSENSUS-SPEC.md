@@ -71,7 +71,7 @@ Candidate Block Evaluation
 Consensus enforces 5 immutable macro-economic rules across the entire lifecycle of **Scytale Coin** (`SCY`):
 
 1. **Global Supply Ceiling Invariant:** Total cumulative circulating value on the ledger can never exceed the immutable hard cap across the entire history of the chain:
-   $$\text{Total Issued Supply}(H) \le \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (42,000,000\text{ SCY})$$
+   $$\text{Total Issued Supply}(H) \le \mathbf{9,498,000,000,000,000\text{ quanta}} \quad (94,980,000\text{ SCY})$$
 2. **Standard Transaction Solvency & Conservation:** For every valid non-coinbase transaction, total input quanta must equal total output quanta plus implicit fee:
    $$\sum \text{Input Values} = \sum \text{Output Values} + \text{Fee} \quad (\text{with } \text{Fee} \ge 0)$$
 3. **Coinbase Transaction Ceiling:** The total output value of a block's coinbase transaction cannot exceed the protocol block subsidy at that height plus the total fees from all transactions in that block:
@@ -80,16 +80,16 @@ Consensus enforces 5 immutable macro-economic rules across the entire lifecycle 
 5. **Strict Integer Quanta Arithmetic:** All consensus state transitions, fee calculations, block subsidies, and balance validations must strictly execute in **unsigned 64-bit integers (`u64 quanta`)** ($1\text{ SCY} = 100,000,000\text{ quanta}$). Floating-point arithmetic is strictly prohibited in consensus.
 
 ### Macro Supply Partitioning:
-$$\text{Maximum Supply} = \text{Genesis Allocation (25%)} + \text{Mining Emission Reserve (75%)}$$
+$$\text{Maximum Supply} = \text{Genesis Allocation (69.49%)} + \text{Mining Emission Reserve (30.51%)}$$
 $$\begin{aligned}
-\text{Genesis Block 0 Issuance} &= \mathbf{1,050,000,000,000,000\text{ quanta}} \quad (10,500,000\text{ SCY}) \\
-\text{Authorized Mining Reserve} &= \mathbf{3,150,000,000,000,000\text{ quanta}} \quad (31,500,000\text{ SCY}) \\
+	ext{Genesis Block 0 Issuance} &= \mathbf{6,600,000,000,000,000\text{ quanta}} \quad (66,000,000\text{ SCY}) \\
+	ext{Authorized Mining Reserve} &= \mathbf{2,898,000,000,000,000\text{ quanta}} \quad (28,980,000\text{ SCY}) \\
 \hline
-\mathbf{\text{Total Hard Cap}} &= \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (\mathbf{42,000,000\text{ SCY}})
+\mathbf{\text{Total Hard Cap}} &= \mathbf{9,498,000,000,000,000\text{ quanta}} \quad (\mathbf{94,980,000\text{ SCY}})
 \end{aligned}$$
 
 > [!WARNING]
-> **Emission Discrepancy Note:** The theoretical infinite halving sum of $10\text{ SCY} \times 2.1\text{M} \times 2 = 42\text{M}$ SCY exceeds the $31.5\text{M}$ SCY mining reserve when combined with Genesis ($10.5\text{M}$). This is flagged as `[CONSENSUS ISSUE — REQUIRES RESOLUTION]` and must be capped at $31.5\text{M}$ SCY or recalibrated before mining emission verification logic is finalized.
+> **Emission Discrepancy Note:** The theoretical infinite halving sum of $10\text{ SCY} \times 2.1\text{M} \times 2 = 42\text{M}$ SCY exceeds the implemented $28.98\text{M}$ SCY mining reserve. This remains a consensus issue and must be capped or recalibrated before mining emission verification is considered final.
 
 - Cross-References: [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md), [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md), and [`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md).
 
@@ -141,7 +141,7 @@ Scytale strictly separates universal consensus invariants from node-local operat
 | :--- | :--- | :--- |
 | **Enforcement** | Uniformly enforced by 100% of network nodes. | Configured locally by individual node operators. |
 | **Divergence Impact** | Disagreement causes a permanent consensus fork. | Disagreement has zero impact on consensus validity. |
-| **Key Domains** | - Transaction structural and cryptographic validity.<br>- Proof-of-Work threshold checks ($\le \text{Target}$).<br>- Coinbase positioning and issuance value ceilings.<br>- UTXO solvency and double-spend rejection.<br>- Supply cap limits ($42,000,000\text{ SCY}$). | - Mempool fee ranking and sorting strategy.<br>- Transaction relay and flood rate limits.<br>- Mining block template selection criteria.<br>- Maximum mempool RAM allocation.<br>- Peer connection counts and ban thresholds. |
+| **Key Domains** | - Transaction structural and cryptographic validity.<br>- Proof-of-Work threshold checks ($\le \text{Target}$).<br>- Coinbase positioning and issuance value ceilings.<br>- UTXO solvency and double-spend rejection.<br>- Supply cap limits ($94,980,000\text{ SCY}$). | - Mempool fee ranking and sorting strategy.<br>- Transaction relay and flood rate limits.<br>- Mining block template selection criteria.<br>- Maximum mempool RAM allocation.<br>- Peer connection counts and ban thresholds. |
 
 ---
 

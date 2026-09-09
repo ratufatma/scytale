@@ -153,3 +153,65 @@ pub fn blake3_hash(data: &[u8]) -> [u8; 32] {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{decode_payload, encode_payload, TxContext};
+
+    #[test]
+    fn tx_context_round_trips_through_payload_codec() {
+        let context = TxContext {
+            tx_hash: [0x11; 32],
+            block_time: 1_750_000_000,
+            input_amount: 42_000,
+            fee_burned: 1_000,
+        };
+
+        let encoded = encode_payload(&context).expect("context should serialize");
+        let decoded: TxContext = decode_payload(&encoded).expect("context should deserialize");
+
+        assert_eq!(decoded.tx_hash, context.tx_hash);
+        assert_eq!(decoded.block_time, context.block_time);
+        assert_eq!(decoded.input_amount, context.input_amount);
+        assert_eq!(decoded.fee_burned, context.fee_burned);
+    }
+
+    #[test]
+    fn payload_decoder_rejects_truncated_payload() {
+        let context = TxContext {
+            tx_hash: [0x22; 32],
+            block_time: 1,
+            input_amount: 2,
+            fee_burned: 3,
+        };
+        let mut encoded = encode_payload(&context).expect("context should serialize");
+        encoded.pop();
+
+        assert!(decode_payload::<TxContext>(&encoded).is_err());
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn host_crypto_helpers_verify_and_hash_deterministically() {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+        let public_key = signing_key.verifying_key().to_bytes();
+        let message = b"scytale-sdk";
+        let signature = signing_key.sign(message).to_bytes();
+
+        assert!(super::verify_ed25519(&public_key, &signature, message));
+
+        let mut tampered_message = message.to_vec();
+        tampered_message[0] ^= 0xff;
+        assert!(!super::verify_ed25519(
+            &public_key,
+            &signature,
+            &tampered_message
+        ));
+
+        let first_hash = super::blake3_hash(message);
+        assert_eq!(first_hash, super::blake3_hash(message));
+        assert_ne!(first_hash, super::blake3_hash(b"different"));
+    }
+}

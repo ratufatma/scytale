@@ -17,7 +17,7 @@ Dependency  : Task 01 — Monetary Policy
 
 ### Dependency Context:
 Task 02 builds directly upon the monetary foundation established in Task 01:
-- Maximum Supply Ceiling ($42,000,000\text{ SCY}$)
+- Maximum Supply Ceiling ($94,980,000\text{ SCY}$)
 - Denomination Conversion ($1\text{ SCY} = 100,000,000\text{ quanta}$)
 - Macro Accounting Boundary ($25\%\text{ Genesis} + 75\%\text{ Mining}$)
 - Consensus Monetary Invariants
@@ -33,12 +33,12 @@ Task 02 builds directly upon the monetary foundation established in Task 01:
 
 ## 2. Objective
 
-> **Task Goal:** *Define and establish Scytale's Genesis Allocation as a fully transparent, explicit, one-time initial distribution strictly bound to the 42,000,000 SCY maximum supply, with mathematically verifiable on-chain Value Provenance.*
+> **Task Goal:** *Define and establish Scytale's Genesis Allocation as a fully transparent, explicit, one-time initial distribution strictly bound to the 94,980,000 SCY maximum supply, with mathematically verifiable on-chain Value Provenance.*
 
 ### Success Invariants:
 - **Zero Hidden Allocations:** Every single quantum allocated at Block 0 must be publicly declared and accounted for.
 - **Zero Arbitrary Minting:** The genesis issuance creates zero future mint authority for any entity.
-- **Immutable Supply Invariant:** $\text{Genesis Allocations} + \text{Mining Emission} \le 42,000,000\text{ SCY}$.
+- **Immutable Supply Invariant:** $\text{Genesis Allocations} + \text{Mining Emission} \le 94,980,000\text{ SCY}$.
 - **Complete Reconcilability:** Every bucket mathematically reconciles in integer quanta without remainder or loss.
 
 ---
@@ -48,16 +48,16 @@ Task 02 builds directly upon the monetary foundation established in Task 01:
 The following distribution model has been formally locked by protocol consensus and must **NOT** be modified:
 
 ```text
-Maximum Supply Ceiling = 42,000,000 SCY (4,200,000,000,000,000 quanta)
+Maximum Supply Ceiling = 94,980,000 SCY (9,498,000,000,000,000 quanta)
 
-1. Genesis Allocation (25% / 10,500,000 SCY / 1,050,000,000,000,000 quanta)
-   ├── Founder Allocation           : 15% ( 6,300,000 SCY / 630,000,000,000,000 quanta)
-   ├── Development / Treasury       :  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
-   └── Ecosystem / Community        :  5% ( 2,100,000 SCY / 210,000,000,000,000 quanta)
+1. Genesis Allocation (69.49% / 66,000,000 SCY / 6,600,000,000,000,000 quanta)
+     ├── Founder Allocation           : 30% of genesis (19,800,000 SCY / 1,980,000,000,000,000 quanta)
+     ├── Development / Treasury       : 20% of genesis (13,200,000 SCY / 1,320,000,000,000,000 quanta)
+     └── Ecosystem / Community        : 50% of genesis (33,000,000 SCY / 3,300,000,000,000,000 quanta)
 
-2. Mining Emission Reserve (75% / 31,500,000 SCY / 3,150,000,000,000,000 quanta)
+2. Mining Emission Reserve (30.51% / 28,980,000 SCY / 2,898,000,000,000,000 quanta)
 
-Total Supply: 100% / 42,000,000 SCY / 4,200,000,000,000,000 quanta
+Total Supply: 100% / 94,980,000 SCY / 9,498,000,000,000,000 quanta
 
 - Founder Allocation Occurrence     : One-time Genesis issuance at Block 0
 - Additional Founder Mint Authority : NONE
@@ -73,7 +73,7 @@ The executing agent must maintain exact integer reconciliation across all catego
 $$\text{Founder} + \text{Treasury} + \text{Ecosystem} + \text{Mining} = \text{Maximum Supply}$$
 
 ### Denomination in SCY:
-$$6,300,000\text{ SCY} + 2,100,000\text{ SCY} + 2,100,000\text{ SCY} + 31,500,000\text{ SCY} = \mathbf{42,000,000\text{ SCY}}$$
+$$19,800,000\text{ SCY} + 13,200,000\text{ SCY} + 33,000,000\text{ SCY} + 28,980,000\text{ SCY} = \mathbf{94,980,000\text{ SCY}}$$
 
 ### Denomination in Integer Quanta (`u64`):
 $$630\text{T} + 210\text{T} + 210\text{T} + 3,150\text{T} = \mathbf{4,200,000,000,000,000\text{ quanta}}$$
@@ -82,7 +82,7 @@ $$630\text{T} + 210\text{T} + 210\text{T} + 3,150\text{T} = \mathbf{4,200,000,00
 
 ## 5. Allocation Category Specifications
 
-### 5.1 Founder Allocation (`15%` / `6,300,000 SCY`)
+### 5.1 Founder Allocation (`30% of genesis` / `19,800,000 SCY`)
 - **Nature:** One-time initial issuance executed exclusively at Block 0.
 - **Authority Boundary:** Grants zero special privileges, zero recurring cuts from mining rewards, and zero future minting rights.
 - **On-Chain Audit:** Moves through standard ledger UTXO transactions subject to standard consensus rules.
@@ -91,23 +91,23 @@ $$630\text{T} + 210\text{T} + 210\text{T} + 3,150\text{T} = \mathbf{4,200,000,00
   - `Founder Vesting Schedule & Cliff Release Rules: TBD`
   - `Founder UTXO Binary Layout: TBD`
 
-### 5.2 Development & Treasury Allocation (`5%` / `2,100,000 SCY`)
+### 5.2 Development & Treasury Allocation (`20% of genesis` / `13,200,000 SCY`)
 - **Purpose:** Protocol engineering sustainability, infrastructure maintenance, security audits, and core tool development.
 - **Authority Boundary:** Strictly finite; this is **NOT** an elastic or unlimited treasury mint.
 - **Pending Parameters (`TBD`):**
   - `Treasury Multi-Signature Control Model: TBD`
   - `Treasury Release Policies & Governance: TBD`
 
-### 5.3 Ecosystem & Community Allocation (`5%` / `2,100,000 SCY`)
+### 5.3 Ecosystem & Community Allocation (`50% of genesis` / `33,000,000 SCY`)
 - **Purpose:** Developer grants, third-party tooling, community education, and ecosystem integrations.
 - **Authority Boundary:** Kept modest ($5\%$) to prevent diluting Proof-of-Work mining security incentives.
 - **Pending Parameters (`TBD`):**
   - `Community Grant Distribution Mechanics: TBD`
   - `Ecosystem Tranche Disbursement Policies: TBD`
 
-### 5.4 Proof-of-Work Mining Reserve (`75%` / `31,500,000 SCY`)
+### 5.4 Proof-of-Work Mining Reserve (`30.51% of supply` / `28,980,000 SCY`)
 - **Purpose:** Long-term decentralized emission distributed exclusively via Proof-of-Work block subsidies.
-- **Critical Warning:** The agent must **NOT** alter the emission schedule independently. If the mathematical halving schedule remains unreconciled with the $31.5\text{M}$ mining cap, the task status must be marked as `BLOCKED — CONSENSUS ISSUE` and reported.
+- **Critical Warning:** The agent must **NOT** alter the emission schedule independently. If the mathematical halving schedule remains unreconciled with the $28.98\text{M}$ mining cap, the task status must be marked as `BLOCKED — CONSENSUS ISSUE` and reported.
 
 ---
 
@@ -147,9 +147,9 @@ Genesis Bootstrap Transaction
      Genesis TxID
           ↓
 Genesis OutPoints (TxID : Index)
-          ├── OutPoint 0: Founder Allocation       (630,000,000,000,000 quanta)
-          ├── OutPoint 1: Treasury Allocation      (210,000,000,000,000 quanta)
-          └── OutPoint 2: Ecosystem Allocation     (210,000,000,000,000 quanta)
+          ├── OutPoint 0: Founder Allocation       (1,980,000,000,000,000 quanta)
+          ├── OutPoint 1: Treasury Allocation      (1,320,000,000,000,000 quanta)
+          └── OutPoint 2: Ecosystem Allocation     (3,300,000,000,000,000 quanta)
 ```
 
 - Cross-References: [`docs/VALUE-PROVENANCE-SPEC.md`](../VALUE-PROVENANCE-SPEC.md) and [`docs/UTXO-SPEC.md`](../UTXO-SPEC.md).
@@ -159,8 +159,8 @@ Genesis OutPoints (TxID : Index)
 ## 8. Implementation Scope & Non-Goals
 
 ### In Scope (for future implementation):
-- Structuring Block 0 transaction outputs representing the 25% Genesis Allocation.
-- Mathematical verification that total genesis outputs equal exactly $1,050,000,000,000,000\text{ quanta}$.
+- Structuring Block 0 transaction outputs representing the 69.49% Genesis Allocation.
+- Mathematical verification that total genesis outputs equal exactly $6,600,000,000,000,000\text{ quanta}$.
 - Enforcing that Genesis outputs are immutable and provable through `redb` storage.
 - Unit and integration tests validating supply arithmetic and allocation boundaries.
 
@@ -168,7 +168,7 @@ Genesis OutPoints (TxID : Index)
 - Implementing Wallet UI or Passbook presentation components.
 - Selecting concrete founder cryptographic keys or public addresses.
 - Creating governance voting protocols or exchange integration layers.
-- Altering the $42\text{M}$ maximum supply ceiling or $15/5/5/75$ distribution ratios.
+- Altering the $94.98\text{M}$ maximum supply ceiling or $30/20/50$ genesis distribution ratios.
 
 ---
 
@@ -177,18 +177,18 @@ Genesis OutPoints (TxID : Index)
 In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), implementation of Task 02 must fulfill the following verification suites:
 
 ### Unit Tests:
-- `test_allocation_percentages_sum_to_100`: Asserting $15 + 5 + 5 + 75 == 100$.
-- `test_allocation_scy_amounts_sum_to_42m`: Asserting $6.3\text{M} + 2.1\text{M} + 2.1\text{M} + 31.5\text{M} == 42\text{M}$.
-- `test_quanta_reconciliation_exactness`: Asserting $630\text{T} + 210\text{T} + 210\text{T} + 3,150\text{T} == 4,200\text{T}$.
+- `test_allocation_percentages_sum_to_100`: Asserting $30 + 20 + 50 == 100$ for genesis outputs.
+- `test_allocation_scy_amounts_sum_to_94_98m`: Asserting $19.8\text{M} + 13.2\text{M} + 33\text{M} + 28.98\text{M} == 94.98\text{M}$.
+- `test_quanta_reconciliation_exactness`: Asserting $1,980\text{T} + 1,320\text{T} + 3,300\text{T} + 2,898\text{T} == 9,498\text{T}$.
 - `test_zero_user_balance_invariant`: Asserting fresh keypairs instantiate with 0 spendable UTXOs.
 
 ### Consensus & Integration Invariant Tests:
-- `test_genesis_output_value_exactness`: Asserting Block 0 outputs match the exact $10.5\text{M}$ SCY quota.
+- `test_genesis_output_value_exactness`: Asserting Block 0 outputs match the exact $66\text{M}$ SCY quota.
 - `test_no_future_founder_mint`: Proving consensus rejects any block attempting to mint non-PoW founder subsidies.
 - `test_genesis_value_provenance_dag`: Proving backward traversal from genesis UTXOs resolves directly to Block 0.
 
 ### Reality Tests (Future Implementation Phase):
-- Execute the real `scytale-node` startup path, load Block 0 into `redb`, and assert that `UTXO_SET` contains exactly the expected Genesis OutPoints totaling $10.5\text{M}$ SCY with zero unaccounted quanta.
+- Execute the real `scytale-node` startup path, load Block 0 into `redb`, and assert that `UTXO_SET` contains exactly the expected Genesis OutPoints totaling $66\text{M}$ SCY with zero unaccounted quanta.
 
 ---
 
@@ -196,11 +196,11 @@ In accordance with [`docs/TESTING-STRATEGY.md`](../TESTING-STRATEGY.md), impleme
 
 Task 02 can only be marked as **VERIFIED** when:
 
-- [x] Founder allocation is locked at `15%` ($6,300,000\text{ SCY}$).
-- [x] Treasury allocation is locked at `5%` ($2,100,000\text{ SCY}$).
-- [x] Ecosystem / Community allocation is locked at `5%` ($2,100,000\text{ SCY}$).
-- [x] Mining reserve is locked at `75%` ($31,500,000\text{ SCY}$).
-- [x] Total allocation reconciles to exactly `42,000,000 SCY` ($4,200,000,000,000,000\text{ quanta}$).
+- [x] Founder allocation is locked at `30% of genesis` ($19,800,000\text{ SCY}$).
+- [x] Treasury allocation is locked at `20% of genesis` ($13,200,000\text{ SCY}$).
+- [x] Ecosystem / Community allocation is locked at `50% of genesis` ($33,000,000\text{ SCY}$).
+- [x] Mining reserve is locked at `28,980,000 SCY` ($2,898,000,000,000,000\text{ quanta}$).
+- [x] Total allocation reconciles to exactly `94,980,000 SCY` ($9,498,000,000,000,000\text{ quanta}$).
 - [x] Founder allocation is specified as a one-time issuance at Block 0.
 - [x] Zero additional founder minting authority exists.
 - [x] New user initial balance remains strictly `0 SCY`.
@@ -244,7 +244,7 @@ Task 02 can only be marked as **VERIFIED** when:
 1. Treat `docs/work/02-genesis-allocation.md` as the authoritative work runbook.
 2. Cross-reference Task 01 and baseline specifications before proposing changes.
 3. The repository codebase and docs are the sole ground truth.
-4. Never alter locked supply ratios ($15/5/5/75$) or maximum supply ($42\text{M}$ SCY).
+4. Never alter locked genesis ratios ($30/20/50$) or maximum supply ($94.98\text{M}$ SCY).
 5. If the emission schedule mismatch affects execution, mark status as `BLOCKED`.
 6. Adhere strictly to the definition of done.
 

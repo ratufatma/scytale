@@ -1,8 +1,8 @@
 //! Standalone generator for Scytale Genesis Block official keypairs.
 //! Derives 3 distinct Ed25519 keypairs for:
-//! - Founder Allocation (21% / 8,820,000 SCY)
-//! - Treasury & Developer Allocation (5% / 2,100,000 SCY)
-//! - Community & Ecosystem Allocation (5% / 2,100,000 SCY)
+//! - Founder Allocation (30% of genesis / 19,800,000 SCY)
+//! - Treasury & Developer Allocation (20% of genesis / 13,200,000 SCY)
+//! - Community & Ecosystem Allocation (50% of genesis / 33,000,000 SCY)
 //!
 //! Writes secrets to `.genesis_keys.json` with strict 0600 POSIX permissions.
 
@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Locking Script (Hex): {}", entry.locking_script_hex);
     }
     println!("================================================================================");
-    println!("Total Genesis Quota : 31% (13,020,000 SCY / 1,302,000,000,000,000 quanta)");
+    println!("Total Genesis Quota : 66,000,000 SCY / 6,600,000,000,000,000 quanta");
     println!("================================================================================");
 
     Ok(())

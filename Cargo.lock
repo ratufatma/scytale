@@ -844,6 +844,7 @@ dependencies = [
  "fiat-crypto",
  "rustc_version",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -1136,6 +1137,7 @@ version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
+ "pkcs8",
  "signature",
 ]
 
@@ -1148,9 +1150,11 @@ dependencies = [
  "curve25519-dalek",
  "ed25519",
  "rand_core",
+ "serde",
  "sha2",
  "signature",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -3690,6 +3694,7 @@ dependencies = [
 name = "scytale-contract-vault"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "scytale-sdk",
  "serde",
 ]

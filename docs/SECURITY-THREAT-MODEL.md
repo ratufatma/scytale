@@ -25,7 +25,7 @@ Scytale enforces a strict zero-trust posture across all operational boundaries:
              ├── Unspent UTXO existence & solvency verification
              ├── Strict value conservation (In >= Out)
              ├── Proof-of-Work threshold validation (Hash <= Target)
-             └── Maximum supply cap enforcement (<= 42M SCY)
+             └── Maximum supply cap enforcement (<= 94.98M SCY)
                                     │
                                     ▼
                 [ TRUSTED CANONICAL DOMAIN (redb Storage) ]
@@ -100,7 +100,7 @@ Threat Taxonomy & Defense Matrix
 - **Mitigation:**
   - Consensus Rule 8 enforces $\text{Coinbase} \le R(H) + \sum \text{Fees}$.
   - Consensus Rule 6 enforces strict integer value conservation on non-coinbase transactions.
-  - Global supply reconciles strictly against the immutable $42,000,000\text{ SCY}$ ceiling.
+  - Global supply reconciles strictly against the immutable $94,980,000\text{ SCY}$ ceiling.
 
 ---
 

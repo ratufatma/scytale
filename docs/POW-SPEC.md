@@ -212,7 +212,7 @@ A block that satisfies the Proof-of-Work target is not valid unless it also sati
 1. **Coinbase Value Limit:**
    $$\sum \text{Coinbase Outputs (quanta)} \le R_{\text{quanta}}(height) + \sum \text{Fees}_{\text{quanta}}$$
 2. **Locked Monetary Parameters:**
-   - Maximum Supply: `42,000,000 SCY` ($4,200,000,000,000,000\text{ quanta}$).
+        - Maximum Supply: `94,980,000 SCY` ($9,498,000,000,000,000\text{ quanta}$).
    - Initial Subsidy: `10 SCY` per block ($1,000,000,000\text{ quanta}$).
    - Halving Interval: Every `2,100,000 blocks` (~3.995 years).
    - Smallest Unit: `1 SCY = 100,000,000 quanta`.

@@ -25,7 +25,7 @@ use crate::node::Node;
 use crate::passbook::Passbook;
 
 /// Default HTTP Gateway bind address.
-pub const DEFAULT_HTTP_BIND: &str = "127.0.0.1:8332";
+pub const DEFAULT_HTTP_BIND: &str = "0.0.0.0:8332";
 
 /// Embedded static Web Explorer HTML single-page application.
 const EXPLORER_HTML: &str = include_str!("../../../explorer/index.html");

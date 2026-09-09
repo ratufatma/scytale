@@ -191,11 +191,11 @@ Genesis Bootstrap Transaction (TxID_0)
            ↓
 Genesis OutPoints (TxID_0 : Index)
            │
-           ├── OutPoint(TxID_0, 0): Founder Allocation     (15% / 630,000,000,000,000 quanta)
-           ├── OutPoint(TxID_0, 1): Development/Treasury   ( 5% / 210,000,000,000,000 quanta)
-           └── OutPoint(TxID_0, 2): Ecosystem/Community    ( 5% / 210,000,000,000,000 quanta)
+           ├── OutPoint(TxID_0, 0): Founder Allocation     (30% of genesis / 1,980,000,000,000,000 quanta)
+           ├── OutPoint(TxID_0, 1): Development/Treasury   (20% of genesis / 1,320,000,000,000,000 quanta)
+           └── OutPoint(TxID_0, 2): Ecosystem/Community    (50% of genesis / 3,300,000,000,000,000 quanta)
            ↓
-    Committed to Initial redb UTXO Set at Height 0 (Total = 1,050,000,000,000,000 quanta)
+    Committed to Initial redb UTXO Set at Height 0 (Total = 6,600,000,000,000,000 quanta)
 ```
 
 - **Lineage Grounding Verification:** Validating nodes verify that every spendable UTXO across the entire network has an unbroken ancestry path leading back to either:
@@ -209,7 +209,7 @@ Genesis OutPoints (TxID_0 : Index)
 
 The locked founder parameters are bound to the public ledger:
 
-- **Share:** `15%` ($6,300,000\text{ SCY} = 630,000,000,000,000\text{ quanta}$).
+- **Share:** `30% of genesis` ($19,800,000\text{ SCY} = 1,980,000,000,000,000\text{ quanta}$).
 - **Genesis OutPoint:** `OutPoint(GenesisTxID, 0)`.
 - **Nature:** One-time issuance executed exclusively at Block 0.
 - **Audit Rule:** Any movement of founder funds creates standard spending transactions on the ledger, preserving full public visibility and Value Provenance.
@@ -223,10 +223,10 @@ At any point in chain history, total ledger value reconciles with mathematical e
 
 $$\text{Maximum Supply} = \text{Genesis Allocation} + \text{Issued Mining Rewards} + \text{Unissued Reserve}$$
 
-$$4,200,000,000,000,000\text{ quanta} = 1,050,000,000,000,000\text{ quanta} + \sum_{i=1}^{H} R(i) + \text{Unissued Reserve}(H)$$
+$$9,498,000,000,000,000\text{ quanta} = 6,600,000,000,000,000\text{ quanta} + \sum_{i=1}^{H} R(i) + \text{Unissued Reserve}(H)$$
 
 > [!WARNING]
-> **Consensus Mining Emission Flag:** Total mining issuance is capped at $3,150,000,000,000,000\text{ quanta}$ ($31.5\text{M}$ SCY). The unadjusted theoretical infinite halving series ($42\text{M}$ SCY) + Genesis ($10.5\text{M}$ SCY) = $52.5\text{M}$ SCY is flagged as `[CONSENSUS ISSUE — REQUIRES RESOLUTION]` and must be resolved by hard cap or parameter adjustment prior to finalizing mining emission logic.
+> **Consensus Mining Emission Flag:** Total mining issuance is reserved at $2,898,000,000,000,000\text{ quanta}$ ($28.98\text{M}$ SCY). The unadjusted theoretical infinite halving series ($42\text{M}$ SCY) exceeds this reserve and remains flagged as `[CONSENSUS ISSUE — REQUIRES RESOLUTION]` until a hard cap or parameter adjustment is finalized.
 
 ---
 
@@ -364,8 +364,8 @@ The following implementation domains remain designated as **TBD**:
 - **[`docs/UTXO-SPEC.md`](UTXO-SPEC.md)**: OutPoint lifecycle, state transitions, and validation.
 - **[`docs/TRANSACTION-SPEC.md`](TRANSACTION-SPEC.md)**: Transaction format, TxID derivation, and validity rules.
 - **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Block structure, coinbase position, and state transitions.
-- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: 15/5/5/75 supply distribution breakdown.
+- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: 30/20/50 genesis distribution plus mining reserve breakdown.
 - **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY cap, emission schedule, and integer quanta arithmetic.
+- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 94,980,000 SCY cap, emission schedule, and integer quanta arithmetic.
 - **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work validation and BLAKE3 target evaluation.
 - **[`docs/PASSBOOK-CONCEPT.md`](PASSBOOK-CONCEPT.md)**: User-facing financial presentation layer and provenance viewer.

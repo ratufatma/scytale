@@ -213,10 +213,10 @@ OutPoint ──> TRANSACTIONS (Creating Tx) ──> BLOCK_INDEX (Block) ──> 
 
 Genesis allocations defined in [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) and [`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md) are stored as standard initial UTXO outputs in Block 0:
 
-- **Founder Allocation:** 15% / 6,300,000 SCY ($630,000,000,000,000\text{ quanta}$)
-- **Development / Treasury:** 5% / 2,100,000 SCY ($210,000,000,000,000\text{ quanta}$)
-- **Ecosystem / Community:** 5% / 2,100,000 SCY ($210,000,000,000,000\text{ quanta}$)
-- **Mining Emission Reserve:** 75% / 31,500,000 SCY ($3,150,000,000,000,000\text{ quanta}$)
+- **Founder Allocation:** 30% of genesis / 19,800,000 SCY ($1,980,000,000,000,000\text{ quanta}$)
+- **Development / Treasury:** 20% of genesis / 13,200,000 SCY ($1,320,000,000,000,000\text{ quanta}$)
+- **Ecosystem / Community:** 50% of genesis / 33,000,000 SCY ($3,300,000,000,000,000\text{ quanta}$)
+- **Mining Emission Reserve:** 30.51% of supply / 28,980,000 SCY ($2,898,000,000,000,000\text{ quanta}$)
 
 All genesis outputs materialize as verifiable records in `UTXO_SET` and `TRANSACTIONS` upon Block 0 initialization.
 
@@ -306,8 +306,8 @@ The following implementation parameters remain designated as **TBD**:
 - **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Block structure, coinbase positioning, and state transitions.
 - **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work threshold verification.
 - **[`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md)**: Dynamic difficulty adjustment.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY cap, 60s block target, and quanta accounting.
-- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: 15/5/5/75 supply distribution breakdown.
+- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 94,980,000 SCY cap, 60s block target, and quanta accounting.
+- **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: 30/20/50 genesis distribution plus mining reserve breakdown.
 - **[`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md)**: Genesis block specification and zero-balance onboarding.
 - **[`docs/HASHING-AND-SERIALIZATION-SPEC.md`](HASHING-AND-SERIALIZATION-SPEC.md)**: BLAKE3 digests and canonical byte serialization.
 - **[`docs/PASSBOOK-CONCEPT.md`](PASSBOOK-CONCEPT.md)**: Presentation layer and dynamic balance derivation.

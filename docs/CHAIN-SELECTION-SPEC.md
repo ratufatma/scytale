@@ -228,7 +228,7 @@ Transactions confirmed in the disconnected branch that do not appear in the new 
 
 - **Stale Subsidy Invalidation:** Coinbase transactions in the disconnected branch are permanently invalidated; their unspent outputs are pruned from `UTXO_SET`.
 - **New Subsidy Activation:** Coinbase outputs from the new canonical branch are instantiated into `UTXO_SET`, subject to protocol emission limits ($10\text{ SCY} \dots$) and maturity delays.
-- **Zero Supply Leakage:** Reorganizations cannot create unbacked supply or violate the 42,000,000 SCY maximum cap.
+- **Zero Supply Leakage:** Reorganizations cannot create unbacked supply or violate the 94,980,000 SCY maximum cap.
 
 ---
 

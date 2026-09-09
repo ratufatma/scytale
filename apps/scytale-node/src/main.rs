@@ -37,8 +37,8 @@ struct Cli {
     #[arg(long)]
     indexer_key: Option<String>,
 
-    /// TCP bind address for Go P2P daemon (e.g. 127.0.0.1:9001)
-    #[arg(long)]
+    /// TCP bind address for Go P2P daemon (e.g. 0.0.0.0:8333)
+    #[arg(long, default_value = "0.0.0.0:8333")]
     p2p_bind: Option<String>,
 
     /// Peer address(es) to dial for P2P network sync (can be repeated)
@@ -115,8 +115,8 @@ enum Commands {
         #[arg(long)]
         indexer_key: Option<String>,
 
-        /// TCP bind address for Go P2P daemon (e.g. 127.0.0.1:9001)
-        #[arg(long)]
+        /// TCP bind address for Go P2P daemon (e.g. 0.0.0.0:8333)
+        #[arg(long, default_value = "0.0.0.0:8333")]
         p2p_bind: Option<String>,
 
         /// Peer address(es) to dial for P2P network sync (can be repeated)

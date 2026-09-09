@@ -129,3 +129,141 @@ pub extern "C" fn validate(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{validate, VaultDatum, VaultRedeemer};
+    use ed25519_dalek::{Signer, SigningKey};
+    use scytale_sdk::{encode_payload, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS};
+
+    fn keypair(seed: u8) -> SigningKey {
+        SigningKey::from_bytes(&[seed; 32])
+    }
+
+    fn context(block_time: u64, fee_burned: u64) -> TxContext {
+        TxContext {
+            tx_hash: [0x42; 32],
+            block_time,
+            input_amount: 100_000,
+            fee_burned,
+        }
+    }
+
+    fn invoke(datum: &VaultDatum, redeemer: &VaultRedeemer, context: &TxContext) -> i32 {
+        let datum_bytes = encode_payload(datum).expect("datum should serialize");
+        let redeemer_bytes = encode_payload(redeemer).expect("redeemer should serialize");
+        let context_bytes = encode_payload(context).expect("context should serialize");
+
+        validate(
+            datum_bytes.as_ptr(),
+            datum_bytes.len(),
+            redeemer_bytes.as_ptr(),
+            redeemer_bytes.len(),
+            context_bytes.as_ptr(),
+            context_bytes.len(),
+        )
+    }
+
+    fn vault_datum(owner: &SigningKey, emergency_key: &SigningKey) -> VaultDatum {
+        VaultDatum {
+            owner_pubkey: owner.verifying_key().to_bytes(),
+            unlock_time: 1_700_000_000,
+            emergency_key: emergency_key.verifying_key().to_bytes(),
+            penalty_fee: 500,
+        }
+    }
+
+    #[test]
+    fn normal_withdraw_requires_unlock_time_and_valid_signature() {
+        let owner = keypair(1);
+        let emergency = keypair(2);
+        let datum = vault_datum(&owner, &emergency);
+        let unlocked_context = context(datum.unlock_time, 0);
+        let signature = owner.sign(&unlocked_context.tx_hash).to_bytes();
+
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::NormalWithdraw { signature },
+                &unlocked_context
+            ),
+            VALIDATION_SUCCESS
+        );
+
+        let early_context = context(datum.unlock_time - 1, 0);
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::NormalWithdraw { signature },
+                &early_context
+            ),
+            VALIDATION_REJECT
+        );
+
+        let wrong_signature = emergency.sign(&unlocked_context.tx_hash).to_bytes();
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::NormalWithdraw {
+                    signature: wrong_signature,
+                },
+                &unlocked_context
+            ),
+            VALIDATION_REJECT
+        );
+    }
+
+    #[test]
+    fn emergency_rescue_requires_accepted_penalty_and_fee_burn() {
+        let owner = keypair(3);
+        let emergency = keypair(4);
+        let datum = vault_datum(&owner, &emergency);
+
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::EmergencyRescue {
+                    penalty_accepted: true,
+                },
+                &context(1, datum.penalty_fee)
+            ),
+            VALIDATION_SUCCESS
+        );
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::EmergencyRescue {
+                    penalty_accepted: false,
+                },
+                &context(1, datum.penalty_fee)
+            ),
+            VALIDATION_REJECT
+        );
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::EmergencyRescue {
+                    penalty_accepted: true,
+                },
+                &context(1, datum.penalty_fee - 1)
+            ),
+            VALIDATION_REJECT
+        );
+    }
+
+    #[test]
+    fn malformed_payloads_are_rejected() {
+        let invalid = [0xff; 3];
+        assert_eq!(
+            validate(
+                invalid.as_ptr(),
+                invalid.len(),
+                invalid.as_ptr(),
+                invalid.len(),
+                invalid.as_ptr(),
+                invalid.len(),
+            ),
+            VALIDATION_REJECT
+        );
+    }
+}

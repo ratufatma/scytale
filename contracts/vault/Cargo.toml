@@ -10,3 +10,7 @@ crate-type = ["cdylib", "rlib"]
 scytale-sdk = { path = "../../crates/scytale-sdk" }
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
 
+[dev-dependencies]
+ed25519-dalek = "2.1"
+scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
+

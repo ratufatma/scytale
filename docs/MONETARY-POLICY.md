@@ -45,13 +45,13 @@ The core macroeconomic parameters for Scytale are locked as follows:
 
 | Parameter | Value in SCY | Value in Quanta | Description |
 | :--- | :--- | :--- | :--- |
-| **Target Maximum Supply ($S_{\text{max}}$)** | **`42,000,000 SCY`** | `4,200,000,000,000,000 quanta` | Target ceiling of total mintable currency. |
+| **Target Maximum Supply ($S_{\text{max}}$)** | **`94,980,000 SCY`** | `9,498,000,000,000,000 quanta` | Target ceiling of total mintable currency. |
 | **Initial Block Reward ($R_0$)** | **`10 SCY`** / block | `1,000,000,000 quanta` / block | Subsidy awarded per block during Epoch 0. |
 | **Target Block Interval ($T_{\text{target}}$)** | **`60 seconds`** | — | Target duration between consecutive blocks. |
 | **Halving Interval** | **`2,100,000 blocks`** | — | Number of blocks in each emission epoch. |
 | **Reward Reduction Schedule** | **`50%`** | — | Subsidy reduces by half every 2,100,000 blocks. |
-| **Genesis Allocation ($G$)** | **`10,500,000 SCY`** (`25%`) | `1,050,000,000,000,000 quanta` | One-time genesis allocation (Founder 15%, Treasury 5%, Ecosystem 5%). |
-| **Mining Emission Reserve** | **`31,500,000 SCY`** (`75%`) | `3,150,000,000,000,000 quanta` | Total supply reserved for Proof-of-Work mining distribution. |
+| **Genesis Allocation ($G$)** | **`66,000,000 SCY`** (`69.49%`) | `6,600,000,000,000,000 quanta` | One-time genesis allocation (Founder 30%, Treasury 20%, Ecosystem 50% of genesis). |
+| **Mining Emission Reserve** | **`28,980,000 SCY`** (`30.51%`) | `2,898,000,000,000,000 quanta` | Total supply reserved for Proof-of-Work mining distribution. |
 
 ---
 
@@ -86,16 +86,16 @@ $$\text{Maximum Supply} = \text{Genesis Allocation} + \text{Issued Mining Reward
 
 In integer **`quanta`**:
 
-$$\mathbf{S_{\text{max}}} = G_{\text{quanta}} + M_{\text{issued,quanta}} + M_{\text{unissued,quanta}} = \mathbf{4,200,000,000,000,000\text{ quanta}}$$
+$$\mathbf{S_{\text{max}}} = G_{\text{quanta}} + M_{\text{issued,quanta}} + M_{\text{unissued,quanta}} = \mathbf{9,498,000,000,000,000\text{ quanta}}$$
 
 ### Macro Allocation Quota Proof:
 $$\begin{aligned}
-\text{Founder Allocation (15%)} &= 630,000,000,000,000\text{ quanta} \quad (6,300,000\text{ SCY}) \\
-\text{Treasury Allocation (5%)} &= 210,000,000,000,000\text{ quanta} \quad (2,100,000\text{ SCY}) \\
-\text{Ecosystem Allocation (5%)} &= 210,000,000,000,000\text{ quanta} \quad (2,100,000\text{ SCY}) \\
-\text{Mining Reserve (75%)} &= 3,150,000,000,000,000\text{ quanta} \quad (31,500,000\text{ SCY}) \\
+	ext{Founder Allocation (30% of genesis)} &= 1,980,000,000,000,000\text{ quanta} \quad (19,800,000\text{ SCY}) \\
+	ext{Treasury Allocation (20% of genesis)} &= 1,320,000,000,000,000\text{ quanta} \quad (13,200,000\text{ SCY}) \\
+	ext{Ecosystem Allocation (50% of genesis)} &= 3,300,000,000,000,000\text{ quanta} \quad (33,000,000\text{ SCY}) \\
+	ext{Mining Reserve (30.51% of supply)} &= 2,898,000,000,000,000\text{ quanta} \quad (28,980,000\text{ SCY}) \\
 \hline
-\mathbf{\text{Total Maximum Supply}} &= \mathbf{4,200,000,000,000,000\text{ quanta}} \quad (\mathbf{42,000,000\text{ SCY}})
+\mathbf{\text{Total Maximum Supply}} &= \mathbf{9,498,000,000,000,000\text{ quanta}} \quad (\mathbf{94,980,000\text{ SCY}})
 \end{aligned}$$
 
 ---
@@ -108,29 +108,29 @@ $$\begin{aligned}
 > A mathematical discrepancy exists between the locked allocation percentages and the baseline halving formula:
 > 
 > 1. **Locked Allocation Rule:**
->    - Genesis Allocation ($25\%$) = $10,500,000\text{ SCY}$ ($1,050,000,000,000,000\text{ quanta}$)
->    - Authorized Mining Allocation ($75\%$) = $\mathbf{31,500,000\text{ SCY}}$ ($\mathbf{3,150,000,000,000,000\text{ quanta}}$)
->    - Maximum Supply Ceiling ($100\%$) = $\mathbf{42,000,000\text{ SCY}}$ ($\mathbf{4,200,000,000,000,000\text{ quanta}}$)
+>    - Genesis Allocation ($69.49\%$) = $66,000,000\text{ SCY}$ ($6,600,000,000,000,000\text{ quanta}$)
+>    - Authorized Mining Allocation ($30.51\%$) = $\mathbf{28,980,000\text{ SCY}}$ ($\mathbf{2,898,000,000,000,000\text{ quanta}}$)
+>    - Maximum Supply Ceiling ($100\%$) = $\mathbf{94,980,000\text{ SCY}}$ ($\mathbf{9,498,000,000,000,000\text{ quanta}}$)
 > 
 > 2. **Baseline Halving Series Calculation:**
 >    $$\text{Theoretical Mined Sum} = 10\text{ SCY} \times 2,100,000\text{ blocks} \times \sum_{k=0}^{\infty} \left(\frac{1}{2}\right)^k = 21,000,000 \times 2 = \mathbf{42,000,000\text{ SCY}}$$
 > 
 > 3. **The Conflict:**
->    - Adding the Genesis Allocation ($10.5\text{M}$ SCY) to the unadjusted infinite halving sum ($42\text{M}$ SCY) produces **$52,500,000\text{ SCY}$**, violating the immutable $42,000,000\text{ SCY}$ ceiling by $10,500,000\text{ SCY}$.
+>    - The unadjusted infinite halving sum ($42\text{M}$ SCY) exceeds the implemented mining reserve ($28.98\text{M}$ SCY); the emission cap or reward schedule still requires an explicit consensus rule.
 > 
 > 4. **Technical Resolution Options for Consensus Decision:**
->    - **Option A (Subsidy Hard Cap):** Keep $R_0 = 10\text{ SCY}$ and $2,100,000\text{ blocks}$ halving; terminate/zero out mining rewards once cumulative mined supply reaches exactly $3,150,000,000,000,000\text{ quanta}$ ($31.5\text{M}$ SCY).
+>    - **Option A (Subsidy Hard Cap):** Keep $R_0 = 10\text{ SCY}$ and $2,100,000\text{ blocks}$ halving; terminate/zero out mining rewards once cumulative mined supply reaches exactly $2,898,000,000,000,000\text{ quanta}$ ($28.98\text{M}$ SCY).
 >    - **Option B (Reward Recalibration):** Recalibrate initial reward to $R_0 = 7.5\text{ SCY}$ ($750,000,000\text{ quanta}$) with $2,100,000\text{ blocks}$ halving ($7.5 \times 2.1\text{M} \times 2 = 31.5\text{M}$ SCY).
 >    - **Option C (Halving Interval Recalibration):** Keep $R_0 = 10\text{ SCY}$ and adjust halving interval to $1,575,000\text{ blocks}$ ($10 \times 1.575\text{M} \times 2 = 31.5\text{M}$ SCY).
 ---
 
 ## 7. Pending Consensus Details: Rounding & Reward Termination
 
-The target cap `42,000,000 SCY` represents the continuous geometric ceiling. The final consensus implementation must explicitly formalize the following **pending consensus details**:
+The target cap `94,980,000 SCY` represents the total supply ceiling. The final consensus implementation must explicitly formalize the following **pending consensus details**:
 
 1. **Integer Bitshift/Division Semantics:** Explicit specification of integer truncation when halving odd quanta amounts ($R_{\text{quanta}}(e) = R_{0,\text{quanta}} \gg e$).
 2. **Terminal Epoch Index ($e_{\text{end}}$):** The exact epoch at which integer division truncates the block subsidy to $0\text{ quanta}$.
-3. **Exact Cumulative Bound Proof:** Formal proof verifying that the discrete integer sum of all minted quanta $\sum R_{\text{quanta}}(h)$ remains strictly $\le 4,200,000,000,000,000\text{ quanta}$.
+3. **Exact Cumulative Bound Proof:** Formal proof verifying that the discrete integer sum of all minted quanta $\sum R_{\text{quanta}}(h)$ remains strictly $\le 9,498,000,000,000,000\text{ quanta}$.
 
 ---
 
@@ -140,7 +140,7 @@ A critical conceptual distinction:
 
 $$\text{Emission Duration} \ne \text{Maximum Supply}$$
 
-- Setting **42,000,000 SCY** (with 10 SCY initial reward) instead of 21,000,000 SCY (with 5 SCY initial reward) **does not double epoch duration or network lifetime**.
+- Setting the total supply ceiling to **94,980,000 SCY** does not change epoch duration; epoch duration remains determined by the block and halving intervals.
 - Epoch duration is determined strictly by $\text{Halving Interval} \times \text{Block Interval}$ ($2,100,000 \times 60\text{s} \approx 3.995\text{ years}$).
 - The parameter change only affects the **issuance velocity (quanta generated per unit of time)**, not the calendar progression of halving milestones.
 
@@ -183,7 +183,7 @@ $$\text{Fee} = \sum \text{Input Values} - \sum \text{Output Values} \quad (\text
 
 The Scytale ledger and consensus rules enforce the following immutable invariants:
 
-1. **Supply Upper Bound:** $\text{Issued Supply}(h) \le 4,200,000,000,000,000\text{ quanta}$ for all heights $h$.
+1. **Supply Upper Bound:** $\text{Issued Supply}(h) \le 9,498,000,000,000,000\text{ quanta}$ for all heights $h$.
 2. **Non-Negative Reward:** $R_{\text{quanta}}(h) \ge 0$ for all heights $h$.
 3. **No Arbitrary Minting:** Coinbase cannot create supply beyond $R_{\text{quanta}}(h) + \sum \text{Fee}_{\text{quanta}}$.
 4. **Conservation of Existing Supply:** Transaction fees never increase total circulating supply.

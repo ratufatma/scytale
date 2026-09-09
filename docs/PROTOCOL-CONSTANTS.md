@@ -29,27 +29,27 @@ The following parameters have been formally locked by protocol design decisions 
 | **`ASSET_SYMBOL`** | `SCY` | String | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`SMALLEST_UNIT`** | `quanta` | String | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`QUANTA_PER_SCY`** | `100,000,000` ($10^8$) | Integer Quanta | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
-| **`MAXIMUM_SUPPLY_SCY`** | `42,000,000` | SCY | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
-| **`MAXIMUM_SUPPLY_QUANTA`** | `4,200,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
-| **`GENESIS_ALLOCATION_PERCENT`**| `25.0` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`GENESIS_ALLOCATION_SCY`** | `10,500,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`GENESIS_TOTAL_QUANTA`** | `1,050,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`MAXIMUM_SUPPLY_SCY`** | `94,980,000` | SCY | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
+| **`MAXIMUM_SUPPLY_QUANTA`** | `9,498,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
+| **`GENESIS_ALLOCATION_PERCENT`**| `69.49` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`GENESIS_ALLOCATION_SCY`** | `66,000,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`GENESIS_TOTAL_QUANTA`** | `6,600,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
 | **`GENESIS_OUTPUT_COUNT`** | `3` | Integer Outputs | **FINAL** | [`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md) |
-| **`FOUNDER_ALLOCATION_PERCENT`**| `15.0` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`FOUNDER_AMOUNT_SCY`** | `6,300,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`FOUNDER_AMOUNT_QUANTA`** | `630,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`GENESIS_FOUNDER_QUANTA`** | `630,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`TREASURY_ALLOCATION_PERCENT`**| `5.0` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`TREASURY_AMOUNT_SCY`** | `2,100,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`TREASURY_AMOUNT_QUANTA`** | `210,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`GENESIS_TREASURY_QUANTA`** | `210,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`ECOSYSTEM_ALLOCATION_PERCENT`**| `5.0` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`ECOSYSTEM_AMOUNT_SCY`** | `2,100,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`ECOSYSTEM_AMOUNT_QUANTA`** | `210,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`GENESIS_ECOSYSTEM_QUANTA`** | `210,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`MINING_ALLOCATION_PERCENT`** | `75.0` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`MINING_ALLOCATION_SCY`** | `31,500,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
-| **`MINING_ALLOCATION_QUANTA`** | `3,150,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`FOUNDER_ALLOCATION_PERCENT`**| `30.0` of genesis | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`FOUNDER_AMOUNT_SCY`** | `19,800,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`FOUNDER_AMOUNT_QUANTA`** | `1,980,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`GENESIS_FOUNDER_QUANTA`** | `1,980,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`TREASURY_ALLOCATION_PERCENT`**| `20.0` of genesis | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`TREASURY_AMOUNT_SCY`** | `13,200,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`TREASURY_AMOUNT_QUANTA`** | `1,320,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`GENESIS_TREASURY_QUANTA`** | `1,320,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`ECOSYSTEM_ALLOCATION_PERCENT`**| `50.0` of genesis | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`ECOSYSTEM_AMOUNT_SCY`** | `33,000,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`ECOSYSTEM_AMOUNT_QUANTA`** | `3,300,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`GENESIS_ECOSYSTEM_QUANTA`** | `3,300,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`MINING_ALLOCATION_PERCENT`** | `30.51` | Percent (%) | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`MINING_ALLOCATION_SCY`** | `28,980,000` | SCY | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`MINING_ALLOCATION_QUANTA`** | `2,898,000,000,000,000` | Integer Quanta | **FINAL** | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
 | **`NEW_USER_INITIAL_BALANCE`** | `0` | Quanta / SCY | **FINAL** | [`docs/GENESIS-SPEC.md`](GENESIS-SPEC.md) |
 | **`INITIAL_BLOCK_REWARD_SCY`** | `10` | SCY / block | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
 | **`INITIAL_BLOCK_REWARD_QUANTA`**| `1,000,000,000` | Quanta / block | **FINAL** | [`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md) |
@@ -81,7 +81,7 @@ The following parameters represent architectural components whose conceptual bou
 | **`COINBASE_MATURITY_DEPTH`** | Confirmation blocks required before coinbase UTXOs become spendable. | `TBD` | [`docs/UTXO-SPEC.md`](UTXO-SPEC.md) |
 | **`EQUAL_WORK_TIE_BREAK_RULE`**| Deterministic tie-breaking criteria for equal-work branches. | `TBD` | [`docs/CHAIN-SELECTION-SPEC.md`](CHAIN-SELECTION-SPEC.md) |
 | **`SETTLEMENT_FINALITY_DEPTH`** | Recommended confirmation count for high-value transactions. | `TBD` | [`docs/CHAIN-SELECTION-SPEC.md`](CHAIN-SELECTION-SPEC.md) |
-| **`FOUNDER_VESTING_SCHEDULE`** | Cliff and tranche lock rules for the 15% founder allocation. | `TBD` | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
+| **`FOUNDER_VESTING_SCHEDULE`** | Cliff and tranche lock rules for the 30% of-genesis founder allocation. | `TBD` | [`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md) |
 
 ---
 
@@ -93,19 +93,18 @@ The following parameters represent architectural components whose conceptual bou
 > The current locked parameters contain a mathematical discrepancy that must be explicitly resolved prior to implementation:
 > 
 > 1. **Locked Allocation Model:**
->    - $\text{Total Maximum Supply} = 42,000,000\text{ SCY}$
->    - $\text{Genesis Allocation (25%)} = 10,500,000\text{ SCY}$ (Founder 15%, Treasury 5%, Ecosystem 5%)
->    - $\text{Mining Emission Allocation (75%)} = \mathbf{31,500,000\text{ SCY}}$
-> 
-> 2. **Theoretical Infinite Halving Series from Baseline Formula:**
->    $$\text{Theoretical Mining Emission} = 10\text{ SCY} \times 2,100,000\text{ blocks} \times \sum_{k=0}^{\infty} \left( \frac{1}{2} \right)^k = 21,000,000 \times 2 = \mathbf{42,000,000\text{ SCY}}$$
+>    - $\text{Total Maximum Supply} = 94,980,000\text{ SCY}$
+>    - $\text{Genesis Allocation (69.49\%)} = 66,000,000\text{ SCY}$ (Founder 30\%, Treasury 20\%, Ecosystem 50\% of genesis)
+>    - $\text{Mining Emission Allocation (30.51\%)} = \mathbf{28,980,000\text{ SCY}}$
 > 
 > 3. **The Conflict:**
->    - If the unadjusted $10\text{ SCY}$ halving series runs to infinity ($42\text{M}$ SCY) on top of the Genesis allocation ($10.5\text{M}$ SCY), total minted supply would reach **$52,500,000\text{ SCY}$**, violating the immutable $42,000,000\text{ SCY}$ ceiling.
->    - **Status:** **`Requires Resolution`** (The consensus engine must either cap mining subsidies when total mined reaches $31.5\text{M}\text{ SCY}$, adjust the initial reward/halving interval to mathematically sum to $31.5\text{M}\text{ SCY}$, or define an explicit terminal epoch). This must be decided by formal protocol decision rather than unauthorized implementation assumptions.
+>    - The unadjusted $10\text{ SCY}$ halving series sums to $42\text{M}$ SCY, exceeding the implemented mining reserve of $28.98\text{M}$ SCY.
+>    - **Status:** **`Requires Resolution`** (The consensus engine must cap mining subsidies, adjust the initial reward/halving interval, or define an explicit terminal epoch). This must be decided by formal protocol decision rather than unauthorized implementation assumptions.
 
----
-
+	- The unadjusted $10\text{ SCY}$ halving series sums to $42\text{M}$ SCY, exceeding the implemented mining reserve of $28.98\text{M}$ SCY.
+	- **Status:** **`Requires Resolution`** (The consensus engine must cap mining subsidies, adjust the initial reward/halving interval, or define an explicit terminal epoch). This must be decided by formal protocol decision rather than unauthorized implementation assumptions.
+	- The unadjusted $10\text{ SCY}$ halving series sums to $42\text{M}$ SCY, exceeding the implemented mining reserve of $28.98\text{M}$ SCY.
+	- **Status:** **`Requires Resolution`** (The consensus engine must cap mining subsidies, adjust the initial reward/halving interval, or define an explicit terminal epoch). This must be decided by formal protocol decision rather than unauthorized implementation assumptions.
 ## 5. Cross-Specification References
 
 - **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: Monetary policy and emission specifications.

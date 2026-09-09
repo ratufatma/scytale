@@ -76,16 +76,16 @@ $$\text{Genesis Allocation} \ne \text{Automatic User Balance}$$
 
 ```text
 +-------------------------------------------------------------------------+
-|                    Maximum Supply: 42,000,000 SCY                       |
-|                     (4,200,000,000,000,000 quanta)                      |
+|                    Maximum Supply: 94,980,000 SCY                       |
+|                     (9,498,000,000,000,000 quanta)                      |
 +------------------------------------+------------------------------------+
-|   Total Genesis Allocation (25%)   |    Mining Emission Reserve (75%)   |
-|        10,500,000 SCY              |           31,500,000 SCY           |
-| (1,050,000,000,000,000 quanta)     |   (3,150,000,000,000,000 quanta)   |
+|   Total Genesis Allocation (69.49%) |    Mining Emission Reserve (30.51%) |
+|        66,000,000 SCY              |           28,980,000 SCY            |
+| (6,600,000,000,000,000 quanta)      |   (2,898,000,000,000,000 quanta)    |
 |                                    |                                    |
-| - Founder:    15% (6,300,000 SCY)  | - Minted over time via Proof-      |
-| - Treasury:    5% (2,100,000 SCY)  |   of-Work block rewards            |
-| - Ecosystem:   5% (2,100,000 SCY)  | - Available to all miners          |
+| - Founder:    30% (19,800,000 SCY) | - Minted over time via Proof-      |
+| - Treasury:   20% (13,200,000 SCY) |   of-Work block rewards            |
+| - Ecosystem:  50% (33,000,000 SCY) | - Available to all miners          |
 +------------------------------------+------------------------------------+
 ```
 
@@ -105,20 +105,20 @@ Block 0 is the hardcoded anchor of the Scytale blockchain. It contains exactly o
 +-------------------------------------------------------------------------+
 |                  Genesis Bootstrap Transaction (TxID_0)                 |
 |  - Inputs: [ ] (Empty; protocol-defined bootstrap minting)              |
-|  - Outputs: Exactly 3 Outputs (Total = 1,050,000,000,000,000 quanta)   |
+|  - Outputs: Exactly 3 Outputs (Total = 6,600,000,000,000,000 quanta)   |
 +-------------------------------------------------------------------------+
        │                             │                             │
        ▼                             ▼                             ▼
 +--------------------+      +--------------------+      +--------------------+
 | OutPoint(TxID_0, 0)|      | OutPoint(TxID_0, 1)|      | OutPoint(TxID_0, 2)|
-|  Founder 15%       |      |  Treasury 5%       |      |  Ecosystem 5%      |
-|  630T quanta       |      |  210T quanta       |      |  210T quanta       |
-|  (6,300,000 SCY)   |      |  (2,100,000 SCY)   |      |  (2,100,000 SCY)   |
+|  Founder 30%       |      |  Treasury 20%      |      |  Ecosystem 50%     |
+|  1,980T quanta     |      |  1,320T quanta      |      |  3,300T quanta      |
+|  (19,800,000 SCY)  |      |  (13,200,000 SCY)   |      |  (33,000,000 SCY)   |
 +--------------------+      +--------------------+      +--------------------+
 ```
 
 ### Invariants:
-1. **Public Accounting:** All genesis allocations are declared on-chain at Block 0 and bounded within the fixed 42,000,000 SCY cap.
+1. **Public Accounting:** All genesis allocations are declared on-chain at Block 0 and bounded within the fixed 94,980,000 SCY cap.
 2. **Exact Output Count:** Block 0 contains strictly **three transaction outputs** corresponding to the three authorized allocation categories.
 3. **No User Airdrops by Default:** Genesis allocations dedicated to founders, treasury, or ecosystem growth do not grant automatic starting balances to arbitrary new nodes.
 4. **Path to Initial Funds:** Users acquire their initial SCY either by:
@@ -181,9 +181,9 @@ Genesis Allocation Provenance (Height 0):
             Genesis TxID
                  ↓
        Genesis OutPoints (TxID : Index)
-                 ├── Index 0: Founder Allocation       (630,000,000,000,000 quanta)
-                 ├── Index 1: Treasury Allocation      (210,000,000,000,000 quanta)
-                 └── Index 2: Ecosystem Allocation     (210,000,000,000,000 quanta)
+                 ├── Index 0: Founder Allocation       (1,980,000,000,000,000 quanta)
+                 ├── Index 1: Treasury Allocation      (1,320,000,000,000,000 quanta)
+                 └── Index 2: Ecosystem Allocation     (3,300,000,000,000,000 quanta)
                  ↓
           Genesis UTXOs (Committed to Initial redb UTXO Set)
 ```
@@ -223,7 +223,7 @@ The following implementation parameters remain designated as **TBD**:
 ## 9. Cross-Specification References
 
 - **[`docs/GENESIS-ALLOCATION.md`](GENESIS-ALLOCATION.md)**: Breakdown of allocation categories and supply reconciliation.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY cap, 60-second block target, and quanta accounting.
+- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 94,980,000 SCY cap, 60-second block target, and quanta accounting.
 - **[`docs/POW-SPEC.md`](POW-SPEC.md)**: Proof-of-Work rules and BLAKE3 target evaluation.
 - **[`docs/BLOCK-SPEC.md`](BLOCK-SPEC.md)**: Block header structure and coinbase positioning.
 - **[`docs/LEDGER-SPEC.md`](LEDGER-SPEC.md)**: Core UTXO state transitions and Value Provenance.

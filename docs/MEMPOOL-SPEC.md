@@ -332,6 +332,6 @@ The following parameters and policies are designated as **TBD**:
 - **[`docs/DIFFICULTY-SPEC.md`](DIFFICULTY-SPEC.md)**: Difficulty adjustment and 60s target block interval.
 - **[`docs/STORAGE-SPEC.md`](STORAGE-SPEC.md)**: Canonical state vs. ephemeral pending storage.
 - **[`docs/VALUE-PROVENANCE-SPEC.md`](VALUE-PROVENANCE-SPEC.md)**: Value lineage and DAG traversal.
-- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 42,000,000 SCY cap, fee mechanisms, and integer quanta accounting.
+- **[`docs/MONETARY-POLICY.md`](MONETARY-POLICY.md)**: 94,980,000 SCY cap, fee mechanisms, and integer quanta accounting.
 - **[`docs/ECONOMIC-MODEL.md`](ECONOMIC-MODEL.md)**: Miner fee market dynamics and block space scarcity.
 - **[`docs/PASSBOOK-CONCEPT.md`](PASSBOOK-CONCEPT.md)**: Presentation of pending and confirmed transaction statuses.

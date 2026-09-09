@@ -108,7 +108,7 @@ Coinbase Transaction
 3. **Monetary Parameters:**
    - Initial Subsidy: $R_0 = 1,000,000,000\text{ quanta}$ ($10\text{ SCY}$).
    - Halving Interval: Every $2,100,000\text{ blocks}$.
-   - Supply Target Ceiling: $4,200,000,000,000,000\text{ quanta}$ ($42,000,000\text{ SCY}$).
+       - Supply Target Ceiling: $9,498,000,000,000,000\text{ quanta}$ ($94,980,000\text{ SCY}$).
 4. **Coinbase Maturity:** Coinbase outputs create new UTXOs subject to spending maturity rules:
    - `Coinbase Maturity Rule: TBD` (Number of confirmation blocks required before coinbase outputs can be spent).
 
