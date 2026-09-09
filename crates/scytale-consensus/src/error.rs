@@ -52,6 +52,14 @@ pub enum ChainError {
     BlockError(#[from] scytale_core::BlockError),
     #[error("utxo error: {0}")]
     UtxoError(#[from] scytale_core::UtxoError),
+    #[error("invalid coinbase reward: subsidy {subsidy}, fees {fees}, output {output}")]
+    InvalidCoinbaseReward {
+        subsidy: u64,
+        fees: u64,
+        output: u64,
+    },
+    #[error("invalid transaction commitment: expected {expected:?}, got {actual:?}")]
+    InvalidTransactionCommitment { expected: Hash256, actual: Hash256 },
 }
 
 #[derive(Debug, Clone, Error)]
@@ -68,6 +76,14 @@ pub enum ConsensusError {
     BlockPoWInvalid,
     #[error("Invalid block reward")]
     InvalidReward,
+    #[error("invalid coinbase reward: subsidy {subsidy}, fees {fees}, output {output}")]
+    InvalidCoinbaseReward {
+        subsidy: u64,
+        fees: u64,
+        output: u64,
+    },
+    #[error("invalid transaction commitment: expected {expected:?}, got {actual:?}")]
+    InvalidTransactionCommitment { expected: Hash256, actual: Hash256 },
     #[error("Transaction verification failed: {0}")]
     TransactionVerification(String),
 }

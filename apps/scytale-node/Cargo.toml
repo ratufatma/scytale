@@ -10,7 +10,9 @@ description = "CLI and node daemon orchestrator for Scytale blockchain"
 workspace = true
 
 [dependencies]
-async-nats = { workspace = true }
+libp2p = { version = "0.56", features = ["tokio", "tcp", "noise", "yamux", "gossipsub", "request-response", "kad", "identify", "ping", "macros"] }
+futures-util = "0.3"
+async-trait = "0.1"
 scytale-primitives = { path = "../../crates/scytale-primitives" }
 scytale-core = { path = "../../crates/scytale-core" }
 scytale-storage = { path = "../../crates/scytale-storage" }
@@ -23,7 +25,6 @@ scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
 scytale-vm = { path = "../../crates/scytale-vm" }
 scytale-account = { path = "../../crates/scytale-account" }
 bincode = { workspace = true }
-futures = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

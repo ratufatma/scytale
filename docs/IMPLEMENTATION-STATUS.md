@@ -27,7 +27,7 @@ reference. `Gap` means documentation or implementation work remains.
 
 | Area | Current state | Action needed |
 |---|---|---|
-| Networking | NATS transport is the active network path | Extend NATS coverage as protocol features are added |
+| Networking | Transport-neutral boundary and peer metadata are present | Implement and test the direct peer transport |
 | DNS seeder | No seeder implementation is present | Mark deployment guide historical or implement the daemon |
 | IBD | Locator helpers exist, full download/apply flow is incomplete | Add integration tests and protocol documentation |
 | Mining template refresh | No complete event-driven refresh policy | Document polling/event behavior or implement it |

@@ -7,6 +7,14 @@ use scytale_node::{error::NodeError, Node, NodeConfig};
 use scytale_script::{builder::ScriptBuilder, opcode::OpCode};
 use tempfile::tempdir;
 
+fn transaction_commitment(transactions: &[Transaction]) -> Hash256 {
+    let mut bytes = Vec::with_capacity(transactions.len() * 32);
+    for transaction in transactions {
+        bytes.extend_from_slice(transaction.txid().as_bytes());
+    }
+    Hash256::hash(&bytes)
+}
+
 #[test]
 fn test_node_verify_legacy_script() {
     let mut utxos = UtxoSet::new();
@@ -135,7 +143,7 @@ fn test_node_op_return_output_handling() {
     let header1 = BlockHeader::new(
         1,
         genesis_tip,
-        Hash256::ZERO,
+        transaction_commitment(std::slice::from_ref(&cb1)),
         utxo_root1,
         100,
         0x207fffff,
@@ -174,8 +182,17 @@ fn test_node_op_return_output_handling() {
         scytale_core::UtxoEntry::new(TxOut::new(subsidy2, vec![0x01, 0x02, 0x03]), 2, true),
     );
     let utxo_root2 = staging2.compute_utxo_root();
-    let header2 = BlockHeader::new(2, tip1, Hash256::ZERO, utxo_root2, 200, 0x207fffff, 0);
-    let block2 = Block::new(header2, vec![cb2, transfer_tx]);
+    let transactions2 = vec![cb2, transfer_tx];
+    let header2 = BlockHeader::new(
+        2,
+        tip1,
+        transaction_commitment(&transactions2),
+        utxo_root2,
+        200,
+        0x207fffff,
+        0,
+    );
+    let block2 = Block::new(header2, transactions2);
 
     assert!(node.submit_external_block(block2).unwrap());
     assert_eq!(node.canonical_height(), 2);
@@ -199,4 +216,105 @@ fn test_node_op_return_output_handling() {
     );
 
     node.shutdown().unwrap();
+}
+
+#[test]
+fn test_utxo_root_template_matches_canonical_block_application() {
+    let make_block = |prev_hash: Hash256,
+                      height: u64,
+                      utxos: &UtxoSet,
+                      transactions: Vec<Transaction>| {
+        let mut staged = utxos.clone();
+        let fee_total = staged.apply_block(&transactions, height).unwrap();
+        let _ = fee_total;
+        let utxo_root = staged.compute_utxo_root();
+        let header = BlockHeader::new(
+            1,
+            prev_hash,
+            transaction_commitment(&transactions),
+            utxo_root,
+            200 + height,
+            0x207fffff,
+            0,
+        );
+        Block::new(header, transactions)
+    };
+
+    let prev_txid = Hash256::hash(b"root_equiv_prev");
+    let spend_1 = OutPoint::new(prev_txid, 0);
+    let spend_2 = OutPoint::new(prev_txid, 1);
+
+    // Scenario 1: coinbase + single spends to a standard output.
+    let coinbase1 = Transaction::new_coinbase(1, vec![TxOut::new(10_000_000, vec![0x10])]);
+    let spend_tx1 = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(spend_1, vec![0x11])],
+        vec![TxOut::new(9_000_000, vec![0x22])],
+        0,
+    );
+
+    let mut utxos1 = UtxoSet::new();
+    utxos1.insert(
+        spend_1,
+        UtxoEntry::new(TxOut::new(10_000_000, vec![0x10]), 1, false),
+    );
+    let block1 = make_block(Hash256::ZERO, 1, &utxos1, vec![coinbase1.clone(), spend_tx1.clone()]);
+    let mut staged1 = utxos1.clone();
+    staged1.apply_block(&block1.transactions, 1).unwrap();
+    assert_eq!(block1.header.utxo_root, staged1.compute_utxo_root());
+
+    // Scenario 2: intra-block dependent payments in the same block.
+    let coinbase2 = Transaction::new_coinbase(2, vec![TxOut::new(10_000_000, vec![0x30])]);
+    let tx_a = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(spend_2, vec![0x41])],
+        vec![TxOut::new(7_000_000, vec![0x50])],
+        0,
+    );
+    let tx_b = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(OutPoint::new(tx_a.txid(), 0), vec![0x51])],
+        vec![TxOut::new(6_900_000, vec![0x60])],
+        0,
+    );
+
+    let mut utxos2 = UtxoSet::new();
+    utxos2.insert(
+        spend_2,
+        UtxoEntry::new(TxOut::new(10_000_000, vec![0x30]), 2, false),
+    );
+    let block2 = make_block(Hash256::ZERO, 2, &utxos2, vec![coinbase2.clone(), tx_a.clone(), tx_b.clone()]);
+    let mut staged2 = utxos2.clone();
+    staged2.apply_block(&block2.transactions, 2).unwrap();
+    assert_eq!(block2.header.utxo_root, staged2.compute_utxo_root());
+
+    // Scenario 3: OP_RETURN + multi-input/output transaction.
+    let coinbase3 = Transaction::new_coinbase(3, vec![TxOut::new(10_000_000, vec![0x70])]);
+    let tx_c = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![
+            TxIn::new(OutPoint::new(prev_txid, 2), vec![0x81]),
+            TxIn::new(OutPoint::new(prev_txid, 3), vec![0x82]),
+        ],
+        vec![
+            TxOut::new(3_000_000, vec![0x90]),
+            TxOut::new(0, vec![0x6a, 0x04, b'X', b'Y']),
+            TxOut::new(2_000_000, vec![0x91]),
+        ],
+        0,
+    );
+
+    let mut utxos3 = UtxoSet::new();
+    utxos3.insert(
+        OutPoint::new(prev_txid, 2),
+        UtxoEntry::new(TxOut::new(2_000_000, vec![0x81]), 3, false),
+    );
+    utxos3.insert(
+        OutPoint::new(prev_txid, 3),
+        UtxoEntry::new(TxOut::new(3_000_000, vec![0x82]), 3, false),
+    );
+    let block3 = make_block(Hash256::ZERO, 3, &utxos3, vec![coinbase3.clone(), tx_c.clone()]);
+    let mut staged3 = utxos3.clone();
+    staged3.apply_block(&block3.transactions, 3).unwrap();
+    assert_eq!(block3.header.utxo_root, staged3.compute_utxo_root());
 }

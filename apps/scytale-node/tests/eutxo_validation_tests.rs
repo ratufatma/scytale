@@ -411,7 +411,15 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         UtxoEntry::new(script_tx_out, 1, true),
     );
     let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
+    let header = BlockHeader::new(
+        1,
+        genesis_tip,
+        Hash256::hash(cb1.txid().as_bytes()),
+        utxo_root,
+        100,
+        0x207fffff,
+        0,
+    );
     let block1 = Block::new(header, vec![cb1.clone()]);
     assert!(
         node.submit_external_block(block1).unwrap(),

@@ -23,6 +23,10 @@ pub struct NodeConfig {
     pub indexer_key: Option<String>,
     /// Maximum allowed reorganization depth before rejecting a competing branch.
     pub max_reorg_depth: u64,
+    /// TCP port used by the libp2p listener.
+    pub p2p_port: u16,
+    /// Initial libp2p bootstrap multiaddresses.
+    pub bootnodes: Vec<String>,
 }
 
 impl Default for NodeConfig {
@@ -37,6 +41,8 @@ impl Default for NodeConfig {
             explorer_url: None,
             indexer_key: None,
             max_reorg_depth: scytale_consensus::DEFAULT_MAX_REORG_DEPTH,
+            p2p_port: 9000,
+            bootnodes: Vec::new(),
         }
     }
 }

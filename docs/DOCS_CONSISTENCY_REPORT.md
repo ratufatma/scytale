@@ -212,9 +212,9 @@ go.mod                                         →  tidak ada
 
 | Fitur | Klaim Spec/README/Audit | Realita Kode | Verdict |
 |-------|------------------------|--------------|---------|
-| Arsitektur P2P | daemon Go (peer discovery, pooling, framing, relay) + Rust validation boundary | transport aktual = **Rust `async_nats` pub/sub** ke `nats://116.212.72.89:4222`, subject `scytale.v1.blocks.new`, `scytale.v1.mempool.tx`, `scytale.v1.nodes.heartbeat` | **MISMATCH** |
+| Arsitektur P2P | daemon Go (peer discovery, pooling, framing, relay) + Rust validation boundary | broker transport telah dihapus; direct peer transport belum tersedia | **MISMATCH** |
 | Rust↔Go IPC boundary | Unix socket antara Go dan Rust | `P2pSupervisor` (Unix-socket bridge) + `scytale-bridge` ABI **ada tapi tidak pernah di-instantiate** (dead code) | **NOT-IMPLEMENTED** |
-| Wire protocol | Handshake, Ping/Pong, ChainLocator, Tx/BlockAnnouncement | tidak ada codec; NATS kirim raw bytes; tanpa handshake/network-ID/genesis match | **NOT-IMPLEMENTED** |
+| Wire protocol | Handshake, Ping/Pong, ChainLocator, Tx/BlockAnnouncement | codec domain tersedia; direct transport dan handshake belum terintegrasi | **NOT-IMPLEMENTED** |
 | Peer discovery | static + DNS + PEX | static `--peer` hanya dikonsumsi supervisor yang tak pernah jalan; `ConnectPeer` events di-ignore di `main.rs` (`Ok(P2pBridgeEvent::ConnectPeer{..}) => {}`) | **NOT-IMPLEMENTED** |
 | Misbehavior scoring & flood protection | §13-14; audit klaim **PASS** via `network/internal/wire/wire_test.go` | tidak ada; file audit yang dikutip **tidak ada** | **NOT-IMPLEMENTED** |
 | DNS Seeder | daemon `scytale-seeder`, NS :53, TTL 60, "Production Ready" | **TIDAK ADA**; `--dns-seed` flags di-parse tapi **tidak pernah dikonsumsi** kode | **NOT-IMPLEMENTED** |
@@ -367,7 +367,7 @@ go.mod                                         →  tidak ada
 ## Temuan Kritis yang Memerlukan Aksi
 
 ### 📛 Kritis (memengaruhi kebenaran operasional)
-1. **Go P2P subsystem hilang** tapi seluruh dokumentasi dan audit checklist mengklaimnya lengkap dan lulus. Transport aktual NATS pub/sub ke satu node hardcoded — perlu klarifikasi apakah ini kondisi yang diinginkan atau kehilangan aksidental.
+1. **Go P2P subsystem hilang** dan direct peer transport belum tersedia; dokumentasi historis perlu terus diperlakukan sebagai arsip.
 2. **`utxo_root` tidak terdokumentasi** di spec tapi consensus-critical (120-byte header hanya benar dengan field ini).
 3. **Emisi reward**: kode sudah menerapkan trunkasi hard-stop (28.98M), dokumen masih menyatakan TBD/berdebat. Spesifikasi dan kode berjalan arah berlawanan.
 4. **Node di `.gitignore`**: seluruh `network/` tidak ada; jika ini repo publik, mustahil memverifikasi "go test clean" yang diklaim.
@@ -390,4 +390,4 @@ go.mod                                         →  tidak ada
 
 - **Yang sudah sangat baik:** parameter ekonomi makro (supply, alokasi, halving, reward end) **100% benar** dengan toleransi detail; mekanisme anti-inflasi, atomicity storage, mempool double-spend, genesis mapping, dan integer-only aritmetika terverifikasi konsisten.
 - **Yang paling bermasalah:** (a) ketiadaan subsistem Go P2P yang didokumentasikan sebagai ada, (b) emisi reward yang kodenya sudah memutuskan tapi dokumen masih menulis TBD, (c) field `utxo_root` yang consensus-critical tapi tidak berspesifikasi.
-- **Perbaikan yang disarankan (tanpa perubahan kode):** perbarui dokumen agar mencerminkan keputusan kode (trunkasi emisi, difficulty 1440/4×, reorg depth 100, mempool konfigurasi), hapus kontradiksi 42M vs 94.98M, deduplikasi working docs 35-41, tandai `TASKS_32_TO_34.md` sebagai superseded, dan putuskan sikap resmi terhadap sub-sistem P2P (hapus atau tulis ulang dokumentasi agar jujur pada implementasi NATS).
+- **Perbaikan yang disarankan (tanpa perubahan kode):** perbarui dokumen agar mencerminkan keputusan kode (trunkasi emisi, difficulty 1440/4×, reorg depth 100, mempool konfigurasi), hapus kontradiksi 42M vs 94.98M, deduplikasi working docs 35-41, dan tandai `TASKS_32_TO_34.md` sebagai superseded.

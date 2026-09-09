@@ -12,26 +12,26 @@
 
 | Bukti | Detail |
 |-------|--------|
-| **Commit `2a53e14`** | `feat: migrate P2P stack to async-nats and add wasm smoke guard` — **menghapus 38 file Go** (semua `network/cmd/*`, `network/internal/{bridge,gossip,peer,seeder,sync,wire}/*`, `go.mod`, `go.sum`) |
-| **Commit `cb6cd33`** | `merge(p2p): integrate native async-nats networking and consensus propagation` — finalisasi migrasi |
-| **File yang ditambahkan** | `apps/scytale-node/src/network/mod.rs` + `message.rs` (Rust, NATS), `apps/scytale-node/tests/nats_smoke.rs` |
-| **Transport aktual** | Rust `async_nats` pub/sub: `scytale.v1.blocks.new`, `scytale.v1.mempool.tx`, `scytale.v1.nodes.heartbeat` |
+| **Commit `2a53e14`** | `feat: migrate P2P stack to broker transport and add wasm smoke guard` — **menghapus 38 file Go** (semua `network/cmd/*`, `network/internal/{bridge,gossip,peer,seeder,sync,wire}/*`, `go.mod`, `go.sum`) |
+| **Commit `cb6cd33`** | `merge(p2p): integrate network abstraction and consensus propagation` — finalisasi migrasi |
+| **File yang ditambahkan** | `apps/scytale-node/src/network/mod.rs` + `message.rs` (transport-neutral boundary) |
+| **Transport aktual** | Broker transport lama telah dihapus; direct peer transport menjadi pekerjaan lanjutan |
 | **Dokumen yang tertinggal** | README §P2P, P2P-NETWORK-SPEC, DNS-SEEDER-GUIDE, TASKS_32-38, AUDIT_CHECKLIST — semuanya masih mendeskripsikan arsitektur Go |
 
-**Kesimpulan:** Bukan "kehilangan kode" melainkan **keputusan migrasi yang SUDAH dilakukan** (Go → Rust/async-nats). Yang salah hanya dokumentasi yang belum diselaraskan.
+**Kesimpulan:** Bukan "kehilangan kode" melainkan keputusan migrasi yang sudah digantikan oleh boundary transport netral.
 
 ### Opsi Keputusan
 
 | Opsi | Deskripsi | Risiko |
 |------|-----------|--------|
-| **Rekomendasi: A. NATS = resmi; Go = deprecated historic** | Dokumentasi ditulis ulang untuk mendeskripsikan transport NATS. Rujukan Go diberi label "deprecated (pre-v0.3.0)". `P2pSupervisor`/`scytale-bridge` (dead code) ditandai legacy | Rendah. Selaras dgn kode aktual. Kode Go bisa direstor dari git bila dibutuhkan |
-| B. Restorasi Go dari git history | `git checkout 2a53e14^ -- network/` + re-integrasi | Tinggi. Menghidupkan kembali arsitektur yang sengaja dibuang; konflik dengan engine NATS yang sudah ter-tes |
+| **Rekomendasi: A. Direct transport; Go = deprecated historic** | Dokumentasi ditulis ulang untuk mendeskripsikan direct transport. Rujukan Go diberi label "deprecated (pre-v0.3.0)". `P2pSupervisor`/`scytale-bridge` (dead code) ditandai legacy | Rendah. Selaras dgn kode aktual. Kode Go bisa direstor dari git bila dibutuhkan |
+| B. Restorasi Go dari git history | `git checkout 2a53e14^ -- network/` + re-integrasi | Tinggi. Menghidupkan kembali arsitektur yang sengaja dibuang |
 | C. Biarkan stagnan | Tidak ada tindakan | Tinggi. Dokumentasi terus menyesatkan; audit akan gagal |
 
 ### File yang Terdampak (jika Opsi A disetujui)
 - `README.md`, `docs/P2P-NETWORK-SPEC.md`, `docs/DNS-SEEDER-DEPLOYMENT-GUIDE.md`,
 - `docs/TASKS_32_TO_38.md`, `docs/AUDIT_CHECKLIST_v0.3.0.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY-THREAT-MODEL.md`,
-- `docs/work/13-p2p.md`, `35*`, `36*`, `37*`, `44*` — tambahkan banner "superseded by NATS"
+- `docs/work/13-p2p.md`, `35*`, `36*`, `37*`, `44*` — tambahkan banner "superseded by direct transport"
 - `CHANGELOG.md` — tambah entri migrasi
 
 ---
@@ -150,7 +150,7 @@ pub fn calculate_block_reward(height: u64) -> Quanta {
 
 | # | Item | Rekomendasi | Perubahan Kode? | Tingkat Risiko |
 |---|------|-------------|-----------------|----------------|
-| 1 | Status Go P2P | NATS resmi; Go = deprecated historic | Tidak | Rendah |
+| 1 | Status Go P2P | Direct transport planned; Go = deprecated historic | Tidak | Rendah |
 | 2 | Terminal mining reward | Option A (hard cap @ height 3,696,000) = FINAL | Tidak | Rendah |
 | 3 | Dokumentasi `utxo_root` | Dokumentasikan fitur existing (7-field, 120B, Merkle) | Tidak | Rendah |
 | 4 | Klasifikasi work docs | Arsipkan `work/`, deduplikasi, tandai superseded | Tidak | Rendah |
@@ -166,7 +166,7 @@ pub fn calculate_block_reward(height: u64) -> Quanta {
 
 Centang setiap item yang disetujui:
 
-- [ ] **Memo 1 — Opsi A**: NATS resmi, Go deprecated historic
+- [ ] **Memo 1 — Opsi A**: Direct transport, Go deprecated historic
 - [ ] **Memo 2 — Opsi A**: Option A hard cap = FINAL (dokumen diselaraskan)
 - [ ] **Memo 3 — Opsi A**: Dokumentasikan `utxo_root` (7-field/120B/Merkle)
 - [ ] **Memo 4 — Opsi A**: Arsipkan `work/`, deduplikasi, banner superseded; task 34 pakai versi underscore terbaru

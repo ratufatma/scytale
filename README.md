@@ -5,7 +5,7 @@
 - **Deterministic UTXO Model** with authenticated state commitment (`utxo_root` in 120-Byte BlockHeader).
 - **Proof-of-Work (PoW)** consensus powered by CPU-friendly BLAKE3 hashing.
 - **Deterministic Zero-Float Fee Market** with integer-only arithmetic.
-- **NATS network transport** for block and transaction broadcast.
+- **Transport-neutral network boundary** for future direct peer networking.
 
 ---
 
@@ -27,7 +27,7 @@ scytale/
 │   ├── scytale-mining/               # CPU miner worker, template builder & coinbase generation
 │   └── scytale-bridge/               # IPC framing and network event types
 ├── apps/
-│   ├── scytale-node/                 # Full node daemon, HTTP RPC gateway & NATS transport
+│   ├── scytale-node/                 # Full node daemon, HTTP RPC gateway & network boundary
 │   └── scytale-cli/                  # Wallet management, keygen, balance & miner operator CLI
 ├── web/
 │   └── explorer/                     # Embedded live block explorer and RPC dashboard
@@ -117,15 +117,14 @@ target/release/scytale-node start \
 	--mine
 ```
 
-For a network node, configure the NATS broker with `--nats`:
+The current daemon runs in standalone mode while the direct peer transport is being implemented:
 
 ```bash
-target/release/scytale-node start \
-	--data-dir .scytale \
-	--socket /tmp/scytale.sock \
-	--http-bind 0.0.0.0:8332 \
-	--nats nats://127.0.0.1:4222 \
-	--mine
+	target/release/scytale-node start \
+		--data-dir .scytale \
+		--socket /tmp/scytale.sock \
+		--http-bind 127.0.0.1:8332 \
+		--mine
 ```
 
 Because the HTTP gateway binds an interface, restrict access with a firewall or

@@ -1,4 +1,7 @@
-use scytale_consensus::{block_work, ChainTree, CumulativeWork, Target};
+use scytale_consensus::{
+    block_work, get_block_subsidy, validate_block_authoritative, ChainError, ChainTree,
+    ConsensusError, CumulativeWork, Target,
+};
 use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoSet, TRANSACTION_VERSION_1,
 };
@@ -17,10 +20,14 @@ fn make_test_block(
     let mut staging = parent_utxos.clone();
     let _ = staging.apply_block_transactions(&txs[0], &txs[1..], height);
     let utxo_root = staging.compute_utxo_root();
+    let mut commitment_bytes = Vec::with_capacity(txs.len() * 32);
+    for tx in &txs {
+        commitment_bytes.extend_from_slice(tx.txid().as_bytes());
+    }
     let header = BlockHeader::new(
         version,
         prev_hash,
-        Hash256::ZERO,
+        Hash256::hash(&commitment_bytes),
         utxo_root,
         timestamp,
         target,
@@ -50,6 +57,72 @@ fn create_genesis() -> (Block, UtxoSet) {
     );
     let block = Block::new(header, vec![coinbase]);
     (block, utxo_set)
+}
+
+#[test]
+fn rejects_coinbase_above_subsidy_plus_fees() {
+    let (genesis, utxo_set) = create_genesis();
+    let height = 1;
+    let coinbase = Transaction::new_coinbase(
+        height,
+        vec![TxOut::new(get_block_subsidy(height) + 1, vec![1])],
+    );
+    let block = make_test_block(
+        1,
+        genesis.header.hash(),
+        1,
+        0x1f00ffff,
+        1,
+        vec![coinbase],
+        &utxo_set,
+        height,
+    );
+
+    let error = validate_block_authoritative(&block, height, &utxo_set).unwrap_err();
+    assert!(matches!(
+        error,
+        ConsensusError::InvalidCoinbaseReward { .. }
+    ));
+
+    let mut tree = ChainTree::new(genesis);
+    let mut state = utxo_set;
+    let error = tree.process_block(block, &mut state).unwrap_err();
+    assert!(matches!(error, ChainError::InvalidCoinbaseReward { .. }));
+    assert_eq!(tree.canonical_height(), 0);
+}
+
+#[test]
+fn rejects_mismatched_transaction_commitment() {
+    let (genesis, utxo_set) = create_genesis();
+    let height = 1;
+    let coinbase =
+        Transaction::new_coinbase(height, vec![TxOut::new(get_block_subsidy(height), vec![1])]);
+    let mut block = make_test_block(
+        1,
+        genesis.header.hash(),
+        1,
+        0x1f00ffff,
+        1,
+        vec![coinbase],
+        &utxo_set,
+        height,
+    );
+    block.header.transaction_commitment = Hash256::ZERO;
+
+    let error = validate_block_authoritative(&block, height, &utxo_set).unwrap_err();
+    assert!(matches!(
+        error,
+        ConsensusError::InvalidTransactionCommitment { .. }
+    ));
+
+    let mut tree = ChainTree::new(genesis);
+    let mut state = utxo_set;
+    let error = tree.process_block(block, &mut state).unwrap_err();
+    assert!(matches!(
+        error,
+        ChainError::InvalidTransactionCommitment { .. }
+    ));
+    assert_eq!(tree.canonical_height(), 0);
 }
 
 #[test]

@@ -193,7 +193,7 @@ pub struct ProvenanceTraceDto {
 // Node network event protocol
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Asynchronous broadcast events emitted from the Rust node to the NATS network layer.
+/// Asynchronous broadcast events emitted from the Rust node to a network transport.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "payload")]
 pub enum NetworkEvent {

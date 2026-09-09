@@ -1,8 +1,57 @@
 use crate::error::{ChainError, ConsensusError};
+use crate::get_block_subsidy;
 use crate::target::Target;
 use crate::work::{block_work, CumulativeWork};
 use scytale_core::{Block, Hash256, Transaction, UtxoSet};
 use std::collections::{HashMap, HashSet};
+
+/// Recomputes the canonical BLAKE3 commitment over the concatenated TxIDs.
+pub fn transaction_commitment(block: &Block) -> Hash256 {
+    let mut bytes = Vec::with_capacity(block.transactions.len() * 32);
+    for tx in &block.transactions {
+        bytes.extend_from_slice(tx.txid().as_bytes());
+    }
+    Hash256::hash(&bytes)
+}
+
+/// Performs consensus checks that must succeed before a block can mutate UTXO state.
+pub fn validate_block_authoritative(
+    block: &Block,
+    height: u64,
+    parent_utxo: &UtxoSet,
+) -> Result<u64, ConsensusError> {
+    block
+        .validate_structure()
+        .map_err(|error| ConsensusError::TransactionVerification(error.to_string()))?;
+
+    let expected_commitment = transaction_commitment(block);
+    if block.header.transaction_commitment != expected_commitment {
+        return Err(ConsensusError::InvalidTransactionCommitment {
+            expected: expected_commitment,
+            actual: block.header.transaction_commitment,
+        });
+    }
+
+    let mut staged = parent_utxo.clone();
+    let total_fees = staged
+        .apply_block(&block.transactions, height)
+        .map_err(|error| ConsensusError::TransactionVerification(error.to_string()))?;
+    let coinbase_output = block.transactions[0]
+        .total_output_quanta()
+        .map_err(|error| ConsensusError::TransactionVerification(error.to_string()))?;
+    let subsidy = get_block_subsidy(height);
+    let maximum_reward = subsidy.checked_add(total_fees).ok_or_else(|| {
+        ConsensusError::TransactionVerification("coinbase reward overflow".into())
+    })?;
+    if coinbase_output > maximum_reward {
+        return Err(ConsensusError::InvalidCoinbaseReward {
+            subsidy,
+            fees: total_fees,
+            output: coinbase_output,
+        });
+    }
+    Ok(total_fees)
+}
 
 /// Contextual transaction verifier interface for validating block transactions against a staged UTXO set.
 pub trait BlockTransactionVerifier {
@@ -278,6 +327,52 @@ impl ChainTree {
 
         let height = parent_node.height + 1;
 
+        // Build the parent state before inserting the candidate into the DAG.
+        // Fork candidates cannot use the active UTXO tip, so replay their parent
+        // path from genesis just as the reorg path does below.
+        let parent_utxo = if parent_hash == self.canonical_tip {
+            utxo_set.clone()
+        } else {
+            let mut staged = UtxoSet::new();
+            for node in self.get_path_from_genesis(&parent_hash)? {
+                staged
+                    .apply_block_transactions(
+                        &node.block.transactions[0],
+                        &node.block.transactions[1..],
+                        node.height,
+                    )
+                    .map_err(|error| ChainError::ReorgFailed {
+                        hash: node.hash,
+                        error: error.to_string(),
+                    })?;
+            }
+            staged
+        };
+
+        // Authoritative validation must happen before any chain-tree or UTXO
+        // mutation, including storing a lower-work fork candidate.
+        if let Err(error) = validate_block_authoritative(&block, height, &parent_utxo) {
+            self.invalid_blocks.insert(block_hash);
+            return Err(match error {
+                ConsensusError::InvalidCoinbaseReward {
+                    subsidy,
+                    fees,
+                    output,
+                } => ChainError::InvalidCoinbaseReward {
+                    subsidy,
+                    fees,
+                    output,
+                },
+                ConsensusError::InvalidTransactionCommitment { expected, actual } => {
+                    ChainError::InvalidTransactionCommitment { expected, actual }
+                }
+                other => ChainError::ReorgFailed {
+                    hash: block_hash,
+                    error: other.to_string(),
+                },
+            });
+        }
+
         // 3. Work computation
         let target = Target::from_compact(block.header.difficulty_target);
         let b_work = block_work(&target);
@@ -373,6 +468,29 @@ impl ChainTree {
         // Apply all blocks in connected_nodes
         let mut connected_blocks = Vec::new();
         for node in &connected_nodes {
+            if let Err(error) = validate_block_authoritative(&node.block, node.height, &staged_utxo)
+            {
+                self.invalid_blocks.insert(node.hash);
+                self.invalid_blocks.insert(block_hash);
+                return Err(match error {
+                    ConsensusError::InvalidCoinbaseReward {
+                        subsidy,
+                        fees,
+                        output,
+                    } => ChainError::InvalidCoinbaseReward {
+                        subsidy,
+                        fees,
+                        output,
+                    },
+                    ConsensusError::InvalidTransactionCommitment { expected, actual } => {
+                        ChainError::InvalidTransactionCommitment { expected, actual }
+                    }
+                    other => ChainError::ReorgFailed {
+                        hash: node.hash,
+                        error: other.to_string(),
+                    },
+                });
+            }
             if let Err(err) = verifier.verify_block_transactions(&node.block, &staged_utxo) {
                 self.invalid_blocks.insert(node.hash);
                 self.invalid_blocks.insert(block_hash);

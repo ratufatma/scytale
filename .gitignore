@@ -49,6 +49,9 @@ explorer/.turbo/
 # Secret and Genesis keys
 .genesis_keys.json
 *.key.json
+p2p_key.dat
+known_peers.json
+*.dat
 
 # Python wrapper (apps/scytale-py)
 apps/scytale-py/.venv/

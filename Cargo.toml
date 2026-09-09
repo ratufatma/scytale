@@ -35,8 +35,6 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 crossbeam-channel = "0.5"
 ureq = { version = "2.10", features = ["json", "tls"] }
 bip39 = "2.1"
-async-nats = "0.38"
-futures = "0.3"
 
 [profile.release.package.scytale-contract-vault]
 opt-level = "z"

@@ -165,31 +165,52 @@ impl UtxoSet {
         Ok(())
     }
 
-    /// Applies a block of transactions atomically (coinbase + standard transactions).
+    /// Applies a block atomically using the canonical state transition order:
+    /// 1. index 0 coinbase
+    /// 2. non-coinbase transactions in block order
     ///
     /// If any transaction fails, the entire state transition rolls back completely.
-    /// Returns the total fees collected from all transactions in the block.
-    pub fn apply_block_transactions(
-        &mut self,
-        coinbase: &Transaction,
-        txs: &[Transaction],
-        block_height: u64,
-    ) -> Result<u64, UtxoError> {
+    /// Returns the total fees collected from all non-coinbase transactions in the block.
+    pub fn apply_block(&mut self, txs: &[Transaction], block_height: u64) -> Result<u64, UtxoError> {
+        if txs.is_empty() {
+            return Err(UtxoError::TxError(crate::error::TransactionError::EmptyOutputs));
+        }
+
         let mut staging = self.clone();
 
-        staging.apply_coinbase(coinbase, block_height)?;
+        if !txs[0].is_coinbase() {
+            return Err(UtxoError::InvalidCoinbasePlacement);
+        }
+
+        staging.apply_coinbase(&txs[0], block_height)?;
 
         let mut total_fees: u64 = 0;
-        for tx in txs {
+        for tx in txs.iter().skip(1) {
+            if tx.is_coinbase() {
+                return Err(UtxoError::InvalidCoinbasePlacement);
+            }
             let fee = staging.apply_transaction(tx, block_height)?;
             total_fees = total_fees
                 .checked_add(fee)
                 .ok_or(UtxoError::ArithmeticOverflow)?;
         }
 
-        // All succeeded, commit atomically
         *self = staging;
         Ok(total_fees)
+    }
+
+    /// Applies a block represented as explicit coinbase + list of non-coinbase
+    /// transactions, using the canonical `apply_block` transition order.
+    pub fn apply_block_transactions(
+        &mut self,
+        coinbase: &Transaction,
+        txs: &[Transaction],
+        block_height: u64,
+    ) -> Result<u64, UtxoError> {
+        let mut all = Vec::with_capacity(txs.len() + 1);
+        all.push(coinbase.clone());
+        all.extend_from_slice(txs);
+        self.apply_block(&all, block_height)
     }
 
     /// Computes the canonical Merkle root for the entire in-memory UTXO set.

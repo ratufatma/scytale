@@ -19,7 +19,7 @@
 
 **Temuan kunci:**
 - Semua test suite hardening **PASS**: codec fuzz (5), script fuzz (5), reorg depth (8), memory limits (4), wallet mnemonic (2 di antara 8), pin vault (2).
-- Go P2P daemon **tidak ada** — konsisten dengan temuan sebelumnya bahwa transport sudah dimigrasi ke Rust/NATS (commit `2a53e14`). Work Record 47 item #1 disalin ke dokumentasi arsip tanpa dasar kode.
+- Go P2P daemon **tidak ada** — transport broker lama sudah dihapus. Work Record 47 item #1 disalin ke dokumentasi arsip tanpa dasar kode.
 - `cargo clippy --workspace --all-targets` bersih dari error, namun ada **3 warning** (`scytale-mining`, `scytale-studio`).
 - `cargo fmt --check` menemukan **1 file tidak terformat** (`apps/scytale-cli/src/bin/generate_genesis_keys.rs`).
 - `scytale-script` dan `scytale-vm` **tidak mewarisi** workspace lint `float_arithmetic = "deny"`.
@@ -68,7 +68,7 @@ Sumber: `docs/archive/work-history/47-phase-2-network-resilience-and-consensus-h
 | 10 | `chain_reorg_tests::test_max_reorg_depth_protection` | ✅ | L.398 + 3 skenario — **lulus** (8/8) | ✅ |
 | 11 | `memory_limits_tests` | ⚠️ | ada **4** test (klaim bilang 3) — semua **lulus** | ✅ (ketlein claim) |
 
-**Konklusi Fase 2:** Reorg-depth & Wasm memory **fully implemented & tested**. Go P2P **tidak ada** → item risilien jaringan tersebut harus ditandai `NOT IMPLEMENTED`; fungsi peer-discovery kini dipegang sistem NATS/async_nats, bukan daemon Go.
+**Konklusi Fase 2:** Reorg-depth & Wasm memory **fully implemented & tested**. Go P2P **tidak ada** → item resilien jaringan tersebut harus ditandai `NOT IMPLEMENTED`; direct peer discovery belum tersedia.
 
 ---
 
@@ -130,7 +130,7 @@ Prioritas:
 2. **MEDIUM** — Tambahkan `[lints] workspace = true` ke `scytale-script` & `scytale-vm` agar `float_arithmetic` deny ikut berlaku.
 3. **MEDIUM** — Perbarui `docs/MONETARY-POLICY.md` §5/§11 (hapus model 42M), selaraskan dengan kode 94.98M/28.98M (keputusan Option A di DECISION_RECOMMENDATIONS terkait).
 4. **LOW** — `cargo fmt` pada `generate_genesis_keys.rs`; bereskan 3 warning clippy; perbaiki claim "3 test" → "4 test" di Work Record 47.
-5. **LOW** — Tandai Work Record 47 item Go P2P sebagai `SUPERSEDED` (digantikan NATS) agar tidak dikira belum dikerjakan, atau tambahkan fallback seed NATS bila diinginkan.
+5. **LOW** — Tandai Work Record 47 item Go P2P sebagai `SUPERSEDED` agar tidak dikira belum dikerjakan; direct peer transport tetap menjadi pekerjaan lanjutan.
 6. **NON-CRITICAL** — HRP `tscy` hanya jika testnet diformalkan.
 
 ---

@@ -1,13 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const BLOCKS_SUBJECT: &str = "scytale.v1.blocks.new";
-pub const TRANSACTIONS_SUBJECT: &str = "scytale.v1.mempool.tx";
-pub const HEARTBEAT_SUBJECT: &str = "scytale.v1.nodes.heartbeat";
-pub const HELLO_SUBJECT: &str = "scytale.v1.peer.hello";
-pub const SYNC_LOCATOR_SUBJECT: &str = "scytale.v1.sync.locator";
-pub const SYNC_HEADERS_SUBJECT: &str = "scytale.v1.sync.headers";
-pub const SYNC_BLOCKS_SUBJECT: &str = "scytale.v1.sync.blocks";
-
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const MAX_SYNC_ITEMS: u32 = 2_000;
 

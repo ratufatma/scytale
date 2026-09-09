@@ -213,11 +213,15 @@ fn mine_block(
     let utxo_root = staged_utxos.compute_utxo_root();
     let mut txs = vec![coinbase];
     txs.extend(non_coinbase);
+    let mut commitment_bytes = Vec::with_capacity(txs.len() * 32);
+    for tx in &txs {
+        commitment_bytes.extend_from_slice(tx.txid().as_bytes());
+    }
     // Use minimal difficulty target (regtest-style); version=1, height is tracked by ChainTree
     let header = BlockHeader::new(
         1u32,
         parent_hash,
-        Hash256::ZERO,
+        Hash256::hash(&commitment_bytes),
         utxo_root,
         timestamp,
         0x207fffff,

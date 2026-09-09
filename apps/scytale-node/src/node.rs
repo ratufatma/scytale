@@ -750,7 +750,7 @@ impl Node {
     }
 
     /// Computes the block locator hashes (exponential spacing from canonical tip to genesis)
-    /// used to negotiate Initial Block Download (IBD) synchronization over NATS.
+    /// used to negotiate Initial Block Download (IBD) synchronization.
     pub fn get_block_locator(&self) -> Result<Vec<Hash256>, NodeError> {
         let chain = self.query_canonical_chain()?;
         if chain.is_empty() {
@@ -1232,7 +1232,7 @@ fn mining_worker_loop(
                 continue;
             }
 
-            match chain.process_block(block.clone(), &mut utxos) {
+            match chain.process_block_with_verifier(block.clone(), &mut utxos, &NodeBlockVerifier) {
                 Ok(Some(reorg)) => {
                     let height = template.height;
                     let work = chain.canonical_work().0;

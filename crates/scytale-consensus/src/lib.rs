@@ -8,8 +8,8 @@ pub mod target;
 pub mod work;
 
 pub use chain::{
-    BlockNode, BlockTransactionVerifier, ChainTree, NoOpTransactionVerifier, ReorgResult,
-    DEFAULT_MAX_REORG_DEPTH,
+    transaction_commitment, validate_block_authoritative, BlockNode, BlockTransactionVerifier,
+    ChainTree, NoOpTransactionVerifier, ReorgResult, DEFAULT_MAX_REORG_DEPTH,
 };
 
 pub use difficulty::{
@@ -49,6 +49,11 @@ pub fn calculate_block_reward(height: u64) -> Quanta {
     } else {
         INITIAL_REWARD >> halvings
     }
+}
+
+/// Authoritative name for the subsidy schedule used by block validation.
+pub fn get_block_subsidy(height: u64) -> Quanta {
+    calculate_block_reward(height)
 }
 
 #[cfg(test)]

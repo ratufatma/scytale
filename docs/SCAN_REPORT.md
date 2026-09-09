@@ -43,7 +43,7 @@ Scytale is a modular Layer-1 blockchain engine written primarily in Rust with Go
 ┌──────────────────────▼───────────────────────────────────────┐
 │                      NODE DAEMON                             │
 │  scytale-node: HTTP Gateway │ IPC Server │ P2P Supervisor    │
-│  Passbook │ Block Indexer │ NATS Networking                  │
+│  Passbook │ Block Indexer │ Network Boundary                 │
 └──────┬──────────┬──────────┬──────────┬─────────────────────┘
        │          │          │          │
 ┌──────▼───┐ ┌───▼────┐ ┌──▼───┐ ┌───▼──────┐
@@ -193,9 +193,9 @@ Scytale is a modular Layer-1 blockchain engine written primarily in Rust with Go
 |-----------|--------|
 | **Files** | 14 source files, ~5,791 LOC |
 | **Purpose** | Full blockchain node daemon |
-| **Features** | HTTP REST gateway (axum), IPC server (Unix socket), P2P supervisor (Go bridge + NATS), block indexer, passbook, mining coordinator |
+| **Features** | HTTP REST gateway (axum), IPC server (Unix socket), transport-neutral network boundary, block indexer, passbook, mining coordinator |
 | **HTTP Endpoints** | `/block/<hash>`, `/blocks`, `/tx/<hash>`, `/balance/<address>`, `/status`, `/broadcast`, `/mempool`, `/passbook`, `/faucet` |
-| **Key Deps** | `axum`, `tower-http`, `async-nats`, `crossbeam-channel`, `tokio` |
+| **Key Deps** | `axum`, `tower-http`, `crossbeam-channel`, `tokio` |
 
 ### 2. `scytale-cli` (Rust)
 | Attribute | Detail |
@@ -341,7 +341,7 @@ scytale-script ◄──────┐   │                                   
 3. **Integer-only arithmetic** for deterministic fee market (zero-float policy)
 4. **ACID storage** via redb with atomic block commits
 5. **eUTXO smart contracts** running in wasmi Wasm VM with fuel-based gas metering
-6. **Dual networking**: NATS async messaging + Go P2P daemon bridge
+6. **Networking**: transport-neutral boundary; direct peer transport pending
 7. **Bech32 addresses** (`scy1...`) with human-readable encoding
 8. **BIP-39 mnemonic** support for wallet recovery
 9. **Bilingual UI** (Indonesian/English) across CLI, Studio, and Explorer

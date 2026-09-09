@@ -124,25 +124,12 @@ pub fn build_template(
     let mut transactions = vec![coinbase];
     transactions.extend(selected_txs);
 
-    // Simulate applying transactions and coinbase to calculate prospective utxo_root
+    // Canonical state transition for the template: coinbase first, then non-coinbase
+    // transactions in block order, matching the authoritative validation path exactly.
     let mut prospective_utxos = utxos.clone();
-    for tx in &transactions {
-        if !tx.is_coinbase() {
-            for input in &tx.inputs {
-                prospective_utxos.remove(&input.previous_output);
-            }
-        }
-        let txid = tx.txid();
-        for (idx, output) in tx.outputs.iter().enumerate() {
-            if output.locking_condition.first() != Some(&0x6a) {
-                let op = OutPoint::new(txid, idx as u32);
-                prospective_utxos.insert(
-                    op,
-                    scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
-                );
-            }
-        }
-    }
+    prospective_utxos
+        .apply_block(&transactions, height)
+        .map_err(|_| MiningError::ArithmeticOverflow)?;
     let utxo_root = prospective_utxos.compute_utxo_root();
 
     Ok(BlockTemplate {
