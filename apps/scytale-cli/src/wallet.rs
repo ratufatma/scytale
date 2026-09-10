@@ -4,7 +4,7 @@
 //! strict POSIX file permissions (0600), and ScytaleScript P2PKH template builders.
 
 use ed25519_dalek::SigningKey;
-use scytale_account::{decrypt_key, EncryptedKeyEnvelope};
+use scytale_account::{decrypt_key, encrypt_key, EncryptedKeyEnvelope};
 use scytale_core::Address;
 use scytale_primitives::{from_hex, to_hex};
 use scytale_script::{builder::ScriptBuilder, opcode::OpCode};
@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Debug, Error)]
 pub enum WalletError {
@@ -23,6 +24,10 @@ pub enum WalletError {
     Hex(String),
     #[error("Invalid key length: expected {expected} bytes, found {found}")]
     InvalidKeyLength { expected: usize, found: usize },
+    #[error("Wallet does not contain a plaintext private key")]
+    MissingPrivateKey,
+    #[error("Encrypted wallet still contains plaintext secrets")]
+    EncryptedWalletContainsPlaintext,
     #[error("Invalid address format: {0}")]
     InvalidAddress(String),
     #[error("Wallet file already exists at '{0}'. Use a different path or back it up.")]
@@ -45,7 +50,8 @@ pub struct WalletFile {
     pub version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mnemonic: Option<String>,
-    pub private_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_key: Option<String>,
     pub public_key: String,
     #[serde(alias = "p2pkh_address")]
     pub address: String,
@@ -90,7 +96,7 @@ impl WalletFile {
         let wallet = Self {
             version: 1,
             mnemonic: None,
-            private_key: to_hex(&privkey_bytes),
+            private_key: Some(to_hex(&privkey_bytes)),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
             account_number: None,
@@ -142,7 +148,7 @@ impl WalletFile {
         let wallet = Self {
             version: 2,
             mnemonic: Some(phrase.clone()),
-            private_key: to_hex(&privkey_bytes),
+            private_key: Some(to_hex(&privkey_bytes)),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
             account_number: None,
@@ -184,7 +190,7 @@ impl WalletFile {
         let wallet = Self {
             version: 2,
             mnemonic: Some(clean_phrase),
-            private_key: to_hex(&privkey_bytes),
+            private_key: Some(to_hex(&privkey_bytes)),
             public_key: to_hex(&pubkey_bytes),
             address: bech32_addr,
             account_number: None,
@@ -201,20 +207,36 @@ impl WalletFile {
         if !path.exists() {
             return Err(WalletError::FileNotFound(path.to_path_buf()));
         }
-        let content = std::fs::read_to_string(path)?;
-        let wallet: Self = serde_json::from_str(&content)?;
+        let content = Zeroizing::new(std::fs::read_to_string(path)?);
+        let mut wallet: Self = serde_json::from_str(&content)?;
+        if wallet.encrypted_key.is_some()
+            && (wallet.private_key.is_some() || wallet.mnemonic.is_some())
+        {
+            wallet.clear_plaintext_secrets();
+            wallet.save_to(path)?;
+        }
         Ok(wallet)
     }
 
     /// Saves the wallet to disk with restrictive 0600 POSIX permissions.
     pub fn save_to(&self, path: &Path) -> Result<(), WalletError> {
+        if self.encrypted_key.is_some()
+            && (self.private_key.is_some() || self.mnemonic.is_some())
+        {
+            return Err(WalletError::EncryptedWalletContainsPlaintext);
+        }
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)?;
             }
         }
 
-        let json = serde_json::to_string_pretty(self)?;
+        let json = Zeroizing::new(serde_json::to_string_pretty(self)?);
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("wallet.json");
+        let temp_path = path.with_file_name(format!(".{file_name}.tmp-{}", std::process::id()));
 
         #[cfg(unix)]
         {
@@ -225,21 +247,57 @@ impl WalletFile {
                 .create(true)
                 .truncate(true)
                 .mode(0o600)
-                .open(path)?;
+                .open(&temp_path)?;
             file.write_all(json.as_bytes())?;
             file.flush()?;
         }
         #[cfg(not(unix))]
         {
-            std::fs::write(path, json.as_bytes())?;
+            std::fs::write(&temp_path, json.as_bytes())?;
         }
+
+        std::fs::rename(&temp_path, path)?;
 
         Ok(())
     }
 
+    /// Encrypts the private key and removes plaintext secrets from this wallet.
+    pub fn encrypt(&mut self, passphrase: &str) -> Result<(), WalletError> {
+        let private_key = self
+            .private_key
+            .as_ref()
+            .ok_or(WalletError::MissingPrivateKey)?;
+        let key_id = Zeroizing::new(
+            from_hex(private_key).map_err(|error| WalletError::Hex(error.to_string()))?,
+        );
+        let envelope = encrypt_key(&key_id, passphrase)
+            .map_err(|error| WalletError::Vault(error.to_string()))?;
+
+        self.encrypted_key = Some(envelope);
+        self.clear_plaintext_secrets();
+        Ok(())
+    }
+
+    fn clear_plaintext_secrets(&mut self) {
+        if let Some(private_key) = self.private_key.as_mut() {
+            private_key.zeroize();
+        }
+        self.private_key = None;
+        if let Some(mnemonic) = self.mnemonic.as_mut() {
+            mnemonic.zeroize();
+        }
+        self.mnemonic = None;
+    }
+
     /// Reconstructs the Ed25519 `SigningKey` from the hex seed.
     pub fn signing_key(&self) -> Result<SigningKey, WalletError> {
-        let bytes = from_hex(&self.private_key).map_err(|e| WalletError::Hex(e.to_string()))?;
+        let private_key = self
+            .private_key
+            .as_ref()
+            .ok_or(WalletError::MissingPrivateKey)?;
+        let bytes = Zeroizing::new(
+            from_hex(private_key).map_err(|e| WalletError::Hex(e.to_string()))?,
+        );
         if bytes.len() != 32 {
             return Err(WalletError::InvalidKeyLength {
                 expected: 32,
@@ -252,12 +310,15 @@ impl WalletFile {
     }
 
     pub fn signing_key_with_pin(&self, pin: &str) -> Result<SigningKey, WalletError> {
-        let key_bytes: Vec<u8> = if let Some(envelope) = &self.encrypted_key {
+        let key_bytes = if let Some(envelope) = &self.encrypted_key {
             decrypt_key(envelope, pin)
                 .map_err(|error| WalletError::Vault(error.to_string()))?
-                .to_vec()
         } else {
-            from_hex(&self.private_key).map_err(|e| WalletError::Hex(e.to_string()))?
+            let private_key = self
+                .private_key
+                .as_ref()
+                .ok_or(WalletError::MissingPrivateKey)?;
+            Zeroizing::new(from_hex(private_key).map_err(|e| WalletError::Hex(e.to_string()))?)
         };
         if key_bytes.len() != 32 {
             return Err(WalletError::InvalidKeyLength {
@@ -340,6 +401,7 @@ pub fn build_op_return_script(data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ed25519_dalek::{Signer, Verifier};
     use tempfile::tempdir;
 
     #[test]
@@ -349,7 +411,7 @@ mod tests {
 
         let wallet = WalletFile::generate_new(&path, false).unwrap();
         assert_eq!(wallet.version, 1);
-        assert_eq!(wallet.private_key.len(), 64);
+        assert_eq!(wallet.private_key.as_ref().unwrap().len(), 64);
         assert_eq!(wallet.public_key.len(), 64);
         assert!(wallet.address.starts_with("scy1"));
 
@@ -393,5 +455,61 @@ mod tests {
         let pubkey = [0x88u8; 32];
         let unlock_script = build_p2pkh_unlocking_script(&sig, &pubkey);
         assert!(!unlock_script.is_empty());
+    }
+
+    #[test]
+    fn encrypted_wallet_serialization_excludes_plaintext_and_unlocks() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("encrypted-wallet.json");
+        let (mut wallet, phrase) = WalletFile::generate_with_mnemonic(&path, false, 12).unwrap();
+        let private_key = wallet.private_key.clone().unwrap();
+
+        wallet.encrypt("123456").unwrap();
+        wallet.save_to(&path).unwrap();
+
+        let serialized = std::fs::read_to_string(&path).unwrap();
+        assert!(!serialized.contains(&private_key));
+        assert!(!serialized.contains(&phrase));
+        assert!(wallet.private_key.is_none());
+        assert!(wallet.mnemonic.is_none());
+
+        let loaded = WalletFile::load_from(&path).unwrap();
+        assert!(loaded.private_key.is_none());
+        assert!(loaded.mnemonic.is_none());
+        let signing_key = loaded.signing_key_with_pin("123456").unwrap();
+        let message = b"wallet unlock regression";
+        let signature = signing_key.sign(message);
+        signing_key.verifying_key().verify(message, &signature).unwrap();
+    }
+
+    #[test]
+    fn loading_legacy_encrypted_wallet_rewrites_without_plaintext() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("legacy-encrypted-wallet.json");
+        let (wallet, phrase) = WalletFile::generate_with_mnemonic(
+            &dir.path().join("source-wallet.json"),
+            false,
+            12,
+        )
+        .unwrap();
+        let private_key = wallet.private_key.clone().unwrap();
+        let envelope = encrypt_key(&from_hex(&private_key).unwrap(), "123456").unwrap();
+        let legacy = serde_json::json!({
+            "version": wallet.version,
+            "mnemonic": phrase,
+            "private_key": private_key,
+            "public_key": wallet.public_key,
+            "address": wallet.address,
+            "encrypted_key": envelope,
+        });
+        std::fs::write(&path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+
+        let loaded = WalletFile::load_from(&path).unwrap();
+        let rewritten = std::fs::read_to_string(&path).unwrap();
+        assert!(loaded.private_key.is_none());
+        assert!(loaded.mnemonic.is_none());
+        assert!(!rewritten.contains(&private_key));
+        assert!(!rewritten.contains(&phrase));
+        loaded.signing_key_with_pin("123456").unwrap();
     }
 }

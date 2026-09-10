@@ -11,7 +11,7 @@ use client::{send_node_request, CliClientError};
 use contract::{handle_contract, ContractArgs};
 use ed25519_dalek::Signer;
 use identity::IdentityStore;
-use scytale_account::{derive_candidate, encrypt_key};
+use scytale_account::derive_candidate;
 use scytale_bridge::{NodeRequest, NodeResponse};
 use scytale_core::{Hash256, OutPoint, Transaction, TxIn, TxOut, TRANSACTION_VERSION_1};
 use scytale_primitives::from_hex;
@@ -733,13 +733,7 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                 } else {
                     WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?
                 };
-                let key_id = from_hex(&wallet.private_key).map_err(|error| {
-                    CliClientError::User(format!("Invalid private key: {error}"))
-                })?;
-                wallet.encrypted_key = Some(
-                    encrypt_key(&key_id, &pin)
-                        .map_err(|error| CliClientError::User(error.to_string()))?,
-                );
+                wallet.encrypt(&pin).map_err(CliClientError::Wallet)?;
                 let registered = register_account(&mut wallet, &cli.node_url)?;
                 wallet.save_to(&path).map_err(CliClientError::Wallet)?;
                 formatter::print_human_wallet_created(

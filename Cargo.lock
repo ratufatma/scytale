@@ -5006,6 +5006,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "ureq",
+ "zeroize",
 ]
 
 [[package]]

@@ -28,6 +28,7 @@ tokio = { workspace = true }
 bincode = { workspace = true }
 hex = { workspace = true }
 bip39 = { workspace = true }
+zeroize = { workspace = true }
 ureq = { workspace = true }
 rpassword = "7.3"
 scytale-node = { path = "../scytale-node" }
