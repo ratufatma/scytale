@@ -26,6 +26,8 @@ network/bin/
 *.redb.tmp
 *.db
 *.sock
+p2p_key.dat
+known_peers.json
 peers.json
 seeder_nodes.json
 data/
