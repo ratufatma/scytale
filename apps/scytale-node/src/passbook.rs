@@ -19,7 +19,7 @@ use scytale_core::{
 use scytale_mempool::MempoolEntry;
 use scytale_storage::AddressTxRecord;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 /// Conversion constant: 1 SCY = 100,000,000 quanta.
 pub const QUANTA_PER_SCY: u64 = 100_000_000;
@@ -497,21 +497,13 @@ impl Passbook {
     ) -> Result<Vec<ProvenanceStep>, PassbookError> {
         self.require_ready(node)?;
 
-        let chain = node.query_canonical_chain()?;
-        let mut tx_height: HashMap<Hash256, u64> = HashMap::new();
-        for (block, height) in &chain {
-            for tx in &block.transactions {
-                tx_height.insert(tx.txid(), *height);
-            }
-        }
-
         let mut rev: Vec<ProvenanceStep> = Vec::new();
         let mut cur = *outpoint;
         loop {
             let tx = node
                 .lookup_transaction(&cur.txid)?
                 .ok_or_else(|| PassbookError::TransactionNotFound { txid: cur.txid })?;
-            let height = tx_height.get(&cur.txid).copied().unwrap_or(0);
+            let height = node.canonical_transaction_height(&cur.txid)?.unwrap_or(0);
             let value = tx
                 .outputs
                 .get(cur.index as usize)
@@ -656,17 +648,10 @@ fn project_confirmed_history_via_index(
 ) -> Result<(), PassbookError> {
     let storage = node.storage_handle();
 
-    let chain = node.query_canonical_chain().unwrap_or_default();
-    let block_timestamps: HashMap<u64, u64> = chain
-        .iter()
-        .map(|(b, h)| (*h, b.header.timestamp))
-        .collect();
-
     // Query storage ADDRESS_TX_INDEX for each address owned by this passbook
     let mut height_records: Vec<(u64, AddressTxRecord)> = Vec::new();
     for addr in &passbook.addresses {
-        let records =
-            storage.get_address_transactions_with_height(addr, 0, tip_height, usize::MAX)?;
+        let records = storage.get_address_transactions_with_height(addr, 0, tip_height, 100)?;
         height_records.extend(records);
     }
 
@@ -686,7 +671,11 @@ fn project_confirmed_history_via_index(
             None => continue,
         };
 
-        let timestamp = block_timestamps.get(&height).copied().unwrap_or(0);
+        let timestamp = node
+            .query_canonical_range(height, 1, true)?
+            .first()
+            .map(|(block, _)| block.header.timestamp)
+            .unwrap_or(0);
         let confirmations = tip_height.saturating_sub(height).saturating_add(1);
         let status = EntryStatus::Confirmed { confirmations };
 

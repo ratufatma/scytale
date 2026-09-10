@@ -3,7 +3,7 @@
 //! Provides real-time block explorer and monitoring endpoints over HTTP.
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     response::Html,
     routing::{get, post},
@@ -25,7 +25,7 @@ use crate::node::Node;
 use crate::passbook::Passbook;
 
 /// Default HTTP Gateway bind address.
-pub const DEFAULT_HTTP_BIND: &str = "0.0.0.0:8332";
+pub const DEFAULT_HTTP_BIND: &str = "127.0.0.1:8332";
 
 /// Embedded static Web Explorer HTML single-page application.
 const EXPLORER_HTML: &str = include_str!("../../../explorer/index.html");
@@ -437,7 +437,7 @@ async fn get_status(State(node): State<Arc<Node>>) -> Json<StatusResponse> {
 async fn get_block_tip(
     State(node): State<Arc<Node>>,
 ) -> Result<Json<BlockDetailResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let chain = node.query_canonical_chain().map_err(|e| {
+    let tip = node.storage_handle().get_canonical_tip().map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -445,17 +445,33 @@ async fn get_block_tip(
             }),
         )
     })?;
-
-    if let Some((block, height)) = chain.last() {
-        Ok(Json(block_to_detail(block, *height)))
-    } else {
-        Err((
+    let (hash, height) = tip.ok_or_else(|| {
+        (
             StatusCode::NOT_FOUND,
             Json(ErrorResponse {
                 error: "No canonical tip found".into(),
             }),
-        ))
-    }
+        )
+    })?;
+    let block = node
+        .get_block(&hash)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "canonical tip block missing".into(),
+                }),
+            )
+        })?;
+    Ok(Json(block_to_detail(&block, height)))
 }
 
 #[derive(Debug, Deserialize)]
@@ -466,20 +482,27 @@ struct BlocksQuery {
     order: Option<String>,
 }
 
+fn strict_limit(
+    limit: Option<usize>,
+    default: usize,
+) -> Result<usize, (StatusCode, Json<ErrorResponse>)> {
+    match limit {
+        Some(value) if !(1..=100).contains(&value) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "limit must be between 1 and 100".into(),
+            }),
+        )),
+        Some(value) => Ok(value),
+        None => Ok(default),
+    }
+}
+
 async fn get_blocks(
     State(node): State<Arc<Node>>,
     Query(query): Query<BlocksQuery>,
 ) -> Result<Json<Vec<BlockSummaryResponse>>, (StatusCode, Json<ErrorResponse>)> {
-    let chain = node.query_canonical_chain().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
-
-    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let limit = strict_limit(query.limit, 20)?;
     let offset = query.offset.unwrap_or(0);
     let is_asc = query
         .order
@@ -487,25 +510,40 @@ async fn get_blocks(
         .map(|s| s.eq_ignore_ascii_case("asc"))
         .unwrap_or(false);
 
-    let filtered: Vec<&(Block, u64)> = match query.from_height {
-        Some(from_h) if is_asc => chain.iter().filter(|(_, h)| *h >= from_h).collect(),
-        Some(from_h) => chain.iter().filter(|(_, h)| *h <= from_h).collect(),
-        None => chain.iter().collect(),
-    };
-
-    let selected: Vec<&(Block, u64)> = if is_asc {
-        filtered.into_iter().skip(offset).take(limit).collect()
+    let anchor = query.from_height.unwrap_or(if is_asc {
+        0
     } else {
-        filtered
-            .into_iter()
-            .rev()
-            .skip(offset)
-            .take(limit)
-            .collect()
+        node.storage_handle()
+            .get_canonical_tip()
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: e.to_string(),
+                    }),
+                )
+            })?
+            .map(|(_, height)| height)
+            .unwrap_or(0)
+    });
+    let start = if is_asc {
+        anchor.saturating_add(offset as u64)
+    } else {
+        anchor.saturating_sub(offset as u64)
     };
+    let selected = node
+        .query_canonical_range(start, limit, is_asc)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
 
     let summaries = selected
-        .into_iter()
+        .iter()
         .map(|(b, h)| {
             let total_quanta: u64 = b
                 .transactions
@@ -534,20 +572,20 @@ async fn get_block_by_identifier(
     State(node): State<Arc<Node>>,
     Path(identifier): Path<String>,
 ) -> Result<Json<BlockDetailResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let chain = node.query_canonical_chain().map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
-
     // 1. Check if identifier is a height number
     if let Ok(height) = identifier.parse::<u64>() {
-        if let Some((block, h)) = chain.iter().find(|(_, h)| *h == height) {
-            return Ok(Json(block_to_detail(block, *h)));
-        } else if identifier.chars().all(|c| c.is_ascii_digit()) && identifier.len() != 64 {
+        let blocks = node.query_canonical_range(height, 1, true).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
+        if let Some((block, block_height)) = blocks.into_iter().find(|(_, h)| *h == height) {
+            return Ok(Json(block_to_detail(&block, block_height)));
+        }
+        if identifier.chars().all(|c| c.is_ascii_digit()) && identifier.len() != 64 {
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {
@@ -567,11 +605,6 @@ async fn get_block_by_identifier(
             }),
         )
     })?;
-
-    // Check canonical chain first
-    if let Some((block, h)) = chain.iter().find(|(b, _)| b.header.hash() == hash) {
-        return Ok(Json(block_to_detail(block, *h)));
-    }
 
     // Check storage for side branch or orphaned block
     if let Ok(Some(block)) = node.storage_handle().get_block(&hash) {
@@ -613,17 +646,33 @@ async fn get_transaction(
 
     // 2. Check storage
     if let Ok(Some(tx)) = node.lookup_transaction(&txid) {
-        let chain = node.query_canonical_chain().unwrap_or_default();
-        let (b_hash, b_height) = chain
-            .iter()
-            .find(|(b, _)| b.transactions.iter().any(|t| t.txid() == txid))
-            .map(|(b, h)| (Some(format!("0x{}", b.header.hash())), Some(*h)))
-            .unwrap_or((None, None));
-
+        let block_height = node.canonical_transaction_height(&txid).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: e.to_string(),
+                }),
+            )
+        })?;
+        let block_hash = if let Some(height) = block_height {
+            node.query_canonical_range(height, 1, true)
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: e.to_string(),
+                        }),
+                    )
+                })?
+                .first()
+                .map(|(block, _)| format!("0x{}", block.header.hash()))
+        } else {
+            None
+        };
         return Ok(Json(tx_to_detail(
             &tx,
-            b_height,
-            b_hash.as_deref(),
+            block_height,
+            block_hash.as_deref(),
             "Confirmed",
         )));
     }
@@ -715,7 +764,7 @@ async fn get_passbook_api_view(
         view.entries
             .retain(|e| e.block_height.map(|h| h <= to).unwrap_or(true));
     }
-    let limit = query.limit.unwrap_or(50);
+    let limit = strict_limit(query.limit, 50)?;
     if view.entries.len() > limit {
         view.entries.truncate(limit);
     }
@@ -726,6 +775,7 @@ async fn get_passbook_api_view(
 #[derive(Debug, Clone, Deserialize)]
 pub struct PassbookStatementApiQuery {
     pub address: String,
+    pub limit: Option<usize>,
 }
 
 async fn get_passbook_api_statement(
@@ -752,7 +802,7 @@ async fn get_passbook_api_statement(
     let mut passbook = Passbook::from_address(addr.clone());
     passbook.add_owned_lock(p2pkh_script);
 
-    let statement = passbook.generate_statement(&node, &addr).map_err(|e| {
+    let mut statement = passbook.generate_statement(&node, &addr).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -761,6 +811,8 @@ async fn get_passbook_api_statement(
         )
     })?;
 
+    let limit = strict_limit(query.limit, 50)?;
+    statement.entries.truncate(limit);
     Ok(Json(statement))
 }
 
@@ -840,10 +892,17 @@ async fn get_provenance(
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct UtxoQuery {
+    limit: Option<usize>,
+}
+
 async fn get_utxos(
     State(node): State<Arc<Node>>,
     Path(locking_script_or_addr): Path<String>,
+    Query(query): Query<UtxoQuery>,
 ) -> Result<Json<Vec<scytale_bridge::UtxoDto>>, (StatusCode, Json<ErrorResponse>)> {
+    let limit = strict_limit(query.limit, 100)?;
     let lock_bytes = if locking_script_or_addr
         .to_ascii_lowercase()
         .starts_with("scy1")
@@ -888,6 +947,7 @@ async fn get_utxos(
             block_height: entry.block_height,
             is_coinbase: entry.is_coinbase,
         })
+        .take(limit)
         .collect();
 
     Ok(Json(dtos))
@@ -972,6 +1032,7 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/api/v1/passbook/:locking_script_hex", get(get_passbook))
         .route("/api/v1/utxos/:locking_script_hex", get(get_utxos))
         .route("/api/v1/provenance/:txid/:index", get(get_provenance))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
         .with_state(node)
 }

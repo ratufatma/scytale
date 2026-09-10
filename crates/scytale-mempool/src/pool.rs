@@ -14,6 +14,8 @@ pub const DEFAULT_MAX_MEMPOOL_BYTES: usize = 5_000_000;
 
 /// Default minimum relay fee rate floor in milli-quanta per byte (setara 1 quantum/byte).
 pub const DEFAULT_MIN_RELAY_FEE_RATE: u64 = 1_000;
+pub const MAX_ANCESTORS: usize = 25;
+pub const MAX_DESCENDANTS: usize = 25;
 
 /// In-memory state machine for local unconfirmed pending transactions,
 /// prioritized by fee density with deterministic capacity enforcement and eviction.
@@ -264,6 +266,35 @@ impl Mempool {
             }
         }
 
+        let mut ancestor_count = parents.len();
+        let mut pending = parents.iter().copied().collect::<Vec<_>>();
+        let mut visited = parents.clone();
+        while let Some(parent) = pending.pop() {
+            if let Some(grandparents) = self.child_to_parents.get(&parent) {
+                for grandparent in grandparents {
+                    if visited.insert(*grandparent) {
+                        ancestor_count = ancestor_count.saturating_add(1);
+                        pending.push(*grandparent);
+                    }
+                }
+            }
+        }
+        if ancestor_count > MAX_ANCESTORS {
+            return Err(MempoolError::MempoolFull {
+                fee_rate: 0,
+                lowest_fee_rate: MAX_ANCESTORS as u64,
+            });
+        }
+        for parent in &parents {
+            let descendants = self.parent_to_children.get(parent).map_or(0, HashSet::len);
+            if descendants >= MAX_DESCENDANTS {
+                return Err(MempoolError::MempoolFull {
+                    fee_rate: 0,
+                    lowest_fee_rate: MAX_DESCENDANTS as u64,
+                });
+            }
+        }
+
         // 5. Authorization verification
         verify_transaction_authorization(&tx, &utxo_entries, verifier)
             .map_err(MempoolError::from)?;
@@ -435,12 +466,19 @@ impl Mempool {
         canonical_utxos: &UtxoSet,
         verifier: &V,
         current_timestamp: u64,
-    ) {
+    ) -> Vec<(Hash256, MempoolError)> {
+        let mut rejected = Vec::new();
         for tx in disconnected_txs {
             if tx.is_coinbase() {
                 continue;
             }
-            let _ = self.admit_transaction(tx, canonical_utxos, verifier, current_timestamp);
+            let txid = tx.txid();
+            if let Err(error) =
+                self.admit_transaction(tx, canonical_utxos, verifier, current_timestamp)
+            {
+                rejected.push((txid, error));
+            }
         }
+        rejected
     }
 }

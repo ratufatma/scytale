@@ -66,7 +66,16 @@ fn build_reward_block(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let header = BlockHeader::new(1, prev, commitment, utxo_root, now, EASY_TARGET, nonce);
+    let timestamp = now.saturating_add(height);
+    let header = BlockHeader::new(
+        1,
+        prev,
+        commitment,
+        utxo_root,
+        timestamp,
+        EASY_TARGET,
+        nonce,
+    );
     Block::new(header, vec![coinbase])
 }
 

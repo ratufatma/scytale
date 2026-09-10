@@ -1,4 +1,5 @@
 use ed25519_dalek::Signer;
+use scytale_consensus::{mine_test_header, Target};
 use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoEntry, UtxoSet,
     TRANSACTION_VERSION_1,
@@ -126,6 +127,7 @@ fn test_node_op_return_output_handling() {
     let config = NodeConfig {
         data_dir: temp.path().to_path_buf(),
         mining_enabled: false,
+        genesis_difficulty_target: 0x207fffff,
         miner_payout_script: vec![0x01, 0x02, 0x03],
         ..NodeConfig::default()
     };
@@ -144,7 +146,7 @@ fn test_node_op_return_output_handling() {
         scytale_core::UtxoEntry::new(TxOut::new(subsidy1, vec![0x01, 0x02, 0x03]), 1, true),
     );
     let utxo_root1 = staging1.compute_utxo_root();
-    let header1 = BlockHeader::new(
+    let mut header1 = BlockHeader::new(
         1,
         genesis_tip,
         transaction_commitment(std::slice::from_ref(&cb1)),
@@ -153,6 +155,11 @@ fn test_node_op_return_output_handling() {
         0x207fffff,
         0,
     );
+    assert!(mine_test_header(
+        &mut header1,
+        &Target::from_compact(0x207fffff),
+        10_000_000
+    ));
     let block1 = Block::new(header1, vec![cb1.clone()]);
     assert!(node.submit_external_block(block1).unwrap());
     assert_eq!(node.canonical_height(), 1);
@@ -187,7 +194,7 @@ fn test_node_op_return_output_handling() {
     );
     let utxo_root2 = staging2.compute_utxo_root();
     let transactions2 = vec![cb2, transfer_tx];
-    let header2 = BlockHeader::new(
+    let mut header2 = BlockHeader::new(
         2,
         tip1,
         transaction_commitment(&transactions2),
@@ -196,6 +203,11 @@ fn test_node_op_return_output_handling() {
         0x207fffff,
         0,
     );
+    assert!(mine_test_header(
+        &mut header2,
+        &Target::from_compact(0x207fffff),
+        10_000_000
+    ));
     let block2 = Block::new(header2, transactions2);
 
     assert!(node.submit_external_block(block2).unwrap());

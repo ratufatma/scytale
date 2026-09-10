@@ -27,6 +27,10 @@ pub enum DifficultyError {
 
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum ChainError {
+    #[error("difficulty validation failed: {0}")]
+    Difficulty(#[from] DifficultyError),
+    #[error("invalid proof of work: {0}")]
+    InvalidPoW(#[from] PowError),
     #[error("invalid block in branch: hash {hash:?}, reason: {reason}")]
     InvalidBranchBlock { hash: Hash256, reason: String },
     #[error("common ancestor not found between tip A {tip_a:?} and tip B {tip_b:?}")]
@@ -60,6 +64,14 @@ pub enum ChainError {
     },
     #[error("invalid transaction commitment: expected {expected:?}, got {actual:?}")]
     InvalidTransactionCommitment { expected: Hash256, actual: Hash256 },
+    #[error("invalid block timestamp: {0}")]
+    InvalidTimestamp(String),
+    #[error("block timestamp must be strictly greater than parent timestamp")]
+    NonMonotonicTimestamp,
+    #[error("block timestamp exceeds the maximum future drift")]
+    BlockTooFarInFuture,
+    #[error("block timestamp precedes median time past")]
+    TimestampBeforeMedianTimePast,
 }
 
 #[derive(Debug, Clone, Error)]

@@ -56,7 +56,14 @@ fn build_extending_block(
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let header = BlockHeader::new(1, prev, commitment, utxo_root, now, EASY_TARGET, 0);
+    let parent_timestamp = node
+        .get_block(&prev)
+        .unwrap()
+        .expect("parent block must be available")
+        .header
+        .timestamp;
+    let timestamp = now.max(parent_timestamp.saturating_add(1));
+    let header = BlockHeader::new(1, prev, commitment, utxo_root, timestamp, EASY_TARGET, 0);
     Block::new(header, vec![coinbase])
 }
 

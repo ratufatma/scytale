@@ -154,7 +154,7 @@ impl UtxoSet {
         }
 
         // Check overflow
-        let _ = tx.total_output_quanta()?;
+        tx.total_output_quanta()?;
 
         let txid = tx.txid();
         for (index, output) in tx.outputs.iter().enumerate() {

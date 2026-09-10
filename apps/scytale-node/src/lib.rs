@@ -23,7 +23,7 @@ pub use network::{
     decode, encode, validate_hello, BlockRequest, BlocksResponse, HeadersResponse, Heartbeat,
     Hello, LocatorRequest, PeerRegistry, RateLimiter, MAX_SYNC_ITEMS, PROTOCOL_VERSION,
 };
-pub use node::{commit_block, Node, PermissiveVerifier};
+pub use node::{commit_block, Node};
 pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookAction, PassbookAsset, PassbookEntry, PassbookError,
     PassbookStatement, PassbookView, ProvenanceCategory, ProvenanceStep,

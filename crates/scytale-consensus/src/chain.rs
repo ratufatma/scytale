@@ -2,8 +2,12 @@ use crate::error::{ChainError, ConsensusError};
 use crate::get_block_subsidy;
 use crate::target::Target;
 use crate::work::{block_work, CumulativeWork};
+use crate::{difficulty, pow};
 use scytale_core::{Block, Hash256, Transaction, UtxoSet};
 use std::collections::{HashMap, HashSet};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub const MAX_FUTURE_DRIFT: u64 = 7200;
 
 /// Recomputes the canonical BLAKE3 commitment over the concatenated TxIDs.
 pub fn transaction_commitment(block: &Block) -> Hash256 {
@@ -159,6 +163,7 @@ pub struct ReorgResult {
 pub const DEFAULT_MAX_REORG_DEPTH: u64 = 100;
 
 /// In-memory tree tracking all validated blocks, competing forks, and the active canonical tip.
+#[derive(Clone)]
 pub struct ChainTree {
     nodes: HashMap<Hash256, BlockNode>,
     canonical_tip: Hash256,
@@ -372,6 +377,38 @@ impl ChainTree {
 
         let height = parent_node.height + 1;
 
+        let mut expected_target = Target::from_compact(parent_node.block.header.difficulty_target);
+        if height >= difficulty::DEFAULT_DIFFICULTY_EPOCH_BLOCKS
+            && height % difficulty::DEFAULT_DIFFICULTY_EPOCH_BLOCKS == 0
+        {
+            let epoch_headers = self.get_path_from_genesis(&parent_hash)?;
+            let start_index = epoch_headers
+                .len()
+                .saturating_sub(difficulty::DEFAULT_DIFFICULTY_EPOCH_BLOCKS as usize + 1);
+            let start_time = epoch_headers
+                .get(start_index)
+                .map(|node| node.block.header.timestamp)
+                .ok_or_else(|| ChainError::InvalidTimestamp("missing DAA epoch history".into()))?;
+            expected_target = difficulty::calculate_next_target(
+                &expected_target,
+                start_time,
+                parent_node.block.header.timestamp,
+                &difficulty::DifficultyConfig::default(),
+            )?;
+            difficulty::validate_block_target(&block.header, &expected_target)?;
+        }
+        pow::verify_pow(&block.header, &expected_target).map_err(ChainError::InvalidPoW)?;
+        if block.header.timestamp <= parent_node.block.header.timestamp {
+            return Err(ChainError::NonMonotonicTimestamp);
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| ChainError::InvalidTimestamp("system clock before epoch".into()))?
+            .as_secs();
+        if block.header.timestamp > now.saturating_add(MAX_FUTURE_DRIFT) {
+            return Err(ChainError::BlockTooFarInFuture);
+        }
+
         // Build the parent state before inserting the candidate into the DAG.
         // Fork candidates cannot use the active UTXO tip, so replay their parent
         // path from genesis just as the reorg path does below.
@@ -401,6 +438,10 @@ impl ChainTree {
             .into_iter()
             .map(|node| node.block.header)
             .collect();
+        let mtp = calculate_median_time_past(&parent_headers, parent_headers.len());
+        if !parent_headers.is_empty() && block.header.timestamp < mtp {
+            return Err(ChainError::TimestampBeforeMedianTimePast);
+        }
         if let Err(error) =
             validate_block_authoritative_with_headers(&block, height, &parent_utxo, &parent_headers)
         {

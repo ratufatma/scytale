@@ -9,6 +9,7 @@
 //!   B) reorg_branch_valid_wasm_spend_triggers_reorg  – real sig in competing block → tip shifts
 
 use ed25519_dalek::{Signer, SigningKey};
+use scytale_consensus::{mine_test_header, Target};
 use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, OutputLock, Transaction, TxInput, TxOut, TxOutput,
     UtxoEntry, UtxoSet, TRANSACTION_VERSION_1,
@@ -103,6 +104,7 @@ fn make_test_node() -> Node {
         data_dir: temp.path().to_path_buf(),
         mining_enabled: false,
         miner_payout_script: vec![0x51],
+        genesis_difficulty_target: 0x207fffff,
         shutdown_timeout_secs: 5,
         ..NodeConfig::default()
     };
@@ -183,7 +185,7 @@ fn mine_block(
     coinbase: Transaction,
     non_coinbase: Vec<Transaction>,
     staged_utxos: &mut UtxoSet,
-    timestamp: u64,
+    _timestamp: u64,
 ) -> Block {
     // Apply coinbase outputs to staged UTXO
     let cb_txid = coinbase.txid();
@@ -218,15 +220,20 @@ fn mine_block(
         commitment_bytes.extend_from_slice(tx.txid().as_bytes());
     }
     // Use minimal difficulty target (regtest-style); version=1, height is tracked by ChainTree
-    let header = BlockHeader::new(
+    let mut header = BlockHeader::new(
         1u32,
         parent_hash,
         Hash256::hash(&commitment_bytes),
         utxo_root,
-        timestamp,
+        1_700_000_000u64.saturating_add(height),
         0x207fffff,
         0,
     );
+    assert!(mine_test_header(
+        &mut header,
+        &Target::from_compact(0x207fffff),
+        10_000_000
+    ));
     Block::new(header, txs)
 }
 

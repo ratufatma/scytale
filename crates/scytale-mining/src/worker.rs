@@ -83,6 +83,7 @@ pub fn build_template(
         .ok_or(MiningError::CanonicalTipMissing)?;
 
     let height = tip_node.height + 1;
+    let timestamp = timestamp.max(tip_node.block.header.timestamp.saturating_add(1));
     let subsidy = calculate_block_reward(height);
 
     // Select mempool transactions sorted by fee-rate (highest first) up to block payload capacity

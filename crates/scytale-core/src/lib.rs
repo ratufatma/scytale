@@ -23,7 +23,7 @@ pub use scytale_primitives::{
     Hash, Hash256, OutPoint, PrimitiveError, Quanta, TxOut, QUANTA_PER_SCY,
 };
 pub use transaction::{
-    calculate_fee, EutxoWitness, OutputLock, Transaction, TxIn, TxInput, TxOutput,
+    calculate_fee, EutxoWitness, OutputLock, Transaction, TxIn, TxInput, TxOutput, DUST_THRESHOLD,
     TRANSACTION_VERSION_1,
 };
 pub use utxo::{

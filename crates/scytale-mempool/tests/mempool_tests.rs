@@ -63,8 +63,8 @@ fn test_admit_valid_transaction() {
 
     let entry = mempool.get(&admitted_txid).unwrap();
     assert_eq!(entry.fee, 1_000_000);
-    assert_eq!(entry.size_bytes, 73);
-    assert_eq!(entry.fee_rate, (1_000_000 * 1000) / 73);
+    assert_eq!(entry.size_bytes, 77);
+    assert_eq!(entry.fee_rate, (1_000_000 * 1000) / 77);
 }
 
 #[test]

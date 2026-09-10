@@ -1,10 +1,11 @@
 use crate::error::{AuthorizationError, TransactionError};
-use scytale_primitives::{Hash256, OutPoint, TxOut};
+use scytale_primitives::{Hash256, OutPoint, Quanta, TxOut};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// Protocol default transaction version.
 pub const TRANSACTION_VERSION_1: u32 = 1;
+pub const DUST_THRESHOLD: Quanta = 500;
 
 /// TxIn: References an unspent output and provides cryptographic authorization.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -219,13 +220,13 @@ impl Transaction {
 
         for output in &self.outputs {
             // Standard outputs must have value > 0; OP_RETURN (0x6a) outputs may have 0 value
-            if output.value == 0 && output.locking_condition.first() != Some(&0x6a) {
+            if output.locking_condition.first() != Some(&0x6a) && output.value < DUST_THRESHOLD {
                 return Err(TransactionError::ZeroOutputValue);
             }
         }
 
         // Verify total output does not overflow u64::MAX
-        let _ = self.total_output_quanta()?;
+        self.total_output_quanta()?;
 
         // Verify absence of duplicate inputs within the same transaction
         let mut seen = HashSet::with_capacity(self.inputs.len());
@@ -486,7 +487,7 @@ mod tests {
         let op = OutPoint::new(Hash256::hash(b"prev"), 0);
         let valid_in = TxIn::new(op, vec![]);
         let huge_out_1 = TxOut::new(u64::MAX - 5, vec![]);
-        let huge_out_2 = TxOut::new(10, vec![]);
+        let huge_out_2 = TxOut::new(DUST_THRESHOLD, vec![]);
 
         let tx = Transaction::new(
             TRANSACTION_VERSION_1,

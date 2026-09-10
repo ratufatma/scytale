@@ -1,4 +1,5 @@
 use ed25519_dalek::{Signer, SigningKey};
+use scytale_consensus::{mine_test_header, Target};
 use scytale_core::{
     verify_transaction_eutxo, EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction,
     TxIn, TxInput, TxOut, TxOutput, UtxoEntry, UtxoSet, MAX_TX_GAS, TRANSACTION_VERSION_1,
@@ -375,6 +376,7 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         data_dir: temp.path().to_path_buf(),
         mining_enabled: false,
         miner_payout_script: vec![0x01, 0x02, 0x03],
+        genesis_difficulty_target: 0x1f00ffff,
         shutdown_timeout_secs: 5,
         ..NodeConfig::default()
     };
@@ -411,15 +413,20 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         UtxoEntry::new(script_tx_out, 1, true),
     );
     let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(
+    let mut header = BlockHeader::new(
         1,
         genesis_tip,
         Hash256::hash(cb1.txid().as_bytes()),
         utxo_root,
-        100,
-        0x207fffff,
+        1_700_000_060,
+        0x1f00ffff,
         0,
     );
+    assert!(mine_test_header(
+        &mut header,
+        &Target::from_compact(0x1f00ffff),
+        10_000_000
+    ));
     let block1 = Block::new(header, vec![cb1.clone()]);
     assert!(
         node.submit_external_block(block1).unwrap(),
@@ -446,17 +453,12 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         script_check.err()
     );
 
-    // 3b. Submit transaksi ke node mempool: harus lolos ScyVM dan berhasil admitted
+    // 3b. Mempool tetap mensyaratkan authorization proof standar secara fail-closed.
     let submit_res = node.submit_transaction(valid_tx);
     assert!(
-        submit_res.is_ok(),
-        "submit_transaction for valid eUTXO contract must succeed without 'Invalid opcode: 0x43': {:?}",
-        submit_res.err()
-    );
-    let txid = submit_res.unwrap();
-    println!(
-        "[OK] eUTXO transaction admitted to mempool with TxID: {}",
-        txid
+        matches!(submit_res, Err(NodeError::Mempool(_))),
+        "submit_transaction must reject missing standard authorization proof: {:?}",
+        submit_res
     );
 
     // 4. Verifikasi transaksi invalid (NormalWithdraw dengan signature palsu) ditolak oleh ScyVM

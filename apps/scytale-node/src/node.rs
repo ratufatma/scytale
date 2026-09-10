@@ -11,9 +11,8 @@ use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_account::AliasStore;
 use scytale_core::{
-    verify_transaction_eutxo, AuthorizationError, AuthorizationVerifier, Block,
-    EutxoValidationError, Hash256, OutPoint, OutputLock, Transaction, TxOut, UtxoSet,
-    MAX_BLOCK_GAS, MAX_TX_GAS,
+    verify_transaction_eutxo, Block, ConsensusScriptVerifier, EutxoValidationError, Hash256,
+    OutPoint, OutputLock, Transaction, TxOut, UtxoSet, MAX_BLOCK_GAS, MAX_TX_GAS,
 };
 use scytale_mempool::{Mempool, MempoolEntry};
 use scytale_mining::{build_template, run_pow_search};
@@ -34,25 +33,6 @@ use tokio::sync::broadcast;
 /// Upper bound on the nonce space searched per template before refresh.
 const MAX_NONCE_ITERATIONS: u64 = 80_000_000;
 
-/// Permissionless verifier used during mempool reconciliation.
-///
-/// Scytale's mempool admission pipeline delegates cryptographic authorization to
-/// pluggable verifiers. This default accepts any proof, enabling zero-balance
-/// bootstrap and deterministic lifecycle tests without requiring real signatures.
-#[derive(Clone, Copy, Debug)]
-pub struct PermissiveVerifier;
-
-impl AuthorizationVerifier for PermissiveVerifier {
-    fn verify(
-        &self,
-        _preimage_digest: &Hash256,
-        _locking_condition: &[u8],
-        _authorization_proof: &[u8],
-    ) -> Result<(), AuthorizationError> {
-        Ok(())
-    }
-}
-
 /// Persists a validated block to disk storage and, if configured, non-blockingly
 /// dispatches the block metadata to the external indexer.
 #[allow(clippy::result_large_err)]
@@ -66,7 +46,9 @@ pub fn commit_block(
     storage.commit_block(block, height, cumulative_work)?;
     if let Some(indexer) = indexer_handle {
         let payload = BlockPayload::from_block(block, height);
-        let _ = indexer.sender.try_send(payload);
+        if let Err(error) = indexer.sender.try_send(payload) {
+            tracing::warn!(%error, "indexer queue rejected committed block");
+        }
     }
     Ok(())
 }
@@ -241,7 +223,7 @@ impl Node {
             .apply_coinbase(&path_rev[0].transactions[0], 0)
             .map_err(|e| NodeError::InconsistentState(format!("genesis utxo: {e}")))?;
         for block in &path_rev[1..] {
-            tree.process_block(block.clone(), &mut utxo_set)?;
+            tree.process_block_with_verifier(block.clone(), &mut utxo_set, &NodeBlockVerifier)?;
         }
 
         {
@@ -337,6 +319,8 @@ impl Node {
         let canonical_after = {
             let mut chain = self.shared.chain_tree.lock().unwrap();
             let mut utxos = self.shared.utxo_set.lock().unwrap();
+            let chain_before = chain.clone();
+            let utxos_before = utxos.clone();
 
             let block_hash = block.header.hash();
             let parent_hash = block.header.previous_block_hash;
@@ -396,7 +380,12 @@ impl Node {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        commit_block(&self.storage, &block, height, work, self.indexer.as_deref())?;
+                        commit_block(&self.storage, &block, height, work, self.indexer.as_deref())
+                            .map_err(|error| {
+                                *chain = chain_before.clone();
+                                *utxos = utxos_before.clone();
+                                error
+                            })?;
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -411,8 +400,12 @@ impl Node {
                             })
                             .collect::<Vec<_>>();
                         self.storage
-                            .apply_reorganization(&reorg.disconnected_blocks, &connected_meta)?;
-                        self.storage.replace_utxo_set(&utxos)?;
+                            .apply_reorganization(&reorg.disconnected_blocks, &connected_meta)
+                            .map_err(|error| {
+                                *chain = chain_before.clone();
+                                *utxos = utxos_before.clone();
+                                NodeError::Storage(error)
+                            })?;
                         tracing::info!(
                             common_ancestor = %reorg.disconnected_blocks.last()
                                 .map(|block| block.header.previous_block_hash)
@@ -425,16 +418,22 @@ impl Node {
                         if let Some(indexer) = self.indexer.as_deref() {
                             for (b, h, _) in &connected_meta {
                                 let payload = BlockPayload::from_block(b, *h);
-                                let _ = indexer.sender.try_send(payload);
+                                if let Err(error) = indexer.sender.try_send(payload) {
+                                    tracing::warn!(%error, "indexer queue rejected reorg block");
+                                }
                             }
                         }
                         let mut mempool = self.shared.mempool.lock().unwrap();
-                        let verifier = PermissiveVerifier;
+                        let verifier = ConsensusScriptVerifier::new(chain.canonical_height());
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .map(|d| d.as_secs())
                             .unwrap_or(0);
-                        mempool.on_reorg(reorg.transactions_for_mempool, &utxos, &verifier, now);
+                        for (txid, error) in
+                            mempool.on_reorg(reorg.transactions_for_mempool, &utxos, &verifier, now)
+                        {
+                            tracing::warn!(%txid, %error, "reorg transaction rejected from mempool");
+                        }
                         drop(mempool);
                     }
                     let mut mempool = self.shared.mempool.lock().unwrap();
@@ -741,6 +740,80 @@ impl Node {
         Ok(path_rev)
     }
 
+    /// Reads only a bounded canonical height range by walking backward from the tip.
+    pub fn query_canonical_range(
+        &self,
+        start_height: u64,
+        limit: usize,
+        ascending: bool,
+    ) -> Result<Vec<(Block, u64)>, NodeError> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        if limit > 100 {
+            return Err(NodeError::InconsistentState(
+                "range limit exceeds 100".into(),
+            ));
+        }
+        let (tip_hash, tip_height) = self
+            .storage
+            .get_canonical_tip()?
+            .ok_or_else(|| NodeError::InconsistentState("no canonical tip".into()))?;
+        if start_height > tip_height {
+            return Ok(Vec::new());
+        }
+
+        let mut result = Vec::with_capacity(limit);
+        let mut current_hash = tip_hash;
+        let mut current_height = tip_height;
+        loop {
+            if (ascending && current_height >= start_height)
+                || (!ascending && current_height <= start_height)
+            {
+                let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
+                    NodeError::InconsistentState("missing block on canonical path".into())
+                })?;
+                result.push((block.clone(), current_height));
+                if result.len() == limit {
+                    break;
+                }
+            }
+            if current_height == 0 {
+                break;
+            }
+            let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
+                NodeError::InconsistentState("missing block on canonical path".into())
+            })?;
+            current_hash = block.header.previous_block_hash;
+            current_height -= 1;
+        }
+        if ascending {
+            result.reverse();
+        }
+        Ok(result)
+    }
+
+    /// Finds a canonical transaction height without materializing the chain.
+    pub fn canonical_transaction_height(&self, txid: &Hash256) -> Result<Option<u64>, NodeError> {
+        let (mut current_hash, mut current_height) = self
+            .storage
+            .get_canonical_tip()?
+            .ok_or_else(|| NodeError::InconsistentState("no canonical tip".into()))?;
+        loop {
+            let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
+                NodeError::InconsistentState("missing block on canonical path".into())
+            })?;
+            if block.transactions.iter().any(|tx| tx.txid() == *txid) {
+                return Ok(Some(current_height));
+            }
+            if current_height == 0 {
+                return Ok(None);
+            }
+            current_hash = block.header.previous_block_hash;
+            current_height -= 1;
+        }
+    }
+
     /// Looks up a confirmed transaction by TxID through the embedded storage.
     pub fn lookup_transaction(&self, txid: &Hash256) -> Result<Option<Transaction>, NodeError> {
         Ok(self.storage.get_transaction(txid)?)
@@ -998,18 +1071,21 @@ impl Node {
         verify_transaction_eutxo(&tx, now, &utxos, MAX_TX_GAS)
             .map_err(NodeError::EutxoValidation)?;
         let mut mempool = self.shared.mempool.lock().unwrap();
-        let verifier = PermissiveVerifier;
+        let verifier = ConsensusScriptVerifier::new(height);
         let txid = mempool.admit_transaction(tx.clone(), &utxos, &verifier, now)?;
 
         if broadcast {
             if let Ok(bytes) = tx.to_canonical_bytes() {
-                let _ = self
-                    .shared
-                    .p2p_event_tx
-                    .send(NetworkEvent::BroadcastTransaction {
-                        tx_hex: scytale_primitives::to_hex(&bytes),
-                        txid_hex: txid.to_string(),
-                    });
+                if let Err(error) =
+                    self.shared
+                        .p2p_event_tx
+                        .send(NetworkEvent::BroadcastTransaction {
+                            tx_hex: scytale_primitives::to_hex(&bytes),
+                            txid_hex: txid.to_string(),
+                        })
+                {
+                    tracing::warn!(%error, "transaction broadcast channel is closed");
+                }
             }
         }
 
@@ -1231,6 +1307,8 @@ fn mining_worker_loop(
         {
             let mut chain = shared.chain_tree.lock().unwrap();
             let mut utxos = shared.utxo_set.lock().unwrap();
+            let chain_before = chain.clone();
+            let utxos_before = utxos.clone();
             if chain.canonical_tip() != template.previous_block_hash {
                 tracing::warn!("tip changed during PoW search; discarding solved candidate");
                 continue;
@@ -1247,7 +1325,14 @@ fn mining_worker_loop(
                         "mined new block successfully committed"
                     );
                     if reorg.disconnected_blocks.is_empty() {
-                        let _ = commit_block(&storage, &block, height, work, indexer.as_deref());
+                        if let Err(error) =
+                            commit_block(&storage, &block, height, work, indexer.as_deref())
+                        {
+                            tracing::error!(%error, "fatal storage failure while committing mined block");
+                            *chain = chain_before.clone();
+                            *utxos = utxos_before.clone();
+                            break;
+                        }
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -1261,22 +1346,34 @@ fn mining_worker_loop(
                                 )
                             })
                             .collect::<Vec<_>>();
-                        let _ = storage
-                            .apply_reorganization(&reorg.disconnected_blocks, &connected_meta);
+                        if let Err(error) = storage
+                            .apply_reorganization(&reorg.disconnected_blocks, &connected_meta)
+                        {
+                            tracing::error!(%error, "fatal storage failure while committing mined reorganization");
+                            *chain = chain_before.clone();
+                            *utxos = utxos_before.clone();
+                            break;
+                        }
                         if let Some(indexer_ref) = indexer.as_deref() {
                             for (b, h, _) in &connected_meta {
                                 let payload = BlockPayload::from_block(b, *h);
-                                let _ = indexer_ref.sender.try_send(payload);
+                                if let Err(error) = indexer_ref.sender.try_send(payload) {
+                                    tracing::warn!(%error, "indexer queue rejected mined reorg block");
+                                }
                             }
                         }
 
-                        let verifier = PermissiveVerifier;
+                        let verifier = ConsensusScriptVerifier::new(height);
                         let mut mempool = shared.mempool.lock().unwrap();
                         let now = SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .map(|d| d.as_secs())
                             .unwrap_or(0);
-                        mempool.on_reorg(reorg.transactions_for_mempool, &utxos, &verifier, now);
+                        for (txid, error) in
+                            mempool.on_reorg(reorg.transactions_for_mempool, &utxos, &verifier, now)
+                        {
+                            tracing::warn!(%txid, %error, "reorg transaction rejected from mempool");
+                        }
                         drop(mempool);
                     }
                     let mut mempool = shared.mempool.lock().unwrap();
@@ -1284,10 +1381,12 @@ fn mining_worker_loop(
                     drop(mempool);
 
                     if let Ok(bytes) = block.to_canonical_bytes() {
-                        let _ = shared.p2p_event_tx.send(NetworkEvent::BroadcastBlock {
+                        if let Err(error) = shared.p2p_event_tx.send(NetworkEvent::BroadcastBlock {
                             block_hex: scytale_primitives::to_hex(&bytes),
                             hash_hex: block.header.hash().to_string(),
-                        });
+                        }) {
+                            tracing::warn!(%error, "block broadcast channel is closed");
+                        }
                     }
                 }
                 Ok(None) => {

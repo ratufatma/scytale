@@ -1,6 +1,6 @@
 use scytale_consensus::{
-    block_work, get_block_subsidy, validate_block_authoritative, ChainError, ChainTree,
-    ConsensusError, CumulativeWork, Target,
+    block_work, get_block_subsidy, mine_test_header, validate_block_authoritative, ChainError,
+    ChainTree, ConsensusError, CumulativeWork, Target,
 };
 use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoSet, TRANSACTION_VERSION_1,
@@ -24,7 +24,7 @@ fn make_test_block(
     for tx in &txs {
         commitment_bytes.extend_from_slice(tx.txid().as_bytes());
     }
-    let header = BlockHeader::new(
+    let mut header = BlockHeader::new(
         version,
         prev_hash,
         Hash256::hash(&commitment_bytes),
@@ -33,6 +33,8 @@ fn make_test_block(
         target,
         nonce,
     );
+    let target_value = Target::from_compact(target);
+    assert!(mine_test_header(&mut header, &target_value, 10_000_000));
     Block::new(header, txs)
 }
 
@@ -46,7 +48,7 @@ fn create_genesis() -> (Block, UtxoSet) {
         .apply_block_transactions(&coinbase, &[], 0)
         .unwrap();
     let utxo_root = utxo_set.compute_utxo_root();
-    let header = BlockHeader::new(
+    let mut header = BlockHeader::new(
         1,
         Hash256::ZERO,
         Hash256::ZERO,
@@ -55,6 +57,8 @@ fn create_genesis() -> (Block, UtxoSet) {
         0x1f00ffff, // Easy target
         0,
     );
+    let target_value = Target::from_compact(0x1f00ffff);
+    assert!(mine_test_header(&mut header, &target_value, 10_000_000));
     let block = Block::new(header, vec![coinbase]);
     (block, utxo_set)
 }
@@ -70,7 +74,7 @@ fn rejects_coinbase_above_subsidy_plus_fees() {
     let block = make_test_block(
         1,
         genesis.header.hash(),
-        1,
+        1_700_000_060,
         0x1f00ffff,
         1,
         vec![coinbase],
@@ -100,7 +104,7 @@ fn rejects_mismatched_transaction_commitment() {
     let mut block = make_test_block(
         1,
         genesis.header.hash(),
-        1,
+        1_700_000_060,
         0x1f00ffff,
         1,
         vec![coinbase],
@@ -108,6 +112,11 @@ fn rejects_mismatched_transaction_commitment() {
         height,
     );
     block.header.transaction_commitment = Hash256::ZERO;
+    assert!(mine_test_header(
+        &mut block.header,
+        &Target::from_compact(0x1f00ffff),
+        10_000_000
+    ));
 
     let error = validate_block_authoritative(&block, height, &utxo_set).unwrap_err();
     assert!(matches!(
@@ -330,7 +339,10 @@ fn test_common_ancestor_discovery() {
         1700000120,
         0x1f00ffff,
         2,
-        vec![Transaction::new_coinbase(2, vec![TxOut::new(100, vec![])])],
+        vec![Transaction::new_coinbase(
+            2,
+            vec![TxOut::new(100, vec![1, 1])],
+        )],
         &utxo_a1,
         2,
     );
