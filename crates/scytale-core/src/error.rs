@@ -25,6 +25,8 @@ pub enum TransactionError {
 
 #[derive(Debug, PartialEq, Eq, Clone, Error)]
 pub enum UtxoError {
+    #[error("duplicate unspent outpoint: {0:?}")]
+    DuplicateOutPoint(OutPoint),
     #[error("referenced UTXO does not exist: {0:?}")]
     MissingUtxo(OutPoint),
     #[error("output already spent: {0:?}")]

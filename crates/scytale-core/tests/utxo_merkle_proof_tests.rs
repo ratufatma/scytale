@@ -15,7 +15,7 @@ fn create_mock_utxo(txid_byte: u8, index: u32, value: u64, lock_byte: u8) -> (Ou
 fn test_single_leaf_merkle_proof() {
     let (op, entry) = create_mock_utxo(1, 0, 100_000_000, 0xaa);
     let mut utxo_set = UtxoSet::new();
-    utxo_set.insert(op, entry.clone());
+    utxo_set.insert(op, entry.clone()).unwrap();
 
     let expected_root = utxo_set.compute_utxo_root();
     assert_eq!(
@@ -48,8 +48,8 @@ fn test_even_and_odd_multi_leaf_merkle_proof() {
     let (op2, e2) = create_mock_utxo(0x20, 0, 1000, 0x22);
 
     let mut set2 = UtxoSet::new();
-    set2.insert(op1, e1.clone());
-    set2.insert(op2, e2.clone());
+    set2.insert(op1, e1.clone()).unwrap();
+    set2.insert(op2, e2.clone()).unwrap();
     let root2 = set2.compute_utxo_root();
 
     let entries2 = set2.to_entries_with_outpoints();
@@ -64,7 +64,7 @@ fn test_even_and_odd_multi_leaf_merkle_proof() {
     // Test with 3 leaves (odd - exercises duplicate-last leaf logic)
     let (op3, e3) = create_mock_utxo(0x30, 0, 1500, 0x33);
     let mut set3 = set2.clone();
-    set3.insert(op3, e3.clone());
+    set3.insert(op3, e3.clone()).unwrap();
     let root3 = set3.compute_utxo_root();
 
     let entries3 = set3.to_entries_with_outpoints();
@@ -82,7 +82,7 @@ fn test_even_and_odd_multi_leaf_merkle_proof() {
     let mut set7 = UtxoSet::new();
     for i in 1..=7 {
         let (op, e) = create_mock_utxo(i as u8, 0, i * 100, i as u8);
-        set7.insert(op, e);
+        set7.insert(op, e).unwrap();
     }
     let root7 = set7.compute_utxo_root();
     let entries7 = set7.to_entries_with_outpoints();
@@ -99,7 +99,7 @@ fn test_merkle_proof_tamper_resistance() {
     let mut outpoints = Vec::new();
     for i in 1..=5 {
         let (op, e) = create_mock_utxo(i as u8 * 0x11, 0, i * 10_000, i as u8);
-        set.insert(op, e);
+        set.insert(op, e).unwrap();
         outpoints.push(op);
     }
     let expected_root = set.compute_utxo_root();

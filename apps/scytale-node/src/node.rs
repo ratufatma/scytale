@@ -486,10 +486,12 @@ impl Node {
             for (idx, output) in tx.outputs.iter().enumerate() {
                 if output.locking_condition.first() != Some(&0x6a) {
                     let op = OutPoint::new(txid, idx as u32);
-                    staged_utxos.insert(
-                        op,
-                        scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
-                    );
+                    staged_utxos
+                        .insert(
+                            op,
+                            scytale_core::UtxoEntry::new(output.clone(), height, tx.is_coinbase()),
+                        )
+                        .map_err(|error| NodeError::InconsistentState(error.to_string()))?;
                 }
             }
         }
@@ -904,7 +906,9 @@ impl Node {
             let mut utxo_set = self.shared.utxo_set.lock().unwrap();
             *utxo_set = scytale_core::UtxoSet::new();
             for (outpoint, entry) in snapshot_entries {
-                utxo_set.insert(outpoint, entry);
+                utxo_set
+                    .insert(outpoint, entry)
+                    .map_err(|error| NodeError::InconsistentState(error.to_string()))?;
             }
         }
 

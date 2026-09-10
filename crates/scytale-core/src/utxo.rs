@@ -51,8 +51,12 @@ impl UtxoSet {
         self.entries.get(outpoint)
     }
 
-    pub fn insert(&mut self, outpoint: OutPoint, entry: UtxoEntry) -> Option<UtxoEntry> {
-        self.entries.insert(outpoint, entry)
+    pub fn insert(&mut self, outpoint: OutPoint, entry: UtxoEntry) -> Result<(), UtxoError> {
+        if self.entries.contains_key(&outpoint) {
+            return Err(UtxoError::DuplicateOutPoint(outpoint));
+        }
+        self.entries.insert(outpoint, entry);
+        Ok(())
     }
 
     pub fn remove(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
@@ -127,7 +131,7 @@ impl UtxoSet {
             }
             let outpoint = OutPoint::new(txid, index as u32);
             let entry = UtxoEntry::new(output.clone(), block_height, false);
-            self.entries.insert(outpoint, entry);
+            self.insert(outpoint, entry)?;
         }
 
         Ok(fee)
@@ -159,7 +163,7 @@ impl UtxoSet {
             }
             let outpoint = OutPoint::new(txid, index as u32);
             let entry = UtxoEntry::new(output.clone(), block_height, true);
-            self.entries.insert(outpoint, entry);
+            self.insert(outpoint, entry)?;
         }
 
         Ok(())
@@ -171,9 +175,15 @@ impl UtxoSet {
     ///
     /// If any transaction fails, the entire state transition rolls back completely.
     /// Returns the total fees collected from all non-coinbase transactions in the block.
-    pub fn apply_block(&mut self, txs: &[Transaction], block_height: u64) -> Result<u64, UtxoError> {
+    pub fn apply_block(
+        &mut self,
+        txs: &[Transaction],
+        block_height: u64,
+    ) -> Result<u64, UtxoError> {
         if txs.is_empty() {
-            return Err(UtxoError::TxError(crate::error::TransactionError::EmptyOutputs));
+            return Err(UtxoError::TxError(
+                crate::error::TransactionError::EmptyOutputs,
+            ));
         }
 
         let mut staging = self.clone();
@@ -435,14 +445,31 @@ mod tests {
         let op3 = OutPoint::new(txid2, 0);
 
         let mut set = UtxoSet::new();
-        set.insert(op1, UtxoEntry::new(TxOut::new(100, vec![]), 1, false));
-        set.insert(op2, UtxoEntry::new(TxOut::new(200, vec![]), 1, false));
-        set.insert(op3, UtxoEntry::new(TxOut::new(300, vec![]), 1, false));
+        set.insert(op1, UtxoEntry::new(TxOut::new(100, vec![]), 1, false))
+            .unwrap();
+        set.insert(op2, UtxoEntry::new(TxOut::new(200, vec![]), 1, false))
+            .unwrap();
+        set.insert(op3, UtxoEntry::new(TxOut::new(300, vec![]), 1, false))
+            .unwrap();
 
         assert_eq!(set.len(), 3);
         assert_eq!(set.get(&op1).unwrap().output.value, 100);
         assert_eq!(set.get(&op2).unwrap().output.value, 200);
         assert_eq!(set.get(&op3).unwrap().output.value, 300);
+    }
+
+    #[test]
+    fn test_reject_duplicate_unspent_outpoint() {
+        let outpoint = OutPoint::new(Hash256::hash(b"duplicate"), 0);
+        let mut set = UtxoSet::new();
+        set.insert(outpoint, UtxoEntry::new(TxOut::new(100, vec![1]), 1, false))
+            .unwrap();
+
+        let error = set
+            .insert(outpoint, UtxoEntry::new(TxOut::new(200, vec![2]), 2, false))
+            .unwrap_err();
+        assert_eq!(error, UtxoError::DuplicateOutPoint(outpoint));
+        assert_eq!(set.get(&outpoint).unwrap().output.value, 100);
     }
 
     #[test]
@@ -455,7 +482,8 @@ mod tests {
         set.insert(
             initial_op,
             UtxoEntry::new(TxOut::new(1_000_000_000, vec![1, 2, 3]), 0, true),
-        );
+        )
+        .unwrap();
         assert_eq!(set.len(), 1);
 
         // Spend the UTXO in a new transaction
@@ -483,7 +511,8 @@ mod tests {
         set.insert(
             initial_op,
             UtxoEntry::new(TxOut::new(1_000_000_000, vec![]), 1, false),
-        );
+        )
+        .unwrap();
 
         // First spend (valid)
         let tx1 = Transaction::new(
@@ -528,7 +557,8 @@ mod tests {
         set.insert(
             op,
             UtxoEntry::new(TxOut::new(100_000_000, vec![]), 1, false),
-        );
+        )
+        .unwrap();
 
         // Outputs (150M) exceed input (100M)
         let tx = Transaction::new(
@@ -558,11 +588,13 @@ mod tests {
         set.insert(
             op1,
             UtxoEntry::new(TxOut::new(500_000_000, vec![]), 1, false),
-        );
+        )
+        .unwrap();
         set.insert(
             op2,
             UtxoEntry::new(TxOut::new(500_000_000, vec![]), 1, false),
-        );
+        )
+        .unwrap();
 
         let initial_snapshot = set.clone();
 
@@ -599,7 +631,8 @@ mod tests {
     fn test_partial_split_conservation() {
         let mut set = UtxoSet::new();
         let op = OutPoint::new(Hash256::hash(b"source"), 0);
-        set.insert(op, UtxoEntry::new(TxOut::new(1_000_000, vec![]), 1, false));
+        set.insert(op, UtxoEntry::new(TxOut::new(1_000_000, vec![]), 1, false))
+            .unwrap();
 
         // Split 1,000,000 into 600,000 + 399,000 (fee = 1,000)
         let tx = Transaction::new(
@@ -639,7 +672,8 @@ mod tests {
         let mut set = UtxoSet::new();
         let op = OutPoint::new(Hash256::hash(b"tx"), 0);
         let out = TxOut::new(500, vec![1, 2, 3]);
-        set.insert(op, UtxoEntry::new(out.clone(), 0, true));
+        set.insert(op, UtxoEntry::new(out.clone(), 0, true))
+            .unwrap();
 
         let expected_leaf = compute_utxo_leaf(&op, &out);
         assert_eq!(set.compute_utxo_root(), expected_leaf);
@@ -659,13 +693,16 @@ mod tests {
         let out3 = TxOut::new(300, vec![3]);
 
         // Insert in different order
-        set1.insert(op1, UtxoEntry::new(out1.clone(), 0, false));
-        set1.insert(op2, UtxoEntry::new(out2.clone(), 0, false));
-        set1.insert(op3, UtxoEntry::new(out3.clone(), 0, false));
+        set1.insert(op1, UtxoEntry::new(out1.clone(), 0, false))
+            .unwrap();
+        set1.insert(op2, UtxoEntry::new(out2.clone(), 0, false))
+            .unwrap();
+        set1.insert(op3, UtxoEntry::new(out3.clone(), 0, false))
+            .unwrap();
 
-        set2.insert(op3, UtxoEntry::new(out3, 0, false));
-        set2.insert(op1, UtxoEntry::new(out1, 0, false));
-        set2.insert(op2, UtxoEntry::new(out2, 0, false));
+        set2.insert(op3, UtxoEntry::new(out3, 0, false)).unwrap();
+        set2.insert(op1, UtxoEntry::new(out1, 0, false)).unwrap();
+        set2.insert(op2, UtxoEntry::new(out2, 0, false)).unwrap();
 
         assert_eq!(set1.compute_utxo_root(), set2.compute_utxo_root());
         assert_ne!(set1.compute_utxo_root(), Hash256::ZERO);

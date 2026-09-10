@@ -188,6 +188,7 @@ impl CanonicalSerialize for TxIn {
     fn serialize_canonical<W: Write>(&self, writer: &mut W) -> Result<(), SerializationError> {
         self.previous_output.serialize_canonical(writer)?;
         self.authorization.serialize_canonical(writer)?;
+        self.sequence.serialize_canonical(writer)?;
         Ok(())
     }
 }
@@ -196,7 +197,8 @@ impl CanonicalDeserialize for TxIn {
     fn deserialize_canonical<R: Read>(reader: &mut R) -> Result<Self, SerializationError> {
         let previous_output = OutPoint::deserialize_canonical(reader)?;
         let authorization = Vec::<u8>::deserialize_canonical(reader)?;
-        Ok(TxIn::new(previous_output, authorization))
+        let sequence = u32::deserialize_canonical(reader)?;
+        Ok(TxIn::new(previous_output, authorization).with_sequence(sequence))
     }
 }
 

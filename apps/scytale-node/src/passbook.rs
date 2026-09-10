@@ -982,10 +982,12 @@ mod tests {
         let lock = vec![9, 9, 9];
         for (i, v) in [100u64, 200u64, 300u64].iter().enumerate() {
             let txid = Hash256::hash(format!("tx{i}").as_bytes());
-            utxos.insert(
-                OutPoint::new(txid, 0),
-                scytale_core::UtxoEntry::new(TxOut::new(*v, lock.clone()), 1, false),
-            );
+            utxos
+                .insert(
+                    OutPoint::new(txid, 0),
+                    scytale_core::UtxoEntry::new(TxOut::new(*v, lock.clone()), 1, false),
+                )
+                .unwrap();
         }
         let p = Passbook::new(vec![lock]);
         assert_eq!(sum_native_owned(&p, &utxos).unwrap(), 600);
@@ -1001,10 +1003,12 @@ mod tests {
         let mut confirmed = UtxoSet::new();
         let fund_txid = Hash256::hash(b"fund");
         let fund_op = OutPoint::new(fund_txid, 0);
-        confirmed.insert(
-            fund_op,
-            scytale_core::UtxoEntry::new(TxOut::new(1_000_000, lock.clone()), 1, false),
-        );
+        confirmed
+            .insert(
+                fund_op,
+                scytale_core::UtxoEntry::new(TxOut::new(1_000_000, lock.clone()), 1, false),
+            )
+            .unwrap();
 
         let input = TxIn::new(fund_op, vec![]);
         let tx = Transaction::new(

@@ -220,9 +220,7 @@ impl WalletFile {
 
     /// Saves the wallet to disk with restrictive 0600 POSIX permissions.
     pub fn save_to(&self, path: &Path) -> Result<(), WalletError> {
-        if self.encrypted_key.is_some()
-            && (self.private_key.is_some() || self.mnemonic.is_some())
-        {
+        if self.encrypted_key.is_some() && (self.private_key.is_some() || self.mnemonic.is_some()) {
             return Err(WalletError::EncryptedWalletContainsPlaintext);
         }
         if let Some(parent) = path.parent() {
@@ -295,9 +293,8 @@ impl WalletFile {
             .private_key
             .as_ref()
             .ok_or(WalletError::MissingPrivateKey)?;
-        let bytes = Zeroizing::new(
-            from_hex(private_key).map_err(|e| WalletError::Hex(e.to_string()))?,
-        );
+        let bytes =
+            Zeroizing::new(from_hex(private_key).map_err(|e| WalletError::Hex(e.to_string()))?);
         if bytes.len() != 32 {
             return Err(WalletError::InvalidKeyLength {
                 expected: 32,
@@ -311,8 +308,7 @@ impl WalletFile {
 
     pub fn signing_key_with_pin(&self, pin: &str) -> Result<SigningKey, WalletError> {
         let key_bytes = if let Some(envelope) = &self.encrypted_key {
-            decrypt_key(envelope, pin)
-                .map_err(|error| WalletError::Vault(error.to_string()))?
+            decrypt_key(envelope, pin).map_err(|error| WalletError::Vault(error.to_string()))?
         } else {
             let private_key = self
                 .private_key
@@ -479,19 +475,19 @@ mod tests {
         let signing_key = loaded.signing_key_with_pin("123456").unwrap();
         let message = b"wallet unlock regression";
         let signature = signing_key.sign(message);
-        signing_key.verifying_key().verify(message, &signature).unwrap();
+        signing_key
+            .verifying_key()
+            .verify(message, &signature)
+            .unwrap();
     }
 
     #[test]
     fn loading_legacy_encrypted_wallet_rewrites_without_plaintext() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("legacy-encrypted-wallet.json");
-        let (wallet, phrase) = WalletFile::generate_with_mnemonic(
-            &dir.path().join("source-wallet.json"),
-            false,
-            12,
-        )
-        .unwrap();
+        let (wallet, phrase) =
+            WalletFile::generate_with_mnemonic(&dir.path().join("source-wallet.json"), false, 12)
+                .unwrap();
         let private_key = wallet.private_key.clone().unwrap();
         let envelope = encrypt_key(&from_hex(&private_key).unwrap(), "123456").unwrap();
         let legacy = serde_json::json!({

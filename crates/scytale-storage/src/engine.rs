@@ -11,6 +11,7 @@ use scytale_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::io::Cursor;
 use std::path::Path;
 
 /// Authenticated snapshot of the active unspent UTXO set at a specific block height.
@@ -20,6 +21,75 @@ pub struct UtxoSnapshotDto {
     pub block_hash: Hash256,
     pub utxo_root: Hash256,
     pub entries: Vec<(OutPoint, UtxoEntry)>,
+}
+
+/// Reversible UTXO delta for one committed block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockUndo {
+    pub spent_utxos: Vec<(OutPoint, UtxoEntry)>,
+    pub created_outpoints: Vec<OutPoint>,
+}
+
+impl BlockUndo {
+    fn to_bytes(&self) -> Result<Vec<u8>, StorageError> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&(self.spent_utxos.len() as u32).to_le_bytes());
+        for (outpoint, entry) in &self.spent_utxos {
+            bytes.extend_from_slice(
+                &outpoint
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?,
+            );
+            bytes.extend_from_slice(
+                &entry
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?,
+            );
+        }
+        bytes.extend_from_slice(&(self.created_outpoints.len() as u32).to_le_bytes());
+        for outpoint in &self.created_outpoints {
+            bytes.extend_from_slice(
+                &outpoint
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?,
+            );
+        }
+        Ok(bytes)
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
+        let mut cursor = Cursor::new(bytes);
+        let read_count = |cursor: &mut Cursor<&[u8]>| -> Result<usize, StorageError> {
+            let mut raw = [0u8; 4];
+            std::io::Read::read_exact(cursor, &mut raw)
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            Ok(u32::from_le_bytes(raw) as usize)
+        };
+        let spent_count = read_count(&mut cursor)?;
+        let mut spent_utxos = Vec::with_capacity(spent_count);
+        for _ in 0..spent_count {
+            let outpoint = OutPoint::deserialize_canonical(&mut cursor)
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            let entry = UtxoEntry::deserialize_canonical(&mut cursor)
+                .map_err(|e| StorageError::serialization(e.to_string()))?;
+            spent_utxos.push((outpoint, entry));
+        }
+        let created_count = read_count(&mut cursor)?;
+        let mut created_outpoints = Vec::with_capacity(created_count);
+        for _ in 0..created_count {
+            created_outpoints.push(
+                OutPoint::deserialize_canonical(&mut cursor)
+                    .map_err(|e| StorageError::serialization(e.to_string()))?,
+            );
+        }
+        if cursor.position() != bytes.len() as u64 {
+            return Err(StorageError::serialization("trailing BlockUndo bytes"));
+        }
+        Ok(Self {
+            spent_utxos,
+            created_outpoints,
+        })
+    }
 }
 
 // Helper: encode OutPoint as fixed 36-byte key (TxID[32] || index_LE[4])
@@ -75,6 +145,7 @@ impl StorageEngine {
         write_tx.open_table(tables::BLOCK_INDEX)?;
         write_tx.open_table(tables::CHAIN_STATE)?;
         write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+        write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
         write_tx.commit()?;
         Ok(())
     }
@@ -180,7 +251,9 @@ impl StorageEngine {
             let outpoint = key_to_outpoint(key);
             let entry = UtxoEntry::from_canonical_bytes(value_guard.value())
                 .map_err(|e| StorageError::serialization(e.to_string()))?;
-            utxo_set.insert(outpoint, entry);
+            utxo_set
+                .insert(outpoint, entry)
+                .map_err(|error| StorageError::InconsistentState(error.to_string()))?;
         }
         Ok(utxo_set)
     }
@@ -310,8 +383,13 @@ impl StorageEngine {
             let mut tx_tbl = write_tx.open_table(tables::TRANSACTIONS)?;
             let mut utxo_tbl = write_tx.open_table(tables::UTXOS)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+            let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
 
             let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> = HashMap::new();
+            let mut undo = BlockUndo {
+                spent_utxos: Vec::new(),
+                created_outpoints: Vec::new(),
+            };
 
             for tx in &block.transactions {
                 let txid = tx.txid();
@@ -329,6 +407,8 @@ impl StorageEngine {
                         let spent_output = if let Some(guard) = utxo_tbl.get(&key)? {
                             let entry = UtxoEntry::from_canonical_bytes(guard.value())
                                 .map_err(|e| StorageError::serialization(e.to_string()))?;
+                            undo.spent_utxos
+                                .push((input.previous_output, entry.clone()));
                             Some(entry.output)
                         } else if let Some(tx_bytes) =
                             tx_tbl.get(input.previous_output.txid.as_bytes())?
@@ -387,6 +467,7 @@ impl StorageEngine {
                         continue;
                     }
                     let new_op = OutPoint::new(txid, idx as u32);
+                    undo.created_outpoints.push(new_op);
                     let key = outpoint_to_key(&new_op);
                     let entry = UtxoEntry::new(output.clone(), height, tx.is_coinbase());
                     let entry_bytes = entry
@@ -411,6 +492,9 @@ impl StorageEngine {
                     .map_err(|e| StorageError::serialization(e.to_string()))?;
                 addr_idx_tbl.insert(&key, payload.as_slice())?;
             }
+
+            let undo_bytes = undo.to_bytes()?;
+            undo_tbl.insert(block_hash.as_bytes(), undo_bytes.as_slice())?;
         }
 
         // ── Step 4: Update BLOCK_INDEX ────────────────────────────────────
@@ -518,20 +602,33 @@ impl StorageEngine {
             let mut blk_tbl = write_tx.open_table(tables::BLOCKS)?;
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+            let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
 
             Self::remove_block_address_records_internal(&mut addr_idx_tbl, &tx_tbl, block, height)?;
 
+            let bh = block.header.hash();
+            let undo = undo_tbl
+                .get(bh.as_bytes())?
+                .ok_or_else(|| {
+                    StorageError::InconsistentState(format!("missing undo delta for block {bh}"))
+                })
+                .and_then(|guard| BlockUndo::from_bytes(guard.value()))?;
+            for outpoint in &undo.created_outpoints {
+                utxo_tbl.remove(&outpoint_to_key(outpoint))?;
+            }
+            for (outpoint, entry) in &undo.spent_utxos {
+                let entry_bytes = entry
+                    .to_canonical_bytes()
+                    .map_err(|e| StorageError::serialization(e.to_string()))?;
+                utxo_tbl.insert(&outpoint_to_key(outpoint), entry_bytes.as_slice())?;
+            }
             for tx in &block.transactions {
                 let txid = tx.txid();
-                for (idx, _) in tx.outputs.iter().enumerate() {
-                    let op = OutPoint::new(txid, idx as u32);
-                    utxo_tbl.remove(&outpoint_to_key(&op))?;
-                }
                 tx_tbl.remove(txid.as_bytes())?;
             }
-            let bh = block.header.hash();
             blk_tbl.remove(bh.as_bytes())?;
             idx_tbl.remove(bh.as_bytes())?;
+            undo_tbl.remove(bh.as_bytes())?;
 
             // If tip matches this block, revert tip to parent
             let mut state_tbl = write_tx.open_table(tables::CHAIN_STATE)?;
@@ -568,6 +665,7 @@ impl StorageEngine {
             let mut blk_tbl = write_tx.open_table(tables::BLOCKS)?;
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
+            let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
 
             // Rollback disconnected blocks
             for block in disconnected_blocks {
@@ -587,16 +685,30 @@ impl StorageEngine {
                     )?;
                 }
 
+                let undo = undo_tbl
+                    .get(bh.as_bytes())?
+                    .ok_or_else(|| {
+                        StorageError::InconsistentState(format!(
+                            "missing undo delta for block {bh}"
+                        ))
+                    })
+                    .and_then(|guard| BlockUndo::from_bytes(guard.value()))?;
+                for outpoint in &undo.created_outpoints {
+                    utxo_tbl.remove(&outpoint_to_key(outpoint))?;
+                }
+                for (outpoint, entry) in &undo.spent_utxos {
+                    let entry_bytes = entry
+                        .to_canonical_bytes()
+                        .map_err(|e| StorageError::serialization(e.to_string()))?;
+                    utxo_tbl.insert(&outpoint_to_key(outpoint), entry_bytes.as_slice())?;
+                }
                 for tx in &block.transactions {
                     let txid = tx.txid();
-                    for (idx, _) in tx.outputs.iter().enumerate() {
-                        let op = OutPoint::new(txid, idx as u32);
-                        utxo_tbl.remove(&outpoint_to_key(&op))?;
-                    }
                     tx_tbl.remove(txid.as_bytes())?;
                 }
                 blk_tbl.remove(bh.as_bytes())?;
                 idx_tbl.remove(bh.as_bytes())?;
+                undo_tbl.remove(bh.as_bytes())?;
             }
 
             // Apply connected blocks
@@ -609,6 +721,10 @@ impl StorageEngine {
 
                 let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> =
                     HashMap::new();
+                let mut undo = BlockUndo {
+                    spent_utxos: Vec::new(),
+                    created_outpoints: Vec::new(),
+                };
 
                 for tx in &block.transactions {
                     let txid = tx.txid();
@@ -622,6 +738,8 @@ impl StorageEngine {
                             let spent_output = if let Some(guard) = utxo_tbl.get(&key)? {
                                 let entry = UtxoEntry::from_canonical_bytes(guard.value())
                                     .map_err(|e| StorageError::serialization(e.to_string()))?;
+                                undo.spent_utxos
+                                    .push((input.previous_output, entry.clone()));
                                 Some(entry.output)
                             } else if let Some(tx_bytes) =
                                 tx_tbl.get(input.previous_output.txid.as_bytes())?
@@ -676,6 +794,7 @@ impl StorageEngine {
                             continue;
                         }
                         let op = OutPoint::new(txid, idx as u32);
+                        undo.created_outpoints.push(op);
                         let entry = UtxoEntry::new(output.clone(), *height, tx.is_coinbase());
                         let entry_bytes = entry
                             .to_canonical_bytes()
@@ -683,6 +802,9 @@ impl StorageEngine {
                         utxo_tbl.insert(&outpoint_to_key(&op), entry_bytes.as_slice())?;
                     }
                 }
+
+                let undo_bytes = undo.to_bytes()?;
+                undo_tbl.insert(block_hash.as_bytes(), undo_bytes.as_slice())?;
 
                 // Write address records for connected block
                 for (addr, new_records) in block_addr_records {

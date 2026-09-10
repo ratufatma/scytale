@@ -17,7 +17,22 @@ fn encode_sleb128(mut val: i32) -> Vec<u8> {
     result
 }
 
-fn build_test_wasm(initial_pages: u8, grow_pages: u8) -> Vec<u8> {
+fn encode_uleb128(mut val: u32) -> Vec<u8> {
+    let mut result = Vec::new();
+    loop {
+        let mut byte = (val & 0x7f) as u8;
+        val >>= 7;
+        if val != 0 {
+            byte |= 0x80;
+        }
+        result.push(byte);
+        if val == 0 {
+            return result;
+        }
+    }
+}
+
+fn build_test_wasm(initial_pages: u32, grow_pages: u32) -> Vec<u8> {
     let mut wasm = Vec::new();
     // Magic and version
     wasm.extend_from_slice(&[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
@@ -40,7 +55,8 @@ fn build_test_wasm(initial_pages: u8, grow_pages: u8) -> Vec<u8> {
     wasm.extend_from_slice(&func_body);
 
     // Memory section (id 5): 1 memory with initial_pages
-    let mem_body = [0x01, 0x00, initial_pages];
+    let mut mem_body = vec![0x01, 0x00];
+    mem_body.extend(encode_uleb128(initial_pages));
     wasm.push(0x05);
     wasm.push(mem_body.len() as u8);
     wasm.extend_from_slice(&mem_body);
@@ -97,7 +113,7 @@ fn dummy_context() -> TxContext {
 
 #[test]
 fn test_normal_memory_execution() {
-    let wasm = build_test_wasm(1, 0); // 1 page (64 KiB), well below 64 pages
+    let wasm = build_test_wasm(1, 0); // 1 page (64 KiB), well below 256 pages
     let ctx = dummy_context();
     let res = ScyVM::execute_validator(&wasm, b"datum", b"redeemer", &ctx, 1_000_000).unwrap();
     assert!(res.is_valid);
@@ -106,13 +122,13 @@ fn test_normal_memory_execution() {
 
 #[test]
 fn test_reject_excessive_initial_memory() {
-    // 65 pages > MAX_WASM_MEMORY_PAGES (64 pages)
-    let wasm = build_test_wasm(65, 0);
+    // 257 pages > MAX_WASM_MEMORY_PAGES (256 pages)
+    let wasm = build_test_wasm(257, 0);
     let ctx = dummy_context();
     let err = ScyVM::execute_validator(&wasm, b"datum", b"redeemer", &ctx, 1_000_000).unwrap_err();
     match err {
         VmError::MemoryLimitExceeded { pages, max_pages } => {
-            assert_eq!(pages, 65);
+            assert_eq!(pages, 257);
             assert_eq!(max_pages, MAX_WASM_MEMORY_PAGES);
         }
         VmError::InstantiationFailed => {
@@ -124,8 +140,8 @@ fn test_reject_excessive_initial_memory() {
 
 #[test]
 fn test_reject_memory_grow_beyond_upper_bound() {
-    // Start with 1 page, attempt to grow by 70 pages (total 71 pages > 64)
-    let wasm = build_test_wasm(1, 70);
+    // Start with 1 page, attempt to grow by 256 pages (total 257 > 256)
+    let wasm = build_test_wasm(1, 256);
     let ctx = dummy_context();
     // With trap_on_grow_failure(true), memory.grow traps or execution fails safely
     let res = ScyVM::execute_validator(&wasm, b"datum", b"redeemer", &ctx, 1_000_000);
@@ -149,7 +165,7 @@ fn test_out_of_fuel_traps_safely() {
         "eksekusi dengan fuel tidak mencukupi harus gagal"
     );
     match res.unwrap_err() {
-        VmError::ExecutionTrapped | VmError::OutOfGas => {}
+        VmError::ExecutionTrapped | VmError::OutOfGas | VmError::OutOfFuel => {}
         other => panic!("expected OutOfGas or ExecutionTrapped, got: {:?}", other),
     }
 }

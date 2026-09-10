@@ -10,7 +10,7 @@ description = "CLI and node daemon orchestrator for Scytale blockchain"
 workspace = true
 
 [dependencies]
-libp2p = { version = "0.56", features = ["tokio", "tcp", "noise", "yamux", "gossipsub", "request-response", "kad", "identify", "ping", "macros"] }
+libp2p = { version = "0.56", features = ["tokio", "tcp", "noise", "yamux", "gossipsub", "request-response", "kad", "identify", "ping", "autonat", "relay", "macros"] }
 futures-util = "0.3"
 async-trait = "0.1"
 scytale-primitives = { path = "../../crates/scytale-primitives" }

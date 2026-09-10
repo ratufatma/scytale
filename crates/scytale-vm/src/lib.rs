@@ -1,12 +1,14 @@
 use scytale_sdk::TxContext;
 use wasmi::*;
 
-/// Maximum linear memory pages allowed for a smart contract instance (64 pages = 4 MiB).
-pub const MAX_WASM_MEMORY_PAGES: u32 = 64;
+/// Maximum linear memory pages allowed for a smart contract instance (256 pages = 16 MiB).
+pub const MAX_WASM_MEMORY_PAGES: u32 = 256;
 /// Standard WebAssembly memory page size in bytes (64 KiB).
 pub const WASM_PAGE_SIZE: usize = 65536;
-/// Maximum linear memory in bytes allowed for a smart contract instance (4,194,304 bytes).
+/// Maximum linear memory in bytes allowed for a smart contract instance (16 MiB).
 pub const MAX_WASM_MEMORY_BYTES: usize = (MAX_WASM_MEMORY_PAGES as usize) * WASM_PAGE_SIZE;
+/// Maximum deterministic fuel budget for one validator execution.
+pub const MAX_WASM_FUEL: u64 = 10_000_000;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum VmError {
@@ -15,6 +17,7 @@ pub enum VmError {
     ExecutionTrapped,
     MemoryAccessViolation,
     OutOfGas,
+    OutOfFuel,
     MemoryLimitExceeded { pages: u32, max_pages: u32 },
 }
 
@@ -52,7 +55,8 @@ impl ScyVM {
 
         let mut store = Store::new(&engine, VmState { limits });
         store.limiter(|state| &mut state.limits);
-        store.add_fuel(gas_limit).map_err(|_| VmError::OutOfGas)?;
+        let fuel_limit = gas_limit.min(MAX_WASM_FUEL);
+        store.add_fuel(fuel_limit).map_err(|_| VmError::OutOfGas)?;
 
         let mut linker = <Linker<VmState>>::new(&engine);
 
@@ -209,7 +213,13 @@ impl ScyVM {
                     ctx_bytes.len() as i32,
                 ),
             )
-            .map_err(|_| VmError::ExecutionTrapped)?;
+            .map_err(|error| {
+                if error.to_string().to_ascii_lowercase().contains("fuel") {
+                    VmError::OutOfFuel
+                } else {
+                    VmError::ExecutionTrapped
+                }
+            })?;
 
         let final_pages: u32 = u32::from(memory.current_pages(&store));
         if final_pages > MAX_WASM_MEMORY_PAGES {

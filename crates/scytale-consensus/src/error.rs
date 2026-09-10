@@ -86,4 +86,6 @@ pub enum ConsensusError {
     InvalidTransactionCommitment { expected: Hash256, actual: Hash256 },
     #[error("Transaction verification failed: {0}")]
     TransactionVerification(String),
+    #[error("transaction lock_time is not yet satisfied")]
+    LockTimeNotMet,
 }

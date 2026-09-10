@@ -11,12 +11,12 @@ pub mod engine;
 pub mod error;
 pub mod tables;
 
-pub use engine::{outpoint_to_key, StorageEngine, UtxoSnapshotDto};
+pub use engine::{outpoint_to_key, BlockUndo, StorageEngine, UtxoSnapshotDto};
 pub use error::StorageError;
 pub use tables::{
     deserialize_address_tx_records, extract_address_from_locking_condition, make_address_tx_key,
     serialize_address_tx_records, AddressTxRecord, BlockMeta, ADDRESS_TX_INDEX, BLOCKS,
-    BLOCK_INDEX, CHAIN_STATE, TRANSACTIONS, UTXOS,
+    BLOCK_INDEX, BLOCK_UNDO_TABLE, CHAIN_STATE, TRANSACTIONS, UTXOS,
 };
 
 // ── Legacy compatibility re-exports ──────────────────────────────────────────

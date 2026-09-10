@@ -21,10 +21,12 @@ fn test_node_verify_legacy_script() {
     let prev_txid = Hash256::hash(b"prev_tx");
     let prev_op = OutPoint::new(prev_txid, 0);
     let legacy_lock = vec![0x01, 0x02, 0x03];
-    utxos.insert(
-        prev_op,
-        UtxoEntry::new(TxOut::new(100_000_000, legacy_lock.clone()), 1, false),
-    );
+    utxos
+        .insert(
+            prev_op,
+            UtxoEntry::new(TxOut::new(100_000_000, legacy_lock.clone()), 1, false),
+        )
+        .unwrap();
 
     // 1. Valid legacy authorization matching locking script
     let valid_tx = Transaction::new(
@@ -71,10 +73,12 @@ fn test_node_verify_p2pkh_script() {
         .push_opcode(OpCode::OpCheckSig)
         .build();
 
-    utxos.insert(
-        prev_op,
-        UtxoEntry::new(TxOut::new(500_000_000, p2pkh_lock.clone()), 10, false),
-    );
+    utxos
+        .insert(
+            prev_op,
+            UtxoEntry::new(TxOut::new(500_000_000, p2pkh_lock.clone()), 10, false),
+        )
+        .unwrap();
 
     // Build unsigned transaction
     let recipient_lock = vec![0x0a, 0x0b];
@@ -220,25 +224,23 @@ fn test_node_op_return_output_handling() {
 
 #[test]
 fn test_utxo_root_template_matches_canonical_block_application() {
-    let make_block = |prev_hash: Hash256,
-                      height: u64,
-                      utxos: &UtxoSet,
-                      transactions: Vec<Transaction>| {
-        let mut staged = utxos.clone();
-        let fee_total = staged.apply_block(&transactions, height).unwrap();
-        let _ = fee_total;
-        let utxo_root = staged.compute_utxo_root();
-        let header = BlockHeader::new(
-            1,
-            prev_hash,
-            transaction_commitment(&transactions),
-            utxo_root,
-            200 + height,
-            0x207fffff,
-            0,
-        );
-        Block::new(header, transactions)
-    };
+    let make_block =
+        |prev_hash: Hash256, height: u64, utxos: &UtxoSet, transactions: Vec<Transaction>| {
+            let mut staged = utxos.clone();
+            let fee_total = staged.apply_block(&transactions, height).unwrap();
+            let _ = fee_total;
+            let utxo_root = staged.compute_utxo_root();
+            let header = BlockHeader::new(
+                1,
+                prev_hash,
+                transaction_commitment(&transactions),
+                utxo_root,
+                200 + height,
+                0x207fffff,
+                0,
+            );
+            Block::new(header, transactions)
+        };
 
     let prev_txid = Hash256::hash(b"root_equiv_prev");
     let spend_1 = OutPoint::new(prev_txid, 0);
@@ -258,7 +260,12 @@ fn test_utxo_root_template_matches_canonical_block_application() {
         spend_1,
         UtxoEntry::new(TxOut::new(10_000_000, vec![0x10]), 1, false),
     );
-    let block1 = make_block(Hash256::ZERO, 1, &utxos1, vec![coinbase1.clone(), spend_tx1.clone()]);
+    let block1 = make_block(
+        Hash256::ZERO,
+        1,
+        &utxos1,
+        vec![coinbase1.clone(), spend_tx1.clone()],
+    );
     let mut staged1 = utxos1.clone();
     staged1.apply_block(&block1.transactions, 1).unwrap();
     assert_eq!(block1.header.utxo_root, staged1.compute_utxo_root());
@@ -283,7 +290,12 @@ fn test_utxo_root_template_matches_canonical_block_application() {
         spend_2,
         UtxoEntry::new(TxOut::new(10_000_000, vec![0x30]), 2, false),
     );
-    let block2 = make_block(Hash256::ZERO, 2, &utxos2, vec![coinbase2.clone(), tx_a.clone(), tx_b.clone()]);
+    let block2 = make_block(
+        Hash256::ZERO,
+        2,
+        &utxos2,
+        vec![coinbase2.clone(), tx_a.clone(), tx_b.clone()],
+    );
     let mut staged2 = utxos2.clone();
     staged2.apply_block(&block2.transactions, 2).unwrap();
     assert_eq!(block2.header.utxo_root, staged2.compute_utxo_root());
@@ -313,7 +325,12 @@ fn test_utxo_root_template_matches_canonical_block_application() {
         OutPoint::new(prev_txid, 3),
         UtxoEntry::new(TxOut::new(3_000_000, vec![0x82]), 3, false),
     );
-    let block3 = make_block(Hash256::ZERO, 3, &utxos3, vec![coinbase3.clone(), tx_c.clone()]);
+    let block3 = make_block(
+        Hash256::ZERO,
+        3,
+        &utxos3,
+        vec![coinbase3.clone(), tx_c.clone()],
+    );
     let mut staged3 = utxos3.clone();
     staged3.apply_block(&block3.transactions, 3).unwrap();
     assert_eq!(block3.header.utxo_root, staged3.compute_utxo_root());

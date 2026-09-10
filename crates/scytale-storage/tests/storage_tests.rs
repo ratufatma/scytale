@@ -159,6 +159,37 @@ fn test_utxo_insert_lookup_spend() {
     assert!(!new_entry.is_coinbase);
 }
 
+#[test]
+fn test_reorg_undo_restores_utxo_state_identically() {
+    let engine = StorageEngine::in_memory().unwrap();
+    let genesis = make_coinbase_tx(0, 1_000);
+    let genesis_block = make_block(Hash256::ZERO, 1_700_000_000, 1, vec![genesis.clone()]);
+    let genesis_outpoint = OutPoint::new(genesis.txid(), 0);
+    engine
+        .commit_block(&genesis_block, 0, [1, 0, 0, 0])
+        .unwrap();
+    let expected_root = engine.load_entire_utxo_set().unwrap().compute_utxo_root();
+
+    let spend = transfer_tx(genesis_outpoint, 900);
+    let fork_block = make_block(
+        genesis_block.header.hash(),
+        1_700_000_100,
+        2,
+        vec![make_coinbase_tx(1, 5_000), spend],
+    );
+    engine.commit_block(&fork_block, 1, [2, 0, 0, 0]).unwrap();
+    assert_ne!(
+        engine.load_entire_utxo_set().unwrap().compute_utxo_root(),
+        expected_root
+    );
+
+    engine.unwind_block(&fork_block, 1).unwrap();
+    let restored = engine.load_entire_utxo_set().unwrap();
+    assert_eq!(restored.compute_utxo_root(), expected_root);
+    assert!(restored.contains(&genesis_outpoint));
+    assert_eq!(engine.get_canonical_tip().unwrap().unwrap().1, 0);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 4. Atomic block commit success (multi-table simultaneous update)
 // ─────────────────────────────────────────────────────────────────────────────

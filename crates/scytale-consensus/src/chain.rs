@@ -14,11 +14,52 @@ pub fn transaction_commitment(block: &Block) -> Hash256 {
     Hash256::hash(&bytes)
 }
 
+/// Calculates Median Time Past from the canonical headers preceding an active block.
+pub fn calculate_median_time_past(
+    headers: &[scytale_core::BlockHeader],
+    current_index: usize,
+) -> u64 {
+    let end = current_index.min(headers.len());
+    let start = end.saturating_sub(11);
+    let mut timestamps: Vec<u64> = headers[start..end]
+        .iter()
+        .map(|header| header.timestamp)
+        .collect();
+    if timestamps.is_empty() {
+        return 0;
+    }
+    timestamps.sort_unstable();
+    timestamps[timestamps.len() / 2]
+}
+
+fn validate_lock_time(tx: &Transaction, block_height: u64, mtp: u64) -> Result<(), ConsensusError> {
+    if tx.lock_time == 0 || tx.inputs.iter().all(|input| input.sequence == u32::MAX) {
+        return Ok(());
+    }
+    if tx.lock_time < 500_000_000 {
+        if tx.lock_time > block_height {
+            return Err(ConsensusError::LockTimeNotMet);
+        }
+    } else if tx.lock_time > mtp {
+        return Err(ConsensusError::LockTimeNotMet);
+    }
+    Ok(())
+}
+
 /// Performs consensus checks that must succeed before a block can mutate UTXO state.
 pub fn validate_block_authoritative(
     block: &Block,
     height: u64,
     parent_utxo: &UtxoSet,
+) -> Result<u64, ConsensusError> {
+    validate_block_authoritative_with_headers(block, height, parent_utxo, &[])
+}
+
+pub fn validate_block_authoritative_with_headers(
+    block: &Block,
+    height: u64,
+    parent_utxo: &UtxoSet,
+    headers: &[scytale_core::BlockHeader],
 ) -> Result<u64, ConsensusError> {
     block
         .validate_structure()
@@ -33,6 +74,10 @@ pub fn validate_block_authoritative(
     }
 
     let mut staged = parent_utxo.clone();
+    let mtp = calculate_median_time_past(headers, headers.len());
+    for tx in block.transactions.iter().skip(1) {
+        validate_lock_time(tx, height, mtp)?;
+    }
     let total_fees = staged
         .apply_block(&block.transactions, height)
         .map_err(|error| ConsensusError::TransactionVerification(error.to_string()))?;
@@ -351,7 +396,14 @@ impl ChainTree {
 
         // Authoritative validation must happen before any chain-tree or UTXO
         // mutation, including storing a lower-work fork candidate.
-        if let Err(error) = validate_block_authoritative(&block, height, &parent_utxo) {
+        let parent_headers: Vec<_> = self
+            .get_path_from_genesis(&parent_hash)?
+            .into_iter()
+            .map(|node| node.block.header)
+            .collect();
+        if let Err(error) =
+            validate_block_authoritative_with_headers(&block, height, &parent_utxo, &parent_headers)
+        {
             self.invalid_blocks.insert(block_hash);
             return Err(match error {
                 ConsensusError::InvalidCoinbaseReward {
@@ -468,8 +520,17 @@ impl ChainTree {
         // Apply all blocks in connected_nodes
         let mut connected_blocks = Vec::new();
         for node in &connected_nodes {
-            if let Err(error) = validate_block_authoritative(&node.block, node.height, &staged_utxo)
-            {
+            let headers: Vec<_> = self
+                .get_path_from_genesis(&node.parent_hash)?
+                .into_iter()
+                .map(|parent| parent.block.header)
+                .collect();
+            if let Err(error) = validate_block_authoritative_with_headers(
+                &node.block,
+                node.height,
+                &staged_utxo,
+                &headers,
+            ) {
                 self.invalid_blocks.insert(node.hash);
                 self.invalid_blocks.insert(block_hash);
                 return Err(match error {

@@ -2,13 +2,15 @@ use crate::network::sync::SyncState;
 use futures_util::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures_util::StreamExt;
 use libp2p::{
-    connection_limits, gossipsub, identify, identity, kad, noise, ping, request_response,
-    swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, Multiaddr, PeerId, Swarm, Transport,
+    autonat, connection_limits, gossipsub, identify, identity, kad, noise, ping,
+    relay::client as relay_client, request_response, swarm::NetworkBehaviour, swarm::SwarmEvent,
+    tcp, yamux, Multiaddr, PeerId, Swarm, Transport,
 };
 use scytale_core::{Block, CanonicalDeserialize, Transaction};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::io;
+use std::net::IpAddr;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -31,6 +33,31 @@ const MAX_KNOWN_PEERS: usize = 50;
 const MAX_PEER_FAILURES: u8 = 3;
 const MIN_DISCOVERY_PEERS: usize = 4;
 const DISCOVERY_INTERVAL: Duration = Duration::from_secs(30);
+const MAX_PEERS_PER_SUBNET: usize = 2;
+
+pub fn subnet_key(address: &Multiaddr) -> Option<Vec<u8>> {
+    let ip = address.iter().find_map(|protocol| match protocol {
+        libp2p::multiaddr::Protocol::Ip4(ip) => Some(IpAddr::V4(ip)),
+        libp2p::multiaddr::Protocol::Ip6(ip) => Some(IpAddr::V6(ip)),
+        _ => None,
+    })?;
+    match ip {
+        IpAddr::V4(ip) => Some(ip.octets()[..3].to_vec()),
+        IpAddr::V6(ip) => Some(ip.octets()[..6].to_vec()),
+    }
+}
+
+pub fn subnet_connection_allowed(addresses: &[Multiaddr], candidate: &Multiaddr) -> bool {
+    let Some(candidate_subnet) = subnet_key(candidate) else {
+        return true;
+    };
+    addresses
+        .iter()
+        .filter_map(subnet_key)
+        .filter(|subnet| *subnet == candidate_subnet)
+        .count()
+        < MAX_PEERS_PER_SUBNET
+}
 
 #[derive(Clone, Debug)]
 pub struct P2pStatus {
@@ -219,6 +246,8 @@ pub struct ScytaleBehaviour {
     pub ping: ping::Behaviour,
     pub identify: identify::Behaviour,
     pub connection_limits: connection_limits::Behaviour,
+    pub autonat: autonat::Behaviour,
+    pub relay: relay_client::Behaviour,
 }
 
 #[derive(Debug)]
@@ -228,6 +257,8 @@ pub enum ScytaleEvent {
     Kad(kad::Event),
     Ping(ping::Event),
     Identify(identify::Event),
+    Autonat(autonat::Event),
+    Relay(relay_client::Event),
 }
 
 impl From<gossipsub::Event> for ScytaleEvent {
@@ -263,6 +294,18 @@ impl From<std::convert::Infallible> for ScytaleEvent {
 impl From<identify::Event> for ScytaleEvent {
     fn from(event: identify::Event) -> Self {
         Self::Identify(event)
+    }
+}
+
+impl From<autonat::Event> for ScytaleEvent {
+    fn from(event: autonat::Event) -> Self {
+        Self::Autonat(event)
+    }
+}
+
+impl From<relay_client::Event> for ScytaleEvent {
+    fn from(event: relay_client::Event) -> Self {
+        Self::Relay(event)
     }
 }
 
@@ -325,12 +368,24 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
     let local_peer_id = PeerId::from(keypair.public());
     let public_key = keypair.public();
 
-    let transport = tcp::tokio::Transport::new(tcp::Config::default())
+    let (relay_transport, relay_behaviour) = relay_client::new(local_peer_id);
+    let relay_transport = relay_transport
+        .upgrade(libp2p::core::upgrade::Version::V1Lazy)
+        .authenticate(
+            noise::Config::new(&keypair).map_err(|error| P2pError::Transport(error.to_string()))?,
+        )
+        .multiplex(yamux::Config::default())
+        .map(|(peer_id, muxer), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)));
+    let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default())
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(
             noise::Config::new(&keypair).map_err(|error| P2pError::Transport(error.to_string()))?,
         )
         .multiplex(yamux::Config::default())
+        .map(|(peer_id, muxer), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)));
+    let transport = relay_transport
+        .or_transport(tcp_transport)
+        .map(|either, _| either.into_inner())
         .boxed();
 
     let gossipsub_config = gossipsub::ConfigBuilder::default()
@@ -383,6 +438,8 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                 .with_max_established_outgoing(Some(20))
                 .with_max_established_per_peer(Some(1)),
         ),
+        autonat: autonat::Behaviour::new(local_peer_id, autonat::Config::default()),
+        relay: relay_behaviour,
     };
     let mut swarm = Swarm::new(
         transport,
@@ -398,7 +455,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
         .listen_on(listen_addr)
         .map_err(|error| P2pError::Transport(error.to_string()))?;
 
-    for bootnode in config.bootnodes {
+    for bootnode in &config.bootnodes {
         let address: Multiaddr = bootnode
             .parse()
             .map_err(|_| P2pError::InvalidAddress(bootnode.clone()))?;
@@ -417,6 +474,11 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
     let status_for_task = Arc::clone(&status);
     let known_peers_path = config.known_peers_path.clone();
     let mut known_peers = load_known_peers(&known_peers_path);
+    let bootnode_addresses: Vec<Multiaddr> = config
+        .bootnodes
+        .iter()
+        .filter_map(|address| address.parse().ok())
+        .collect();
     for known_peer in &known_peers {
         if let Ok(address) = known_peer.address.parse::<Multiaddr>() {
             if let Err(error) = swarm.dial(address) {
@@ -428,6 +490,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
     let task = tokio::spawn(async move {
         let mut request_windows: HashMap<PeerId, VecDeque<Instant>> = HashMap::new();
         let mut invalid_gossip: HashMap<PeerId, u8> = HashMap::new();
+        let mut connected_addresses: Vec<(PeerId, Multiaddr)> = Vec::new();
         let mut discovery_timer = tokio::time::interval(DISCOVERY_INTERVAL);
         loop {
             tokio::select! {
@@ -483,6 +546,22 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                     }
                     SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
                         tracing::info!(%peer_id, "libp2p peer connected");
+                        let remote_address = endpoint.get_remote_address().clone();
+                        let is_bootnode = bootnode_addresses
+                            .iter()
+                            .any(|address| address == &remote_address);
+                        let connected_only: Vec<_> = connected_addresses
+                            .iter()
+                            .map(|(_, address)| address.clone())
+                            .collect();
+                        if !is_bootnode
+                            && !subnet_connection_allowed(&connected_only, &remote_address)
+                        {
+                            tracing::warn!(%peer_id, %remote_address, "connection rejected: subnet limit reached");
+                            let _ = swarm.disconnect_peer_id(peer_id);
+                            continue;
+                        }
+                        connected_addresses.push((peer_id, remote_address.clone()));
                         {
                             let mut status = status_for_task.write().unwrap();
                             if !status.connected_peer_ids.contains(&peer_id) {
@@ -490,7 +569,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                             }
                             status.connected_peers = status.connected_peer_ids.len();
                         }
-                        let address = endpoint.get_remote_address().clone();
+                        let address = remote_address;
                         if let Some(known) = known_peers.iter_mut().find(|known| known.peer_id == peer_id.to_string()) {
                             known.address = address.to_string();
                             known.failures = 0;
@@ -507,6 +586,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                     }
                     SwarmEvent::ConnectionClosed { peer_id, .. } => {
                         tracing::info!(%peer_id, "libp2p peer disconnected");
+                        connected_addresses.retain(|(connected_peer, _)| connected_peer != &peer_id);
                         let mut status = status_for_task.write().unwrap();
                         status.connected_peer_ids.retain(|connected| connected != &peer_id);
                         status.connected_peers = status.connected_peer_ids.len();
@@ -588,6 +668,14 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                             }
                         }
                     }
+                    SwarmEvent::Behaviour(ScytaleEvent::Autonat(
+                        autonat::Event::StatusChanged { old, new },
+                    )) => {
+                        tracing::info!(?old, ?new, "AutoNAT reachability status changed");
+                    }
+                    SwarmEvent::Behaviour(ScytaleEvent::Relay(event)) => {
+                        tracing::debug!(?event, "circuit relay client event");
+                    }
                     _ => {}
                 } },
                 outbound_message = outbound_rx.recv() => { match outbound_message {
@@ -659,7 +747,7 @@ fn load_identity(path: &Path) -> Result<identity::Keypair, P2pError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_identity, BLOCKS_TOPIC, TRANSACTIONS_TOPIC};
+    use super::{load_identity, subnet_connection_allowed, BLOCKS_TOPIC, TRANSACTIONS_TOPIC};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -681,5 +769,24 @@ mod tests {
         let second = load_identity(&path).unwrap();
         assert_eq!(first.public(), second.public());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_subnet_connection_limit() {
+        let connected = vec![
+            "/ip4/192.0.2.10/tcp/1000".parse().unwrap(),
+            "/ip4/192.0.2.11/tcp/1001".parse().unwrap(),
+        ];
+        let third = "/ip4/192.0.2.12/tcp/1002".parse().unwrap();
+        assert!(!subnet_connection_allowed(&connected, &third));
+        let different = "/ip4/192.0.3.12/tcp/1002".parse().unwrap();
+        assert!(subnet_connection_allowed(&connected, &different));
+
+        let v6 = vec![
+            "/ip6/2001:db8::1/tcp/1000".parse().unwrap(),
+            "/ip6/2001:db8::2/tcp/1001".parse().unwrap(),
+        ];
+        let third_v6 = "/ip6/2001:db8::3/tcp/1002".parse().unwrap();
+        assert!(!subnet_connection_allowed(&v6, &third_v6));
     }
 }

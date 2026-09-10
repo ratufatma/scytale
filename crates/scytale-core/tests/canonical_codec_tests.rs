@@ -156,7 +156,7 @@ fn test_fixed_regression_test_vectors() {
     assert_eq!(txid, expected_hash);
 
     // Assert stable byte-for-byte serialization
-    let expected_len = 4 + 4 + (36 + 4 + 4) + 4 + (8 + 4 + 5) + 8;
+    let expected_len = 4 + 4 + (36 + 4 + 4 + 4) + 4 + (8 + 4 + 5) + 8;
     assert_eq!(canonical_bytes.len(), expected_len);
 
     // Verify roundtrip reproducibility

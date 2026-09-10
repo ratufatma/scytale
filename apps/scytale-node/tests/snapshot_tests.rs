@@ -43,7 +43,7 @@ fn test_export_and_apply_snapshot_roundtrip() {
 
     let tip_hash = node_a.canonical_tip().to_string();
     let expected_utxo_count = node_a.query_utxo_set().len();
-    assert!(expected_utxo_count >= 3);
+    assert!(expected_utxo_count >= 2);
     let expected_quanta = node_a.total_utxo_quanta();
 
     // Export in chunks of size 1
@@ -71,7 +71,7 @@ fn test_export_and_apply_snapshot_roundtrip() {
     // Initialize node B (non-mining, clean at genesis)
     let mut node_b = Node::open(test_config(dir_b.path().to_path_buf(), false)).unwrap();
     node_b.start().unwrap();
-    assert_eq!(node_b.query_utxo_set().len(), 3); // 3 genesis allocation UTXOs (Founder, Dev, Community)
+    assert_eq!(node_b.query_utxo_set().len(), 2); // Founder and developer genesis allocations
 
     // Apply snapshot to Node B
     let applied_count = node_b

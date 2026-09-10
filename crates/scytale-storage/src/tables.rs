@@ -28,6 +28,9 @@ pub const CHAIN_STATE: TableDefinition<&str, &[u8]> = TableDefinition::new("chai
 pub const ADDRESS_TX_INDEX: TableDefinition<&[u8; 40], &[u8]> =
     TableDefinition::new("address_tx_index");
 
+/// Stores deterministic per-block UTXO undo deltas for instant reorg rollback.
+pub const BLOCK_UNDO_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("block_undo");
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy compatibility tables (kept for existing unit test)
 // ─────────────────────────────────────────────────────────────────────────────

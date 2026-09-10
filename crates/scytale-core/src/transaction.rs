@@ -11,6 +11,12 @@ pub const TRANSACTION_VERSION_1: u32 = 1;
 pub struct TxIn {
     pub previous_output: OutPoint,
     pub authorization: Vec<u8>,
+    #[serde(default = "default_sequence")]
+    pub sequence: u32,
+}
+
+fn default_sequence() -> u32 {
+    u32::MAX
 }
 
 impl TxIn {
@@ -18,6 +24,7 @@ impl TxIn {
         Self {
             previous_output,
             authorization,
+            sequence: u32::MAX,
         }
     }
 
@@ -26,7 +33,13 @@ impl TxIn {
         Self {
             previous_output: OutPoint::null(),
             authorization: Vec::new(),
+            sequence: u32::MAX,
         }
+    }
+
+    pub fn with_sequence(mut self, sequence: u32) -> Self {
+        self.sequence = sequence;
+        self
     }
 }
 
