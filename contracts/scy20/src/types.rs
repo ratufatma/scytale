@@ -1,6 +1,5 @@
 extern crate alloc;
 use alloc::string::String;
-use alloc::vec::Vec;
 use scytale_sdk::serde_signature;
 pub use scytale_sdk::TxContext;
 pub use scytale_sdk::TxContext as ScriptContext;
@@ -24,26 +23,32 @@ pub struct Scy20Datum {
     pub amount: u128,
 }
 
+/// Canonical token state. This datum must be spent and recreated for every
+/// supply-changing operation, which makes both supply and replay state ledger-owned.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenRegistryDatum {
+    pub token_id: TokenId,
+    pub authority: Address,
+    pub current_supply: u128,
+    pub max_supply: Option<u128>,
+    pub nonce: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Scy20Redeemer {
     Transfer {
         #[serde(with = "serde_signature")]
         signature: [u8; 64],
-        outputs: Vec<Scy20Datum>,
-        fee: u128,
+        nonce: u64,
     },
     Mint {
-        amount: u128,
         #[serde(with = "serde_signature")]
         signature: [u8; 64],
-        outputs: Vec<Scy20Datum>,
-        metadata: Option<TokenMetadata>,
-        current_supply: u128,
+        nonce: u64,
     },
     Burn {
-        amount: u128,
         #[serde(with = "serde_signature")]
         signature: [u8; 64],
-        outputs: Vec<Scy20Datum>,
+        nonce: u64,
     },
 }

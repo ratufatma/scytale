@@ -24,7 +24,6 @@ pub fn deserialize_redeemer(bytes: &[u8]) -> Result<Scy20Redeemer, Scy20Error> {
 mod tests {
     use super::*;
     use crate::types::{Address, TokenId};
-    use alloc::vec;
 
     const TOKEN_ID: TokenId = [1; 32];
     const OWNER: Address = [2; 32];
@@ -48,28 +47,15 @@ mod tests {
         let redeemers = [
             Scy20Redeemer::Transfer {
                 signature: [0x55; 64],
-                outputs: vec![Scy20Datum {
-                    token_id: TOKEN_ID,
-                    owner: OWNER,
-                    amount: 100,
-                }],
-                fee: 0,
+                nonce: 1,
             },
             Scy20Redeemer::Mint {
-                amount: 123,
                 signature: [0x77; 64],
-                outputs: vec![Scy20Datum {
-                    token_id: TOKEN_ID,
-                    owner: OWNER,
-                    amount: 123,
-                }],
-                metadata: None,
-                current_supply: 0,
+                nonce: 2,
             },
             Scy20Redeemer::Burn {
-                amount: 45,
                 signature: [0x99; 64],
-                outputs: Vec::new(),
+                nonce: 3,
             },
         ];
 

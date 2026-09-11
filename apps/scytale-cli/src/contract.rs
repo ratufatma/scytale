@@ -134,10 +134,6 @@ pub struct CallArgs {
     #[arg(long)]
     pub skip_dry_run: bool,
 
-    /// Simulated input amount in quanta for dry-run (use actual UTXO value)
-    #[arg(long, default_value_t = 0)]
-    pub input_amount: u64,
-
     /// Node HTTP Gateway URL to broadcast the spend transaction
     #[arg(long, alias = "rpc-url", default_value = "http://127.0.0.1:8332")]
     pub node_url: String,
@@ -656,10 +652,14 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
 
     let signature_bytes = if let Some(sig_hex) = &args.signature {
         let clean_sig = clean_hex(sig_hex);
-        Some(
-            hex::decode(clean_sig)
-                .map_err(|e| CliClientError::User(format!("Invalid signature hex: {e}")))?,
-        )
+        let signature = hex::decode(clean_sig)
+            .map_err(|e| CliClientError::User(format!("Invalid signature hex: {e}")))?;
+        if signature.len() != 64 {
+            return Err(CliClientError::User(
+                "Contract witness signature must be exactly 64 bytes".to_string(),
+            ));
+        }
+        Some(signature)
     } else {
         None
     };
@@ -667,17 +667,21 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
     let script_hash = *blake3::hash(&wasm_bytes).as_bytes();
 
     // 3. Determine input and output amounts
-    let input_amount = if args.input_amount > 0 {
-        args.input_amount
-    } else if let Some(fetched) = fetch_tx_output_value(&node_url, txid_hex, output_index) {
+    let input_amount = if let Some(fetched) = fetch_tx_output_value(&node_url, txid_hex, output_index) {
         fetched
-    } else if args.amount + args.fee > 0 {
-        args.amount + args.fee
     } else {
-        1_000_000 // default fallback placeholder
+        return Err(CliClientError::User(
+            "Unable to resolve the actual input UTXO value from the node"
+                .to_string(),
+        ));
     };
 
     let output_amount = if args.amount > 0 {
+        if args.amount > input_amount.saturating_sub(args.fee) {
+            return Err(CliClientError::User(
+                "Output amount exceeds the resolved input after fee".to_string(),
+            ));
+        }
         args.amount
     } else {
         input_amount.saturating_sub(args.fee)
@@ -714,7 +718,7 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
         Some(wasm_bytes.clone()),
     );
     let tx_in = eutxo_input.to_tx_in();
-    let tx_out = TxOut::new(output_amount, to_bytes);
+    let tx_out = TxOut::new(output_amount, to_bytes.clone());
     let spending_tx = Transaction::new(TRANSACTION_VERSION_1, vec![tx_in], vec![tx_out], 0);
 
     // 5. ScyVM Dry-Run Simulation
@@ -728,7 +732,14 @@ pub fn call_contract(args: CallArgs) -> Result<(), CliClientError> {
             .map(|d| d.as_secs())
             .unwrap_or(0);
 
-        let tx_context = create_tx_context(&spending_tx, current_time, input_amount, output_amount);
+        let mut tx_context =
+            create_tx_context(&spending_tx, current_time, input_amount, output_amount);
+        tx_context.input_datums.push(datum_bytes.clone());
+        if let Some(OutputLock::Script { datum, .. }) = OutputLock::from_locking_condition(&to_bytes)
+        {
+            tx_context.output_datums.push(datum);
+        }
+        tx_context.ledger_state.push(datum_bytes.clone());
 
         println!("  [*] Executing ScyVM sandbox...");
         println!("      block_time   = {} (unix timestamp)", current_time);

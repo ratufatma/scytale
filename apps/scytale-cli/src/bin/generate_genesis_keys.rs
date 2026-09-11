@@ -6,6 +6,7 @@
 //!
 //! Writes secrets to `.genesis_keys.json` with strict 0600 POSIX permissions.
 
+use clap::Parser;
 use ed25519_dalek::SigningKey;
 use scytale_core::Address;
 use scytale_primitives::to_hex;
@@ -14,8 +15,23 @@ use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "generate_genesis_keys",
+    about = "Generate the official Scytale genesis allocation keys"
+)]
+struct Args {
+    /// Destination JSON file. Existing files require --force.
+    #[arg(long, default_value = ".genesis_keys.json")]
+    output: PathBuf,
+
+    /// Replace an existing output file atomically.
+    #[arg(long)]
+    force: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GenesisKeyEntry {
@@ -48,18 +64,21 @@ fn build_p2pkh_locking_script(address_hash: &[u8; 32]) -> Vec<u8> {
         .build()
 }
 
-fn generate_entry(role: &str, percent: u8, scy: u64, quanta: u64) -> GenesisKeyEntry {
+fn generate_entry(
+    role: &str,
+    percent: u8,
+    scy: u64,
+    quanta: u64,
+) -> Result<GenesisKeyEntry, Box<dyn std::error::Error>> {
     let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
     let verifying_key = signing_key.verifying_key();
     let privkey_bytes = signing_key.to_bytes();
     let pubkey_bytes = verifying_key.to_bytes();
     let address_hash = *blake3::hash(&pubkey_bytes).as_bytes();
-    let bech32_addr = Address::new(address_hash)
-        .to_bech32()
-        .expect("bech32 address encoding failed");
+    let bech32_addr = Address::new(address_hash).to_bech32()?;
     let locking_script = build_p2pkh_locking_script(&address_hash);
 
-    GenesisKeyEntry {
+    Ok(GenesisKeyEntry {
         role: role.to_string(),
         allocation_percent: percent,
         allocation_scy: scy,
@@ -69,25 +88,34 @@ fn generate_entry(role: &str, percent: u8, scy: u64, quanta: u64) -> GenesisKeyE
         address_hash_hex: to_hex(&address_hash),
         bech32_address: bech32_addr,
         locking_script_hex: to_hex(&locking_script),
-    }
+    })
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let founder = generate_entry("Founder Allocation", 30, 19_800_000, 1_980_000_000_000_000);
+    let args = Args::parse();
+    if args.output.exists() && !args.force {
+        return Err(format!(
+            "refusing to overwrite existing key file {}; pass --force only after verifying the backup",
+            args.output.display()
+        )
+        .into());
+    }
+
+    let founder = generate_entry("Founder Allocation", 30, 19_800_000, 1_980_000_000_000_000)?;
 
     let treasury = generate_entry(
         "Development / Treasury",
         20,
         13_200_000,
         1_320_000_000_000_000,
-    );
+    )?;
 
     let community = generate_entry(
         "Ecosystem / Community",
         50,
         33_000_000,
         3_300_000_000_000_000,
-    );
+    )?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -101,22 +129,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         allocations: vec![founder.clone(), treasury.clone(), community.clone()],
     };
 
-    let target_path = Path::new(".genesis_keys.json");
     let json_content = serde_json::to_string_pretty(&keys_file)?;
+    let temporary_path = args.output.with_extension("json.tmp");
 
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
+        .create_new(true)
         .truncate(true)
         .mode(0o600)
-        .open(target_path)?;
+        .open(&temporary_path)?;
     file.write_all(json_content.as_bytes())?;
     file.flush()?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(&temporary_path, &args.output)?;
+    std::fs::set_permissions(
+        &args.output,
+        std::os::unix::fs::PermissionsExt::from_mode(0o600),
+    )?;
 
     println!("================================================================================");
     println!("               SCYTALE OFFICIAL GENESIS KEYPAIR GENERATION                      ");
     println!("================================================================================");
-    println!("Generated file: .genesis_keys.json (Permissions: 0600 - Strictly Local)");
+    println!(
+        "Generated file: {} (Permissions: 0600 - Strictly Local)",
+        args.output.display()
+    );
     println!();
 
     for entry in &keys_file.allocations {

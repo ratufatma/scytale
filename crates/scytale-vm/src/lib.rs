@@ -157,7 +157,12 @@ impl ScyVM {
                     }
 
                     let hash = blake3::hash(&data);
-                    let _ = memory.write(&mut caller, out_ptr as usize, hash.as_bytes());
+                    if memory
+                        .write(&mut caller, out_ptr as usize, hash.as_bytes())
+                        .is_err()
+                    {
+                        return;
+                    }
                 },
             )
             .map_err(|_| VmError::InstantiationFailed)?;
@@ -183,9 +188,20 @@ impl ScyVM {
         let ctx_bytes = bincode::serialize(context).map_err(|_| VmError::MemoryAccessViolation)?;
 
         // Alokasikan ruang data langsung di offset memori Wasm linear
-        let datum_offset = 1024;
-        let redeemer_offset = datum_offset + datum.len();
-        let ctx_offset = redeemer_offset + redeemer.len();
+        let datum_offset: usize = 1024;
+        let redeemer_offset = datum_offset
+            .checked_add(datum.len())
+            .ok_or(VmError::MemoryAccessViolation)?;
+        let ctx_offset = redeemer_offset
+            .checked_add(redeemer.len())
+            .ok_or(VmError::MemoryAccessViolation)?;
+        if datum.len() > i32::MAX as usize
+            || redeemer.len() > i32::MAX as usize
+            || ctx_bytes.len() > i32::MAX as usize
+            || ctx_offset > i32::MAX as usize
+        {
+            return Err(VmError::MemoryAccessViolation);
+        }
 
         memory
             .write(&mut store, datum_offset, datum)
@@ -229,7 +245,7 @@ impl ScyVM {
             });
         }
 
-        let gas_consumed = store.fuel_consumed().unwrap_or(0);
+        let gas_consumed = store.fuel_consumed().ok_or(VmError::OutOfFuel)?;
 
         Ok(ExecutionResult {
             is_valid: result == 1,

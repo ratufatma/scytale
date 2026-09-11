@@ -8,6 +8,8 @@ pub enum Scy20Error {
     MaxSupplyExceeded,
     ZeroAmount,
     DeserializationFailed,
+    InvalidRegistryState,
+    NonceMismatch,
 }
 
 impl fmt::Display for Scy20Error {
@@ -29,6 +31,8 @@ impl fmt::Display for Scy20Error {
             Self::DeserializationFailed => {
                 write!(f, "Gagal melakukan deserialisasi Datum atau Redeemer")
             }
+            Self::InvalidRegistryState => write!(f, "State registry token tidak valid"),
+            Self::NonceMismatch => write!(f, "Nonce transaksi tidak cocok atau sudah dipakai"),
         }
     }
 }

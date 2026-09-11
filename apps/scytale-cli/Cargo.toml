@@ -5,6 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Command-line interface and operator tooling for Scytale blockchain"
+default-run = "scytale-cli"
 
 [lints]
 workspace = true

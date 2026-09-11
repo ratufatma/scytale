@@ -76,6 +76,8 @@ pub enum VaultRedeemer {
     },
     EmergencyRescue {
         penalty_accepted: bool,
+        #[serde(with = "serde_signature")]
+        signature: [u8; 64],
     },
 }
 
@@ -89,6 +91,12 @@ pub extern "C" fn validate(
     ctx_ptr: *const u8,
     ctx_len: usize,
 ) -> i32 {
+    if (datum_ptr.is_null() && datum_len != 0)
+        || (redeemer_ptr.is_null() && redeemer_len != 0)
+        || (ctx_ptr.is_null() && ctx_len != 0)
+    {
+        return VALIDATION_REJECT;
+    }
     let datum_slice = unsafe { core::slice::from_raw_parts(datum_ptr, datum_len) };
     let redeemer_slice = unsafe { core::slice::from_raw_parts(redeemer_ptr, redeemer_len) };
     let ctx_slice = unsafe { core::slice::from_raw_parts(ctx_ptr, ctx_len) };
@@ -119,9 +127,15 @@ pub extern "C" fn validate(
                 VALIDATION_REJECT
             }
         }
-        VaultRedeemer::EmergencyRescue { penalty_accepted } => {
-            // Penyelamatan sebelum timelock wajib menyertakan pembakaran denda
-            if penalty_accepted && ctx.fee_burned >= datum.penalty_fee {
+        VaultRedeemer::EmergencyRescue {
+            penalty_accepted,
+            signature,
+        } => {
+            // Rescue requires emergency authority and an independently verified penalty.
+            if penalty_accepted
+                && ctx.fee_burned >= datum.penalty_fee
+                && verify_ed25519(&datum.emergency_key, &signature, &ctx.tx_hash)
+            {
                 VALIDATION_SUCCESS
             } else {
                 VALIDATION_REJECT
@@ -219,11 +233,15 @@ mod tests {
         let emergency = keypair(4);
         let datum = vault_datum(&owner, &emergency);
 
+        let signature = emergency
+            .sign(&context(1, datum.penalty_fee).tx_hash)
+            .to_bytes();
         assert_eq!(
             invoke(
                 &datum,
                 &VaultRedeemer::EmergencyRescue {
                     penalty_accepted: true,
+                    signature,
                 },
                 &context(1, datum.penalty_fee)
             ),
@@ -234,6 +252,7 @@ mod tests {
                 &datum,
                 &VaultRedeemer::EmergencyRescue {
                     penalty_accepted: false,
+                    signature,
                 },
                 &context(1, datum.penalty_fee)
             ),
@@ -244,8 +263,24 @@ mod tests {
                 &datum,
                 &VaultRedeemer::EmergencyRescue {
                     penalty_accepted: true,
+                    signature,
                 },
                 &context(1, datum.penalty_fee - 1)
+            ),
+            VALIDATION_REJECT
+        );
+
+        let wrong_signature = keypair(9)
+            .sign(&context(1, datum.penalty_fee).tx_hash)
+            .to_bytes();
+        assert_eq!(
+            invoke(
+                &datum,
+                &VaultRedeemer::EmergencyRescue {
+                    penalty_accepted: true,
+                    signature: wrong_signature,
+                },
+                &context(1, datum.penalty_fee)
             ),
             VALIDATION_REJECT
         );

@@ -53,6 +53,9 @@ pub fn create_tx_context(
         block_time,
         input_amount: total_input_amount,
         fee_burned: total_input_amount.saturating_sub(total_output_amount),
+        input_datums: Vec::new(),
+        output_datums: Vec::new(),
+        ledger_state: Vec::new(),
     }
 }
 
@@ -87,7 +90,28 @@ pub fn verify_transaction_eutxo(
     let total_out = tx
         .total_output_quanta()
         .map_err(|_| EutxoValidationError::ArithmeticOverflow)?;
-    let tx_context = create_tx_context(tx, block_time, total_in, total_out);
+    let mut tx_context = create_tx_context(tx, block_time, total_in, total_out);
+
+    // Only the host may resolve datum state. Witness redeemers never provide
+    // substitute input/output token state to the validator.
+    for input in &tx.inputs {
+        let utxo = utxos
+            .get(&input.previous_output)
+            .expect("UTXO checked above");
+        if let Some(OutputLock::Script { datum, .. }) =
+            OutputLock::from_locking_condition(&utxo.output.locking_condition)
+        {
+            tx_context.input_datums.push(datum.clone());
+            tx_context.ledger_state.push(datum);
+        }
+    }
+    for output in &tx.outputs {
+        if let Some(OutputLock::Script { datum, .. }) =
+            OutputLock::from_locking_condition(&output.locking_condition)
+        {
+            tx_context.output_datums.push(datum);
+        }
+    }
 
     let mut total_gas_consumed: u64 = 0;
 

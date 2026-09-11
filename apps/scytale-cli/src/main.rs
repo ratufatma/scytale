@@ -22,6 +22,10 @@ use wallet::WalletFile;
 
 const DEFAULT_SOCKET_PATH: &str = "/tmp/scytale.sock";
 
+fn default_socket_path() -> String {
+    std::env::var("SCYTALE_SOCKET").unwrap_or_else(|_| DEFAULT_SOCKET_PATH.to_string())
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "scytale-cli",
@@ -33,8 +37,8 @@ pub struct Cli {
     #[arg(
         long,
         global = true,
-        default_value = DEFAULT_SOCKET_PATH,
-        help = "Path to node IPC socket"
+        default_value_t = default_socket_path(),
+        help = "Path to node IPC socket (or SCYTALE_SOCKET)"
     )]
     pub socket: String,
 

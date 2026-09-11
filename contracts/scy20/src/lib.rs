@@ -8,8 +8,11 @@ pub mod validator;
 
 pub use codec::{deserialize_datum, deserialize_redeemer, serialize_datum, serialize_redeemer};
 pub use error::Scy20Error;
-pub use types::{Address, ScriptContext, Scy20Datum, Scy20Redeemer, TokenId, TokenMetadata};
-pub use validator::{validate_burn, validate_mint, validate_scy20_execution, validate_transfer};
+pub use types::{
+    Address, ScriptContext, Scy20Datum, Scy20Redeemer, TokenId, TokenMetadata,
+    TokenRegistryDatum,
+};
+pub use validator::validate_scy20_execution;
 
 pub use scytale_sdk::{decode_payload, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS};
 

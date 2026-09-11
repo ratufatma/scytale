@@ -29,5 +29,6 @@ COPY --from=rust-builder /app/target/release/scytale-cli /usr/local/bin/scytale-
 RUN mkdir -p /data /run/scytale /root/.scytale
 
 ENV RUST_LOG=info
+ENV SCYTALE_SOCKET=/run/scytale/node.sock
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["scytale-node", "--data-dir", "/data", "--socket", "/run/scytale/node.sock", "start"]

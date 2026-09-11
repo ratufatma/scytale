@@ -80,6 +80,8 @@ enum VaultRedeemer {
     },
     EmergencyRescue {
         penalty_accepted: bool,
+        #[serde(with = "serde_signature")]
+        signature: [u8; 64],
     },
 }
 

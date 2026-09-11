@@ -424,6 +424,7 @@ async fn test_ipc_request_response_roundtrip() {
         data_dir: ":memory:".into(),
         mining_enabled: false,
         miner_payout_script: vec![0x01, 0x02, 0x03],
+        genesis_difficulty_target: 0x1f00ffff,
         ..NodeConfig::default()
     };
 
@@ -504,7 +505,20 @@ async fn test_ipc_request_response_roundtrip() {
         scytale_core::UtxoEntry::new(TxOut::new(subsidy, vec![0x01, 0x02, 0x03]), 1, true),
     );
     let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
+    let mut header = BlockHeader::new(
+        1,
+        genesis_tip,
+        Hash256::hash(cb1.txid().as_bytes()),
+        utxo_root,
+        1_700_000_060,
+        0x1f00ffff,
+        0,
+    );
+    assert!(scytale_consensus::mine_test_header(
+        &mut header,
+        &scytale_consensus::Target::from_compact(0x1f00ffff),
+        10_000_000
+    ));
     let block1 = Block::new(header, vec![cb1]);
     assert!(node.submit_external_block(block1).unwrap());
     assert_eq!(node.canonical_height(), 1);

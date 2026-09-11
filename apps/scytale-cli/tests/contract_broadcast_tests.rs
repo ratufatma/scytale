@@ -28,6 +28,24 @@ use contract::{
 };
 use wallet::WalletFile;
 
+fn mine_header(
+    version: u32,
+    parent: Hash256,
+    commitment: Hash256,
+    utxo_root: Hash256,
+    timestamp: u64,
+) -> BlockHeader {
+    let mut header = BlockHeader::new(
+        version, parent, commitment, utxo_root, timestamp, 0x1f00ffff, 0,
+    );
+    assert!(scytale_consensus::mine_test_header(
+        &mut header,
+        &scytale_consensus::Target::from_compact(0x1f00ffff),
+        10_000_000
+    ));
+    header
+}
+
 #[derive(Serialize, Deserialize)]
 struct VaultDatum {
     owner_pubkey: [u8; 32],
@@ -60,6 +78,8 @@ enum VaultRedeemer {
     },
     EmergencyRescue {
         penalty_accepted: bool,
+        #[serde(with = "serde_sig")]
+        signature: [u8; 64],
     },
 }
 
@@ -85,6 +105,7 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         data_dir: temp.path().to_path_buf(),
         mining_enabled: false,
         miner_payout_script: vec![0x01, 0x02, 0x03],
+        genesis_difficulty_target: 0x1f00ffff,
         ..NodeConfig::default()
     };
     let mut node = Node::open(config).unwrap();
@@ -124,7 +145,13 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         scytale_core::UtxoEntry::new(TxOut::new(reward, wallet_script), 1, true),
     );
     let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
+    let header = mine_header(
+        1,
+        genesis_tip,
+        Hash256::hash(cb.txid().as_bytes()),
+        utxo_root,
+        1_700_000_060,
+    );
     let block1 = Block::new(header, vec![cb]);
     assert!(node.submit_external_block(block1).unwrap());
 
@@ -211,7 +238,16 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         );
     }
     let utxo_root2 = staging2.compute_utxo_root();
-    let header2 = BlockHeader::new(2, tip1, Hash256::ZERO, utxo_root2, 200, 0x207fffff, 0);
+    let mut commitment2 = Vec::with_capacity(64);
+    commitment2.extend_from_slice(cb2.txid().as_bytes());
+    commitment2.extend_from_slice(deploy_txid.as_bytes());
+    let header2 = mine_header(
+        2,
+        tip1,
+        Hash256::hash(&commitment2),
+        utxo_root2,
+        1_700_000_120,
+    );
     let block2 = Block::new(header2, vec![cb2, deploy_tx.clone()]);
     assert!(node.submit_external_block(block2).unwrap());
 
@@ -222,6 +258,7 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
     // 7. Test `contract call` with dry-run
     let redeemer = VaultRedeemer::EmergencyRescue {
         penalty_accepted: true,
+        signature: [0u8; 64],
     };
     let redeemer_bytes = bincode::serialize(&redeemer).unwrap();
     let redeemer_hex = hex::encode(&redeemer_bytes);
@@ -237,7 +274,6 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         signature: None,
         dry_run: true,
         skip_dry_run: false,
-        input_amount: 10_000_000,
         node_url: node_url.clone(),
     };
     let dry_call_res = call_contract(dry_call_args);
@@ -259,7 +295,6 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
         signature: None,
         dry_run: false,
         skip_dry_run: false,
-        input_amount: 10_000_000,
         node_url: node_url.clone(),
     };
     let live_call_res = call_contract(live_call_args);
@@ -336,6 +371,7 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
         data_dir: temp.path().to_path_buf(),
         mining_enabled: false,
         miner_payout_script: vec![0x01, 0x02, 0x03],
+        genesis_difficulty_target: 0x1f00ffff,
         ..NodeConfig::default()
     };
     let mut node = Node::open(config).unwrap();
@@ -391,13 +427,20 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
         ),
     );
     let utxo_root = staging.compute_utxo_root();
-    let header = BlockHeader::new(1, genesis_tip, Hash256::ZERO, utxo_root, 100, 0x207fffff, 0);
+    let header = mine_header(
+        1,
+        genesis_tip,
+        Hash256::hash(cb.txid().as_bytes()),
+        utxo_root,
+        1_700_000_060,
+    );
     let block1 = Block::new(header, vec![cb.clone()]);
     assert!(node.submit_external_block(block1).unwrap());
 
     // 4. Try to call contract with fee = 10 quanta (way below 92KB minimum relay fee)
     let redeemer = VaultRedeemer::EmergencyRescue {
         penalty_accepted: true,
+        signature: [0u8; 64],
     };
     let redeemer_bytes = bincode::serialize(&redeemer).unwrap();
     let redeemer_hex = hex::encode(&redeemer_bytes);
@@ -413,7 +456,6 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
         signature: None,
         dry_run: false,
         skip_dry_run: false,
-        input_amount: reward,
         node_url,
     };
 

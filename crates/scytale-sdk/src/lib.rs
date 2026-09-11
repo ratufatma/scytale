@@ -11,6 +11,12 @@ pub struct TxContext {
     pub block_time: u64,
     pub input_amount: u64,
     pub fee_burned: u64,
+    /// Canonical datum bytes resolved by the host from all transaction inputs.
+    pub input_datums: Vec<Vec<u8>>,
+    /// Canonical datum bytes resolved by the host from all transaction outputs.
+    pub output_datums: Vec<Vec<u8>>,
+    /// Canonical ledger state available to the validator (for example a token registry).
+    pub ledger_state: Vec<Vec<u8>>,
 }
 
 /// Helper untuk deserialisasi payload byte yang dikirim dari VM host
@@ -165,6 +171,9 @@ mod tests {
             block_time: 1_750_000_000,
             input_amount: 42_000,
             fee_burned: 1_000,
+            input_datums: Vec::new(),
+            output_datums: Vec::new(),
+            ledger_state: Vec::new(),
         };
 
         let encoded = encode_payload(&context).expect("context should serialize");
@@ -183,6 +192,9 @@ mod tests {
             block_time: 1,
             input_amount: 2,
             fee_burned: 3,
+            input_datums: Vec::new(),
+            output_datums: Vec::new(),
+            ledger_state: Vec::new(),
         };
         let mut encoded = encode_payload(&context).expect("context should serialize");
         encoded.pop();
