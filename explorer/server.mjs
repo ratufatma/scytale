@@ -9,7 +9,8 @@ import {
   getRecentBlocks,
   getBlockByIdentifier,
   getLatestBlock,
-  getBlockCount
+  getBlockCount,
+  getActiveMinersStats
 } from './db.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -170,28 +171,54 @@ app.get('/api/v1/blocks/:id', handleGetBlockById);
 app.get('/rpc/api/blocks/:id', handleGetBlockById);
 app.get('/rpc/api/v1/blocks/:id', handleGetBlockById);
 
-function handleGetStatus(req, res) {
+async function handleGetStatus(req, res) {
   try {
     const latest = getLatestBlock();
     const count = getBlockCount();
+    const minersStats = getActiveMinersStats(100);
 
-    if (!latest) {
-      return res.status(404).json({ error: 'No indexed canonical block found' });
+    let upstream = null;
+    if (nodeBaseUrl) {
+      try {
+        const r = await fetch(`${nodeBaseUrl}/api/v1/status`, {
+          signal: AbortSignal.timeout(2500)
+        });
+        if (r.ok) {
+          upstream = await r.json();
+        }
+      } catch (_) {
+        // Fallback to SQLite DB if node is temporarily unreachable
+      }
     }
-    const tipHash = latest.hash.startsWith('0x') ? latest.hash : `0x${latest.hash}`;
+
+    const tipHash = upstream?.canonical_tip || (latest ? (latest.hash.startsWith('0x') ? latest.hash : `0x${latest.hash}`) : '0x0');
+    const height = upstream?.canonical_height !== undefined ? upstream.canonical_height : (latest ? latest.height : 0);
 
     res.json({
-      runtime_state: 'Operational',
-      canonical_height: latest.height,
+      runtime_state: upstream?.runtime_state || 'Operational',
+      canonical_height: height,
       canonical_tip: tipHash,
       indexed_blocks_count: count,
-      peer_count: 0,
-      mempool_tx_count: 0,
-      mining_active: false
+      peer_count: upstream?.peer_count !== undefined ? upstream.peer_count : 0,
+      mempool_tx_count: upstream?.mempool_tx_count !== undefined ? upstream.mempool_tx_count : 0,
+      mining_active: upstream?.mining_active !== undefined ? upstream.mining_active : false,
+      active_miners_count: minersStats.active_miner_count,
+      total_miners_count: minersStats.total_miner_count
     });
   } catch (err) {
     console.error('Error retrieving status:', err);
     res.status(500).json({ error: 'Failed to retrieve status' });
+  }
+}
+
+function handleGetMiners(req, res) {
+  try {
+    const window = Math.min(1000, Math.max(1, Number(req.query.window) || 100));
+    const stats = getActiveMinersStats(window);
+    res.json(stats);
+  } catch (err) {
+    console.error('Error retrieving active miners:', err);
+    res.status(500).json({ error: 'Failed to retrieve active miners' });
   }
 }
 
@@ -219,7 +246,6 @@ async function proxyNodeRequest(req, res, next) {
 
 if (nodeBaseUrl) {
   for (const path of [
-    '/api/v1/status',
     '/api/v1/blocks',
     '/api/v1/blocks/:id',
     '/api/v1/tx/:id',
@@ -236,6 +262,11 @@ app.get('/api/status', handleGetStatus);
 app.get('/api/v1/status', handleGetStatus);
 app.get('/rpc/api/status', handleGetStatus);
 app.get('/rpc/api/v1/status', handleGetStatus);
+
+app.get('/api/miners', handleGetMiners);
+app.get('/api/v1/miners', handleGetMiners);
+app.get('/rpc/api/miners', handleGetMiners);
+app.get('/rpc/api/v1/miners', handleGetMiners);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Faucet Endpoints (POST /api/v1/faucet & GET /api/v1/faucet/info)

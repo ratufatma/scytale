@@ -30,6 +30,7 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_blocks_hash ON blocks(hash);
   CREATE INDEX IF NOT EXISTS idx_blocks_timestamp ON blocks(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_blocks_miner ON blocks(miner);
 `);
 
 const stmtUpsert = db.prepare(`
@@ -72,6 +73,27 @@ const stmtLatestBlock = db.prepare(`
 
 const stmtCountBlocks = db.prepare(`
   SELECT COUNT(*) as count FROM blocks
+`);
+
+const stmtMinersStats = db.prepare(`
+  WITH recent_blocks AS (
+    SELECT height, miner, timestamp
+    FROM blocks
+    ORDER BY height DESC
+    LIMIT ?
+  )
+  SELECT 
+    miner,
+    COUNT(*) as blocks_mined,
+    MAX(height) as last_block_height,
+    MAX(timestamp) as last_seen
+  FROM recent_blocks
+  GROUP BY miner
+  ORDER BY blocks_mined DESC, last_block_height DESC
+`);
+
+const stmtDistinctMinersCount = db.prepare(`
+  SELECT COUNT(DISTINCT miner) as count FROM blocks
 `);
 
 /**
@@ -136,6 +158,34 @@ export function getLatestBlock() {
 export function getBlockCount() {
   const row = stmtCountBlocks.get();
   return row ? row.count : 0;
+}
+
+/**
+ * Returns active miner statistics evaluated over recent N blocks.
+ * @param {number} windowLimit
+ */
+export function getActiveMinersStats(windowLimit = 100) {
+  const window = Math.max(1, Math.min(1000, Number(windowLimit) || 100));
+  const rows = stmtMinersStats.all(window);
+  const totalMinersRow = stmtDistinctMinersCount.get();
+  const totalMinersCount = totalMinersRow ? totalMinersRow.count : 0;
+
+  const totalBlocksInWindow = rows.reduce((sum, r) => sum + r.blocks_mined, 0);
+
+  const miners = rows.map(r => ({
+    address: r.miner,
+    blocks_mined: r.blocks_mined,
+    share_pct: totalBlocksInWindow > 0 ? Number(((r.blocks_mined / totalBlocksInWindow) * 100).toFixed(1)) : 0,
+    last_block_height: r.last_block_height,
+    last_seen: r.last_seen
+  }));
+
+  return {
+    window_blocks: totalBlocksInWindow,
+    active_miner_count: miners.length,
+    total_miner_count: totalMinersCount,
+    miners
+  };
 }
 
 export default db;
