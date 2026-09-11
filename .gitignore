@@ -50,6 +50,7 @@ explorer/.turbo/
 
 # Secret and Genesis keys
 .genesis_keys.json
+.env.prod
 *.key.json
 p2p_key.dat
 known_peers.json

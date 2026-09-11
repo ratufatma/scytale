@@ -1,0 +1,63 @@
+services:
+  node-1:
+    image: scytale:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: scytale-node-prod
+    hostname: node-1
+    restart: unless-stopped
+    env_file:
+      - ${SCYTALE_ENV_FILE:-.env.prod}
+    expose:
+      - "8332"
+      - "9000"
+    volumes:
+      - scytale_node_data:/data
+    networks:
+      - scytale-net
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "--socket"
+      - "/run/scytale/node.sock"
+      - "start"
+      - "--http-bind"
+      - "0.0.0.0:8332"
+      - "--p2p-listen"
+      - "/ip4/0.0.0.0/tcp/9000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8332/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: scytale-rpc-proxy
+    restart: unless-stopped
+    env_file:
+      - ${SCYTALE_ENV_FILE:-.env.prod}
+    depends_on:
+      node-1:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - scytale-net
+
+volumes:
+  scytale_node_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  scytale-net:
+    driver: bridge

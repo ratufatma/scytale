@@ -1,0 +1,19 @@
+{$SCYTALE_DOMAIN} {
+    encode gzip
+
+    @rpc_write {
+        method POST
+        path /api/v1/tx /api/v1/alias/bind
+    }
+
+    handle @rpc_write {
+        basic_auth {
+            {$RPC_BASIC_AUTH_USER} {$RPC_BASIC_AUTH_HASH}
+        }
+        reverse_proxy node-1:8332
+    }
+
+    handle {
+        reverse_proxy node-1:8332
+    }
+}
