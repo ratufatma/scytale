@@ -1,3 +1,4 @@
+use scytale_core::codec::CanonicalSerialize;
 use scytale_core::{
     AuthorizationVerifier, Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut,
     UtxoEntry, UtxoSet, TRANSACTION_VERSION_1,
@@ -127,6 +128,51 @@ fn test_reject_pending_double_spend() {
             conflicting_tx: tx1.txid()
         }
     );
+}
+
+#[test]
+fn test_double_spend_collision_storm_100_variants() {
+    let (utxos, verifier) = create_test_setup();
+    let mut mempool = Mempool::new();
+
+    let txid_genesis = Hash256::hash(b"genesis_tx");
+    let shared_outpoint = OutPoint::new(txid_genesis, 0);
+
+    // Tx 1: validly spends shared_outpoint
+    let tx1 = Transaction::new(
+        TRANSACTION_VERSION_1,
+        vec![TxIn::new(shared_outpoint, vec![1])],
+        vec![TxOut::new(9_000_000, vec![1])],
+        0,
+    );
+    let admitted = mempool
+        .admit_transaction(tx1.clone(), &utxos, &verifier, 1700000000)
+        .unwrap();
+    assert_eq!(admitted, tx1.txid());
+
+    // 99 conflicting variants targeting the same UTXO
+    for i in 2..=100 {
+        let tx_conflicting = Transaction::new(
+            TRANSACTION_VERSION_1,
+            vec![TxIn::new(shared_outpoint, vec![i as u8])],
+            vec![TxOut::new(9_000_000 - i as u64 * 1000, vec![i as u8])],
+            0,
+        );
+        let err = mempool
+            .admit_transaction(tx_conflicting, &utxos, &verifier, 1700000000 + i as u64)
+            .unwrap_err();
+        assert_eq!(
+            err,
+            MempoolError::ConflictDoubleSpend {
+                outpoint: shared_outpoint,
+                conflicting_tx: tx1.txid()
+            }
+        );
+    }
+
+    // Ensure state integrity and zero memory leakage
+    assert_eq!(mempool.len(), 1);
+    assert_eq!(mempool.total_bytes(), tx1.to_canonical_bytes().unwrap().len());
 }
 
 #[test]

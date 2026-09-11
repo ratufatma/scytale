@@ -27,13 +27,13 @@ fn block_with_lock_time(lock_time: u64) -> (Block, UtxoSet) {
     let funding = OutPoint::new(Hash256::hash(b"locktime-funding"), 0);
     let mut parent_utxo = UtxoSet::new();
     parent_utxo
-        .insert(funding, UtxoEntry::new(TxOut::new(10, vec![1]), 1, false))
+        .insert(funding, UtxoEntry::new(TxOut::new(10_000, vec![1]), 1, false))
         .unwrap();
 
     let spend = Transaction::new(
         TRANSACTION_VERSION_1,
         vec![TxIn::new(funding, vec![]).with_sequence(0)],
-        vec![TxOut::new(9, vec![2])],
+        vec![TxOut::new(9_000, vec![2])],
         lock_time,
     );
     let coinbase = Transaction::new_coinbase(2, vec![TxOut::new(25 * 100_000_000, vec![3])]);
@@ -61,7 +61,7 @@ fn test_mtp_calculation_and_locktime_validation() {
 
     let (height_locked, parent_utxo) = block_with_lock_time(3);
     assert!(matches!(
-        validate_block_authoritative_with_headers(&height_locked, 2, &parent_utxo, &history,),
+        validate_block_authoritative_with_headers(&height_locked, 2, &parent_utxo, &history),
         Err(ConsensusError::LockTimeNotMet)
     ));
 
