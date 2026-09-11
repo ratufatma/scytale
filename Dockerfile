@@ -1,11 +1,12 @@
 # --- STAGE 1: Build Rust Binaries ---
-FROM rust:1.80-slim-bookworm AS rust-builder
+FROM rust:latest AS rust-builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 COPY apps apps
 COPY contracts contracts
+COPY explorer explorer
 RUN cargo build --release -p scytale-node -p scytale-cli
 
 # --- STAGE 2: Minimal Production Runtime Image ---

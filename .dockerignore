@@ -11,3 +11,4 @@ target/tmp/
 *.log
 *.sock
 scytale.db/
+explorer/node_modules/
