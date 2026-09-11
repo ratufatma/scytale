@@ -1296,12 +1296,23 @@
       return `${txid}:${index}`;
     }
 
-    // Truncate address / hash with middle ellipsis
+    // Global HTML sanitization helper to prevent Stored & Reflected XSS
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Truncate address / hash with middle ellipsis (auto-escaped)
     function truncateMiddle(val, startChars = 8, endChars = 6) {
       if (!val) return '';
       const str = typeof val === 'string' ? val : bytesToHex(val);
-      if (!str || str === '--' || str.length <= startChars + endChars) return str;
-      return `${str.slice(0, startChars)}...${str.slice(-endChars)}`;
+      if (!str || str === '--' || str.length <= startChars + endChars) return escapeHtml(str);
+      return escapeHtml(`${str.slice(0, startChars)}...${str.slice(-endChars)}`);
     }
 
     function copyText(text) {
@@ -1316,6 +1327,51 @@
       toast.classList.remove('hidden');
       setTimeout(() => toast.classList.add('hidden'), 2200);
     }
+
+    // Centralized event delegation for secure DOM interaction (zero inline code injection)
+    document.addEventListener('click', (e) => {
+      const copyBtn = e.target.closest('[data-copy]');
+      if (copyBtn) {
+        e.stopPropagation();
+        copyText(copyBtn.dataset.copy);
+        return;
+      }
+
+      const inspectTxBtn = e.target.closest('[data-inspect-tx]');
+      if (inspectTxBtn) {
+        e.stopPropagation();
+        inspectTx(inspectTxBtn.dataset.inspectTx);
+        return;
+      }
+
+      const inspectBlockBtn = e.target.closest('[data-inspect-block]');
+      if (inspectBlockBtn) {
+        e.stopPropagation();
+        inspectBlock(inspectBlockBtn.dataset.inspectBlock);
+        return;
+      }
+
+      const searchAddrBtn = e.target.closest('[data-search-address]');
+      if (searchAddrBtn) {
+        e.stopPropagation();
+        searchAddress(searchAddrBtn.dataset.searchAddress);
+        return;
+      }
+
+      const qrBtn = e.target.closest('[data-show-qr]');
+      if (qrBtn) {
+        e.stopPropagation();
+        showQrModal(qrBtn.dataset.showQr, qrBtn.dataset.title || 'Alamat Dompet');
+        return;
+      }
+
+      const rowDetailBtn = e.target.closest('[data-toggle-detail]');
+      if (rowDetailBtn) {
+        e.stopPropagation();
+        toggleRowDetail(rowDetailBtn.dataset.toggleDetail);
+        return;
+      }
+    });
 
     // Polling Status, Mempool, & Blocks
     async function pollNode() {
@@ -1411,6 +1467,7 @@
       }
 
       tbody.innerHTML = txs.map((tx, idx) => {
+        const safeTxid = escapeHtml(tx.txid || '');
         const density = ((tx.fee_rate_milli || (tx.fee_rate * 1000) || 1000) / 1000).toFixed(2);
         const isEvictionRisk = (slotsPercent >= 90 || memPercent >= 90) && idx >= txs.length - 2;
         const statusBadge = isEvictionRisk
@@ -1424,16 +1481,16 @@
             <td class="px-4 py-3 ${rankColor}">#${idx + 1}</td>
             <td class="px-4 py-3">
               <div class="flex items-center gap-1.5">
-                <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectTx('${tx.txid}')" title="${tx.txid}">${truncateMiddle(tx.txid, 10, 8)}</span>
-                <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin TxID">📋</button>
+                <span class="font-bold text-white cursor-pointer hover:text-emerald-400" data-inspect-tx="${safeTxid}" title="${safeTxid}">${truncateMiddle(tx.txid, 10, 8)}</span>
+                <button data-copy="${safeTxid}" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin TxID">📋</button>
               </div>
             </td>
-            <td class="px-4 py-3 text-right text-gray-300">${tx.size_bytes.toLocaleString()} B</td>
-            <td class="px-4 py-3 text-right font-bold text-emerald-400">${tx.fee_quanta.toLocaleString()} q</td>
+            <td class="px-4 py-3 text-right text-gray-300">${Number(tx.size_bytes || 0).toLocaleString()} B</td>
+            <td class="px-4 py-3 text-right font-bold text-emerald-400">${Number(tx.fee_quanta || 0).toLocaleString()} q</td>
             <td class="px-4 py-3 text-right text-teal-300 font-bold">${density} q/B</td>
             <td class="px-4 py-3 text-center">${statusBadge}</td>
             <td class="px-4 py-3 text-right">
-              <button onclick="inspectTx('${tx.txid}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_inspect')}</button>
+              <button data-inspect-tx="${safeTxid}" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_inspect')}</button>
             </td>
           </tr>
         `;
@@ -1460,24 +1517,27 @@
         return;
       }
 
-      tbody.innerHTML = blocks.map(b => `
+      tbody.innerHTML = blocks.map(b => {
+        const safeHash = escapeHtml(b.hash || '');
+        return `
         <tr class="hover:bg-gray-900/50 transition">
-          <td class="px-4 py-3 text-emerald-400 font-black">#${b.height}</td>
+          <td class="px-4 py-3 text-emerald-400 font-black">#${Number(b.height || 0)}</td>
           <td class="px-4 py-3">
             <div class="flex items-center gap-1.5">
-              <span class="font-bold text-white cursor-pointer hover:text-emerald-400" onclick="inspectBlock('${b.hash}')" title="${b.hash}">${truncateMiddle(b.hash, 10, 8)}</span>
-              <button onclick="copyText('${b.hash}')" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin Hash">📋</button>
+              <span class="font-bold text-white cursor-pointer hover:text-emerald-400" data-inspect-block="${safeHash}" title="${safeHash}">${truncateMiddle(b.hash, 10, 8)}</span>
+              <button data-copy="${safeHash}" class="text-gray-500 hover:text-gray-300 badge-copy" title="Salin Hash">📋</button>
             </div>
           </td>
-          <td class="px-4 py-3 text-center font-bold">${b.tx_count || (b.transactions ? b.transactions.length : 1)}</td>
-          <td class="px-4 py-3 text-emerald-300 font-bold">${b.total_scy ? b.total_scy + ' SCY' : formatScyOnly(b.total_quanta || 0)}</td>
-          <td class="px-4 py-3 text-gray-400">${b.nonce ? '0x' + b.nonce.toString(16) : '0x0'}</td>
+          <td class="px-4 py-3 text-center font-bold">${Number(b.tx_count || (b.transactions ? b.transactions.length : 1))}</td>
+          <td class="px-4 py-3 text-emerald-300 font-bold">${b.total_scy ? escapeHtml(b.total_scy) + ' SCY' : formatScyOnly(b.total_quanta || 0)}</td>
+          <td class="px-4 py-3 text-gray-400">${b.nonce ? '0x' + Number(b.nonce).toString(16) : '0x0'}</td>
           <td class="px-4 py-3 text-gray-400">${formatTime(b.timestamp)}</td>
           <td class="px-4 py-3 text-right">
-            <button onclick="inspectBlock('${b.hash}')" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_details')}</button>
+            <button data-inspect-block="${safeHash}" class="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold">${t('btn_details')}</button>
           </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
     }
 
     async function inspectBlock(identifier) {
@@ -1487,25 +1547,29 @@
         if (!res.ok) throw new Error(t('inspect_not_found_block'));
         const block = await res.json();
 
+        const safeHash = escapeHtml(block.hash || '');
+        const safePrevHash = escapeHtml(block.previous_block_hash || '');
+        const safeMiner = escapeHtml(block.miner || '');
+
         // Render formatted block view
         let html = `
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-gray-900/60 border border-gray-800 rounded-xl text-xs">
-            <div><span class="text-gray-500">Height:</span> <span class="font-bold text-emerald-400">#${block.height}</span></div>
+            <div><span class="text-gray-500">Height:</span> <span class="font-bold text-emerald-400">#${Number(block.height || 0)}</span></div>
             <div><span class="text-gray-500">Timestamp:</span> <span class="text-gray-300">${formatDateTime(block.timestamp)}</span></div>
             <div class="col-span-1 sm:col-span-2">
               <span class="text-gray-500">Block Hash:</span>
               <div class="flex items-center gap-1.5 font-bold text-white break-all mt-0.5">
-                <span>${block.hash}</span>
-                <button onclick="copyText('${block.hash}')" class="text-gray-400 hover:text-white" title="Salin">📋</button>
+                <span>${safeHash}</span>
+                <button data-copy="${safeHash}" class="text-gray-400 hover:text-white" title="Salin">📋</button>
               </div>
             </div>
             <div class="col-span-1 sm:col-span-2">
               <span class="text-gray-500">Previous Hash:</span>
-              <div class="font-bold text-gray-400 break-all mt-0.5">${block.previous_block_hash}</div>
+              <div class="font-bold text-gray-400 break-all mt-0.5">${safePrevHash}</div>
             </div>
-            <div><span class="text-gray-500">Nonce:</span> <span class="text-gray-300">${block.nonce ? '0x' + block.nonce.toString(16) : '0x0'}</span></div>
+            <div><span class="text-gray-500">Nonce:</span> <span class="text-gray-300">${block.nonce ? '0x' + Number(block.nonce).toString(16) : '0x0'}</span></div>
             <div><span class="text-gray-500">Transactions:</span> <span class="font-bold text-white">${block.transactions ? block.transactions.length : block.tx_count}</span></div>
-            ${block.miner ? `<div class="col-span-1 sm:col-span-2"><span class="text-gray-500">Miner / Coinbase:</span> <span class="font-bold text-emerald-300 break-all">${block.miner}</span></div>` : ''}
+            ${block.miner ? `<div class="col-span-1 sm:col-span-2"><span class="text-gray-500">Miner / Coinbase:</span> <span class="font-bold text-emerald-300 break-all">${safeMiner}</span></div>` : ''}
           </div>
 
           <div class="space-y-3 mt-4">
@@ -1542,8 +1606,9 @@
 
     function renderTxCard(tx, idx) {
       const isCoinbase = tx.is_coinbase;
+      const safeTxid = escapeHtml(tx.txid || '');
       const statusBadge = tx.status === 'Confirmed'
-        ? `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">Confirmed (Blok #${tx.block_height})</span>`
+        ? `<span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-800">Confirmed (Blok #${Number(tx.block_height || 0)})</span>`
         : `<span class="px-2 py-0.5 rounded text-[10px] bg-amber-950/80 text-amber-300 border border-amber-800">Pending Mempool</span>`;
 
       let html = `
@@ -1552,7 +1617,7 @@
             <div class="flex items-center gap-2">
               <span class="font-bold text-emerald-400">Tx #${idx + 1}</span>
               <span class="text-white font-bold">${truncateMiddle(tx.txid, 12, 10)}</span>
-              <button onclick="copyText('${tx.txid}')" class="text-gray-500 hover:text-white badge-copy" title="Salin TxID">📋</button>
+              <button data-copy="${safeTxid}" class="text-gray-500 hover:text-white badge-copy" title="Salin TxID">📋</button>
               ${isCoinbase ? '<span class="px-2 py-0.5 rounded text-[10px] bg-yellow-950/80 text-yellow-400 border border-yellow-800 font-bold">COINBASE</span>' : ''}
             </div>
             <div>${statusBadge}</div>
@@ -1563,11 +1628,14 @@
             <!-- Inputs -->
             <div class="space-y-1.5">
               <span class="text-gray-500 text-[11px] uppercase tracking-wider block font-bold">${t('inspect_inputs', { n: tx.inputs ? tx.inputs.length : 0 })}</span>
-              ${(tx.inputs || []).map(inp => `
+              ${(tx.inputs || []).map(inp => {
+                const safePrevOut = escapeHtml(inp.previous_output || '');
+                return `
                 <div class="bg-gray-950 p-2 rounded-lg border border-gray-800/80 text-[11px] break-all">
-                  ${isCoinbase ? `<span class="text-yellow-400">${t('inspect_coinbase_msg')}</span>` : truncateMiddle(inp.previous_output, 16, 8)}
+                  ${isCoinbase ? `<span class="text-yellow-400">${t('inspect_coinbase_msg')}</span>` : truncateMiddle(safePrevOut, 16, 8)}
                 </div>
-              `).join('')}
+              `;
+              }).join('')}
             </div>
 
             <!-- Outputs -->
@@ -1576,6 +1644,7 @@
               ${(tx.outputs || []).map(out => {
         const isP2pkh = out.script_type === 'p2pkh';
         const isOpReturn = out.script_type === 'op_return';
+        const safeAddr = escapeHtml(out.address || '');
 
         let badge = '';
         let dest = '';
@@ -1583,30 +1652,32 @@
           badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">P2PKH</span>`;
           dest = `
                     <div class="flex items-center justify-between gap-1.5 mt-1">
-                      <span class="text-emerald-400 font-bold cursor-pointer hover:underline" onclick="searchAddress('${out.address}')" title="Klik untuk lihat Passbook">${truncateMiddle(out.address, 10, 8)}</span>
+                      <span class="text-emerald-400 font-bold cursor-pointer hover:underline" data-search-address="${safeAddr}" title="Klik untuk lihat Passbook">${truncateMiddle(out.address, 10, 8)}</span>
                       <div class="flex items-center gap-1">
-                        <button onclick="copyText('${out.address}')" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
-                        <button onclick="showQrModal('${out.address}', 'Alamat Penerima')" class="text-gray-500 hover:text-emerald-400 text-[10px]" title="Tampilkan QR Code">📱 QR</button>
+                        <button data-copy="${safeAddr}" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
+                        <button data-show-qr="${safeAddr}" data-title="Alamat Penerima" class="text-gray-500 hover:text-emerald-400 text-[10px]" title="Tampilkan QR Code">📱 QR</button>
                       </div>
                     </div>
                   `;
         } else if (isOpReturn) {
           badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-purple-950 text-purple-300 border border-purple-800 font-bold">DATA / OP_RETURN</span>`;
+          const safePayload = escapeHtml(out.op_return_payload || '');
           dest = `
                     <div class="text-[11px] text-purple-200 mt-1 bg-purple-950/40 p-1.5 rounded border border-purple-900/50 break-all">
-                      Payload: "${out.op_return_payload || ''}"
+                      Payload: "${safePayload}"
                     </div>
                   `;
         } else {
           badge = `<span class="px-1.5 py-0.5 rounded text-[9px] bg-gray-800 text-gray-400 font-bold">CUSTOM</span>`;
-          dest = `<div class="text-[11px] text-gray-400 mt-1 truncate">${out.locking_script_hex || out.locking_script || ''}</div>`;
+          const safeScript = escapeHtml(out.locking_script_hex || out.locking_script || '');
+          dest = `<div class="text-[11px] text-gray-400 mt-1 truncate">${safeScript}</div>`;
         }
 
         return `
                   <div class="bg-gray-950 p-2.5 rounded-lg border border-gray-800/80 text-[11px]">
                     <div class="flex items-center justify-between">
                       ${badge}
-                      <span class="font-bold text-white">${out.value_scy ? out.value_scy + ' SCY' : formatScyOnly(out.value_quanta || 0)}</span>
+                      <span class="font-bold text-white">${out.value_scy ? escapeHtml(out.value_scy) + ' SCY' : formatScyOnly(out.value_quanta || 0)}</span>
                     </div>
                     ${dest}
                   </div>
@@ -1734,12 +1805,15 @@
       if (tokenKeys.length === 0) {
         tokensContainer.innerHTML = `<span class="text-xs text-gray-500 italic font-mono">${t('pb_no_tokens')}</span>`;
       } else {
-        tokensContainer.innerHTML = tokenKeys.map(tid => `
+        tokensContainer.innerHTML = tokenKeys.map(tid => {
+          const safeTid = escapeHtml(tid);
+          return `
           <div class="px-2.5 py-1 rounded-lg bg-indigo-950/70 border border-indigo-800/80 text-[11px] font-mono flex items-center gap-1.5 shadow">
-            <span class="text-indigo-400">🪙 ${truncateMiddle(tid, 6, 4)}:</span>
+            <span class="text-indigo-400">🪙 ${truncateMiddle(safeTid, 6, 4)}:</span>
             <span class="text-white font-bold">${Number(tokenBalances[tid]).toLocaleString()} unit</span>
           </div>
-        `).join('');
+        `;
+        }).join('');
       }
 
       // Entries Table
@@ -1757,8 +1831,11 @@
           const blockHeight = e.block_height !== undefined ? e.block_height : (e.height !== undefined ? e.height : null);
           const timestamp = (e.timestamp && e.timestamp > 0) ? formatDateTime(e.timestamp) : (blockHeight === 0 ? t('pb_genesis_timestamp') : '--');
           const txid = bytesToHex(e.txid);
+          const safeTxid = escapeHtml(txid);
           const outpointStr = formatOutpointFull(e.outpoint);
+          const safeOutpoint = escapeHtml(outpointStr);
           const datumHashStr = e.datum_hash ? bytesToHex(e.datum_hash) : null;
+          const safeDatum = datumHashStr ? escapeHtml(datumHashStr) : null;
 
           // Running balance logic
           const runningQuanta = e.running_native_balance_quanta !== undefined ? Number(e.running_native_balance_quanta) : null;
@@ -1768,7 +1845,7 @@
           let statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${t('pb_confirmed_label')}</span>`;
           if (typeof e.status === 'object' && e.status !== null) {
             if (e.status.Confirmed !== undefined) {
-              const confs = e.status.Confirmed.confirmations;
+              const confs = Number(e.status.Confirmed.confirmations || 0);
               const confSuffix = confs > 1 ? t('pb_confs_suffix') : t('pb_conf_suffix');
               statusBadge = `<span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px]">${confs} ${confSuffix}</span>`;
             } else if (e.status.Pending !== undefined) {
@@ -1781,11 +1858,11 @@
           const detailRowId = `pb-detail-${idx}`;
 
           return `
-            <tr class="hover:bg-gray-900/60 transition cursor-pointer" onclick="toggleRowDetail('${detailRowId}')">
+            <tr class="hover:bg-gray-900/60 transition cursor-pointer" data-toggle-detail="${detailRowId}">
               <td class="px-4 py-3 text-gray-400 font-bold">#${String(e.entry_number || (idx + 1)).padStart(6, '0')}</td>
               <td class="px-4 py-3">
                 <div class="text-gray-300">${timestamp}</div>
-                ${blockHeight !== null ? `<a href="javascript:void(0)" onclick="event.stopPropagation(); inspectBlock(${blockHeight})" class="text-emerald-400 hover:underline text-[11px]">${t('pb_block_link', { height: blockHeight })}</a>` : `<span class="text-amber-400 text-[11px]">${t('pb_mempool_label')}</span>`}
+                ${blockHeight !== null ? `<a href="javascript:void(0)" data-inspect-block="${blockHeight}" class="text-emerald-400 hover:underline text-[11px]">${t('pb_block_link', { height: blockHeight })}</a>` : `<span class="text-amber-400 text-[11px]">${t('pb_mempool_label')}</span>`}
               </td>
               <td class="px-4 py-3">
                 <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold border ${actionInfo.badge}">
@@ -1809,7 +1886,7 @@
                 ${statusBadge}
               </td>
               <td class="px-4 py-3 text-center no-print">
-                <button type="button" class="text-gray-400 hover:text-white text-xs font-bold" onclick="event.stopPropagation(); toggleRowDetail('${detailRowId}')">▼</button>
+                <button type="button" class="text-gray-400 hover:text-white text-xs font-bold" data-toggle-detail="${detailRowId}">▼</button>
               </td>
             </tr>
             <!-- Collapsible Row Details -->
@@ -1819,18 +1896,18 @@
                   <div>
                     <span class="text-gray-500 uppercase block">${t('pb_detail_txid')}</span>
                     <div class="flex items-center gap-1.5 font-bold text-emerald-400 break-all mt-0.5">
-                      <span>${txid}</span>
-                      ${txid !== '--' ? `<button onclick="event.stopPropagation(); inspectTx('${txid}')" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-[10px]">${t('pb_btn_inspect_tx')}</button>` : ''}
+                      <span>${safeTxid}</span>
+                      ${txid !== '--' ? `<button data-inspect-tx="${safeTxid}" class="px-2 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-white text-[10px]">${t('pb_btn_inspect_tx')}</button>` : ''}
                     </div>
                   </div>
                   <div>
                     <span class="text-gray-500 uppercase block">${t('pb_detail_outpoint')}</span>
-                    <div class="font-mono text-gray-300 break-all mt-0.5">${outpointStr}</div>
+                    <div class="font-mono text-gray-300 break-all mt-0.5">${safeOutpoint}</div>
                   </div>
-                  ${datumHashStr ? `
+                  ${safeDatum ? `
                   <div class="col-span-1 md:col-span-2">
                     <span class="text-gray-500 uppercase block">${t('pb_detail_datum')}</span>
-                    <div class="font-mono text-purple-400 break-all mt-0.5">${datumHashStr}</div>
+                    <div class="font-mono text-purple-400 break-all mt-0.5">${safeDatum}</div>
                   </div>` : ''}
                 </div>
               </td>
@@ -1915,10 +1992,10 @@
         tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500 font-mono">${t('stmt_no_proofs')}</td></tr>`;
       } else {
         tbody.innerHTML = proofs.map((p, pIdx) => {
-          const outpointStr = formatOutpoint(p.outpoint);
+          const outpointStr = escapeHtml(formatOutpoint(p.outpoint));
           const leafHash = bytesToHex(p.leaf_hash);
           const valQuanta = Number(p.value_quanta || 0);
-          const auditSteps = p.audit_path ? p.audit_path.length : 0;
+          const auditSteps = Number(p.audit_path ? p.audit_path.length : 0);
 
           return `
             <tr class="hover:bg-gray-900/50">
@@ -2134,9 +2211,9 @@
 
     async function handleFaucetClaim() {
       const input = document.getElementById('faucetAddressInput');
-      const address = (input.value || '').trim();
+      const address = input ? input.value.trim() : '';
       const resBox = document.getElementById('faucetResultBox');
-      const btn = document.getElementById('btn-faucet-claim');
+      const btn = document.getElementById('faucetClaimBtn');
       const spinner = document.getElementById('faucetClaimSpinner');
       const btnText = document.getElementById('faucetClaimBtnText');
 
@@ -2180,6 +2257,7 @@
           checkFaucetCooldown();
           fetchFaucetInfo();
 
+          const safeTxid = escapeHtml(data.txid || '');
           resBox.className = 'p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs space-y-2 block shadow-lg';
           resBox.innerHTML = `
             <div class="flex items-center gap-2 text-emerald-400 font-bold">
@@ -2188,10 +2266,10 @@
             </div>
             <div class="text-gray-300">
               <span class="text-gray-400">${t('faucet_success_txid')} </span>
-              <span class="font-mono text-emerald-400 break-all select-all font-semibold">${data.txid}</span>
+              <span class="font-mono text-emerald-400 break-all select-all font-semibold">${safeTxid}</span>
             </div>
             <div class="pt-1">
-              <a href="#/tx/${data.txid}" onclick="searchTx('${data.txid}')" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-[11px] font-mono transition">
+              <a href="#/tx/${safeTxid}" data-inspect-tx="${safeTxid}" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-[11px] font-mono transition">
                 <span>🔍 ${t('faucet_view_tx')}</span>
                 <span>↗</span>
               </a>
@@ -2205,21 +2283,24 @@
             checkFaucetCooldown();
           }
 
+          const safeError = escapeHtml(data.error || 'Gagal memproses klaim faucet');
+          const safeDetails = data.details ? escapeHtml(data.details) : '';
           resBox.className = 'p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs space-y-1 block';
           resBox.innerHTML = `
             <div class="font-bold flex items-center gap-2 text-amber-400">
               <span>⚠️</span>
-              <span>${data.error || 'Gagal memproses klaim faucet'}</span>
+              <span>${safeError}</span>
             </div>
-            ${data.details ? `<div class="text-[11px] text-gray-400 font-mono">${data.details}</div>` : ''}
+            ${safeDetails ? `<div class="text-[11px] text-gray-400 font-mono">${safeDetails}</div>` : ''}
           `;
         }
       } catch (err) {
         console.error('Faucet claim request error:', err);
+        const safeErrMsg = escapeHtml(err.message || String(err));
         resBox.className = 'p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs space-y-1 block';
         resBox.innerHTML = `
           <div class="font-bold">⚠️ Koneksi ke server explorer gagal.</div>
-          <div class="text-[11px] text-gray-400 font-mono">${err.message}</div>
+          <div class="text-[11px] text-gray-400 font-mono">${safeErrMsg}</div>
         `;
       } finally {
         delete btn.dataset.loading;

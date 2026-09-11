@@ -316,14 +316,34 @@ async function handleFaucetInfo(req, res) {
   });
 }
 
+const SCYTALE_BECH32_REGEX = /^scy1[ac-hj-np-z02-9]{38,90}$/;
+
 async function handleFaucetClaim(req, res) {
   const body = req.body || {};
-  const { address } = body;
+  const rawAddress = body.address;
   const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
 
-  if (!isValidScytaleAddress(address)) {
-    return res.status(400).json({ error: 'Alamat Bech32 Scytale tidak valid (harus diawali scy1).' });
+  if (!rawAddress || typeof rawAddress !== 'string') {
+    return res.status(400).json({ error: 'Alamat Bech32 Scytale wajib disertakan.' });
   }
+
+  const cleanAddress = rawAddress.trim();
+
+  // Layer 1: Strict Bech32 alphabet & length regex validation
+  if (!SCYTALE_BECH32_REGEX.test(cleanAddress)) {
+    return res.status(400).json({
+      error: 'Format alamat tidak valid. Alamat harus berupa Bech32 Scytale resmi (scy1...).'
+    });
+  }
+
+  // Layer 2: Full Bech32 Polymod checksum verification
+  if (!isValidScytaleAddress(cleanAddress)) {
+    return res.status(400).json({
+      error: 'Checksum atau data alamat Scytale tidak valid.'
+    });
+  }
+
+  const address = cleanAddress;
 
   const now = Date.now();
   if (faucetCooldowns.has(address) && (now - faucetCooldowns.get(address) < COOLDOWN_MS)) {
