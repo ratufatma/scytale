@@ -23,6 +23,24 @@ mod wallet;
 
 use wallet::WalletFile;
 
+fn mine_header(
+    version: u32,
+    parent: Hash256,
+    commitment: Hash256,
+    utxo_root: Hash256,
+    timestamp: u64,
+) -> BlockHeader {
+    let mut header = BlockHeader::new(
+        version, parent, commitment, utxo_root, timestamp, 0x1f00ffff, 0,
+    );
+    assert!(scytale_consensus::mine_test_header(
+        &mut header,
+        &scytale_consensus::Target::from_compact(0x1f00ffff),
+        10_000_000
+    ));
+    header
+}
+
 #[tokio::test]
 async fn test_wallet_p2pkh_end_to_end() {
     let temp = tempdir().unwrap();
@@ -41,6 +59,7 @@ async fn test_wallet_p2pkh_end_to_end() {
         data_dir: ":memory:".into(),
         mining_enabled: false,
         miner_payout_script: lock_a.clone(),
+        genesis_difficulty_target: 0x1f00ffff,
         ..NodeConfig::default()
     };
     let mut node = Node::open(config).unwrap();
@@ -64,14 +83,12 @@ async fn test_wallet_p2pkh_end_to_end() {
         scytale_core::UtxoEntry::new(cb1.outputs[0].clone(), 1, true),
     );
     let utxo_root1 = staging.compute_utxo_root();
-    let h1 = BlockHeader::new(
+    let h1 = mine_header(
         1,
         genesis_tip,
-        Hash256::ZERO,
+        Hash256::hash(cb1.txid().as_bytes()),
         utxo_root1,
         100,
-        0x207fffff,
-        0,
     );
     let b1 = Block::new(h1, vec![cb1]);
     assert!(node.submit_external_block(b1).unwrap());
@@ -157,7 +174,16 @@ async fn test_wallet_p2pkh_end_to_end() {
         scytale_core::UtxoEntry::new(cb2.outputs[0].clone(), 2, true),
     );
     let utxo_root2 = staging2.compute_utxo_root();
-    let h2 = BlockHeader::new(2, b1_tip, Hash256::ZERO, utxo_root2, 200, 0x207fffff, 0);
+    let mut commitment2 = Vec::with_capacity(64);
+    commitment2.extend_from_slice(cb2.txid().as_bytes());
+    commitment2.extend_from_slice(transfer_tx.txid().as_bytes());
+    let h2 = mine_header(
+        2,
+        b1_tip,
+        Hash256::hash(&commitment2),
+        utxo_root2,
+        200,
+    );
     let b2 = Block::new(h2, vec![cb2, transfer_tx]);
     assert!(node.submit_external_block(b2).unwrap());
     assert_eq!(node.canonical_height(), 2);
@@ -237,6 +263,7 @@ async fn test_wallet_op_return_embed_data() {
         data_dir: ":memory:".into(),
         mining_enabled: false,
         miner_payout_script: lock.clone(),
+        genesis_difficulty_target: 0x1f00ffff,
         ..NodeConfig::default()
     };
     let mut node = Node::open(config).unwrap();
@@ -260,14 +287,12 @@ async fn test_wallet_op_return_embed_data() {
         scytale_core::UtxoEntry::new(cb.outputs[0].clone(), 1, true),
     );
     let utxo_root1 = staging.compute_utxo_root();
-    let h1 = BlockHeader::new(
+    let h1 = mine_header(
         1,
         genesis_tip,
-        Hash256::ZERO,
+        Hash256::hash(cb.txid().as_bytes()),
         utxo_root1,
         100,
-        0x207fffff,
-        0,
     );
     let b1 = Block::new(h1, vec![cb]);
     assert!(node.submit_external_block(b1).unwrap());
@@ -339,7 +364,16 @@ async fn test_wallet_op_return_embed_data() {
         scytale_core::UtxoEntry::new(cb2.outputs[0].clone(), 2, true),
     );
     let utxo_root2 = staging2.compute_utxo_root();
-    let h2 = BlockHeader::new(2, tip, Hash256::ZERO, utxo_root2, 200, 0x207fffff, 0);
+    let mut commitment2 = Vec::with_capacity(64);
+    commitment2.extend_from_slice(cb2.txid().as_bytes());
+    commitment2.extend_from_slice(embed_tx.txid().as_bytes());
+    let h2 = mine_header(
+        2,
+        tip,
+        Hash256::hash(&commitment2),
+        utxo_root2,
+        200,
+    );
     let b2 = Block::new(h2, vec![cb2, embed_tx]);
     assert!(node.submit_external_block(b2).unwrap());
 

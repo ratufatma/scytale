@@ -273,16 +273,26 @@ function isValidScytaleAddress(value) {
 }
 
 const FAUCET_WALLET = process.env.FAUCET_WALLET || '/var/lib/scytale/faucet_wallet.json';
-const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS || 'scy1kxwmc88ejusze6qsvze0f66jm05ke4e53xfst6deh3axwe9mh28ssujjul';
+function getFaucetAddress() {
+  if (process.env.FAUCET_ADDRESS) return process.env.FAUCET_ADDRESS;
+  try {
+    if (existsSync(FAUCET_WALLET)) {
+      const w = JSON.parse(readFileSync(FAUCET_WALLET, 'utf8'));
+      if (w.address) return w.address;
+    }
+  } catch {}
+  return 'scy1nw7vhxmxyz2jlw89vz88tdv938692xk968uxn89787fa4w207s8sddvv3q';
+}
 const CLI_PATH = process.env.SCYTALE_CLI_BIN || '/usr/local/bin/scytale-cli';
 const SOCKET_PATH = process.env.SCYTALE_SOCKET || '/run/scytale/node.sock';
 
 async function handleFaucetInfo(req, res) {
   let reserve_balance_scy = 0.0;
   let reserve_quanta = 0;
+  const faucetAddr = getFaucetAddress();
   try {
     if (nodeBaseUrl) {
-      const resp = await fetch(`${nodeBaseUrl}/api/v1/passbook?address=${FAUCET_ADDRESS}`, {
+      const resp = await fetch(`${nodeBaseUrl}/api/v1/passbook?address=${faucetAddr}`, {
         signal: AbortSignal.timeout(3000)
       });
       if (resp.ok) {
@@ -298,7 +308,7 @@ async function handleFaucetInfo(req, res) {
   }
 
   return res.json({
-    faucet_address: FAUCET_ADDRESS,
+    faucet_address: faucetAddr,
     dispense_amount_scy: 10.0,
     cooldown_seconds: 1800,
     reserve_balance_scy,

@@ -900,9 +900,13 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
 
             let mut tx = Transaction::new(TRANSACTION_VERSION_1, inputs, outputs, 0);
 
-            let signing_key = wallet
-                .signing_key_with_pin(&collect_pin(pin, false)?)
-                .map_err(CliClientError::Wallet)?;
+            let signing_key = if wallet.encrypted_key.is_some() {
+                wallet
+                    .signing_key_with_pin(&collect_pin(pin, false)?)
+                    .map_err(CliClientError::Wallet)?
+            } else {
+                wallet.signing_key().map_err(CliClientError::Wallet)?
+            };
             let pubkey_bytes = wallet
                 .verifying_key_bytes()
                 .map_err(CliClientError::Wallet)?;

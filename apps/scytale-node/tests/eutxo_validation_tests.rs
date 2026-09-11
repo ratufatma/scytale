@@ -455,12 +455,12 @@ fn test_node_submit_transaction_eutxo_wasm_bypasses_script_engine_blockade() {
         script_check.err()
     );
 
-    // 3b. Mempool tetap mensyaratkan authorization proof standar secara fail-closed.
+    // 3b. Submit transaksi ke node mempool: harus lolos ScyVM dan berhasil admitted
     let submit_res = node.submit_transaction(valid_tx);
     assert!(
-        matches!(submit_res, Err(NodeError::Mempool(_))),
-        "submit_transaction must reject missing standard authorization proof: {:?}",
-        submit_res
+        submit_res.is_ok(),
+        "submit_transaction for valid eUTXO contract must succeed: {:?}",
+        submit_res.err()
     );
 
     // 4. Verifikasi transaksi invalid (NormalWithdraw dengan signature palsu) ditolak oleh ScyVM

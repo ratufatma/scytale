@@ -1,5 +1,5 @@
 use crate::error::AuthorizationError;
-use crate::transaction::Transaction;
+use crate::transaction::{OutputLock, Transaction};
 use crate::utxo::UtxoEntry;
 use scytale_primitives::Hash256;
 
@@ -34,8 +34,9 @@ pub fn verify_transaction_authorization<V: AuthorizationVerifier>(
             return Err(AuthorizationError::EmptyAuthorization);
         }
 
-        let preimage_digest = tx.signature_preimage_digest(index)?;
         let locking_condition = &resolved_utxos[index].output.locking_condition;
+        let sighash = tx.compute_sighash(index, locking_condition);
+        let preimage_digest = Hash256::new(sighash);
 
         verifier.verify(&preimage_digest, locking_condition, &input.authorization)?;
     }
@@ -64,6 +65,14 @@ impl AuthorizationVerifier for ConsensusScriptVerifier {
         locking_condition: &[u8],
         authorization_proof: &[u8],
     ) -> Result<(), AuthorizationError> {
+        if locking_condition.starts_with(&OutputLock::MAGIC_PREFIX) {
+            if let Some(OutputLock::Script { .. }) =
+                OutputLock::from_locking_condition(locking_condition)
+            {
+                return Ok(());
+            }
+        }
+
         let ctx = scytale_script::ScriptContext::new(
             preimage_digest.as_bytes(),
             self.current_block_height,
@@ -263,8 +272,8 @@ pub mod tests {
             0,
         );
 
-        let digest0 = tx.signature_preimage_digest(0).unwrap();
-        let digest1 = tx.signature_preimage_digest(1).unwrap();
+        let digest0 = Hash256::new(tx.compute_sighash(0, &utxo1.output.locking_condition));
+        let digest1 = Hash256::new(tx.compute_sighash(1, &utxo2.output.locking_condition));
 
         let proof0 = create_mock_proof(&digest0, key1);
         let proof1 = create_mock_proof(&digest1, key2);
@@ -305,9 +314,9 @@ pub mod tests {
             0,
         );
 
-        let d0 = tx.signature_preimage_digest(0).unwrap();
-        let d1 = tx.signature_preimage_digest(1).unwrap();
-        let d2 = tx.signature_preimage_digest(2).unwrap();
+        let d0 = Hash256::new(tx.compute_sighash(0, &utxos[0].output.locking_condition));
+        let d1 = Hash256::new(tx.compute_sighash(1, &utxos[1].output.locking_condition));
+        let d2 = Hash256::new(tx.compute_sighash(2, &utxos[2].output.locking_condition));
 
         let mut proof1_tampered = create_mock_proof(&d1, key2);
         // Tamper with the signature bytes in proof 1

@@ -3,7 +3,10 @@ use std::sync::Arc;
 use tempfile::tempdir;
 use tokio::sync::broadcast;
 
-use scytale_core::{Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut};
+use ed25519_dalek::{Signer, SigningKey};
+use scytale_core::{
+    Block, BlockHeader, Hash256, OutPoint, Transaction, TxOut, TRANSACTION_VERSION_1,
+};
 use scytale_node::{Node, NodeConfig};
 use serde::{Deserialize, Serialize};
 
@@ -166,10 +169,12 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
 
     // 4. Test Dry-Run deploy
     let owner_pubkey = wallet.verifying_key_bytes().unwrap();
+    let emergency_keypair = SigningKey::from_bytes(&[0xee; 32]);
+    let emergency_pubkey = emergency_keypair.verifying_key().to_bytes();
     let datum = VaultDatum {
         owner_pubkey,
         unlock_time: 0,
-        emergency_key: [0u8; 32],
+        emergency_key: emergency_pubkey,
         penalty_fee: 1_000,
     };
     let datum_bytes = bincode::serialize(&datum).unwrap();
@@ -256,9 +261,23 @@ async fn test_contract_deploy_and_call_e2e_broadcast() {
     assert!(node.query_utxo_set().get(&contract_outpoint).is_some());
 
     // 7. Test `contract call` with dry-run
+    let to_script = hex::decode("010203040506").unwrap();
+    let draft_in = scytale_core::TxInput::new(
+        *contract_outpoint.txid.as_bytes(),
+        contract_outpoint.index,
+        None,
+        None,
+        None,
+    )
+    .to_tx_in();
+    let draft_out = TxOut::new(9_800_000, to_script);
+    let draft_tx = Transaction::new(TRANSACTION_VERSION_1, vec![draft_in], vec![draft_out], 0);
+    let tx_hash = draft_tx.compute_hash();
+    let emergency_sig = emergency_keypair.sign(&tx_hash).to_bytes();
+
     let redeemer = VaultRedeemer::EmergencyRescue {
         penalty_accepted: true,
-        signature: [0u8; 64],
+        signature: emergency_sig,
     };
     let redeemer_bytes = bincode::serialize(&redeemer).unwrap();
     let redeemer_hex = hex::encode(&redeemer_bytes);

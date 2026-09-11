@@ -57,9 +57,12 @@ p2p_key.dat
 known_peers.json
 *.dat
 
-# Python wrapper (apps/scytale-py)
+# Python cache
+__pycache__/
+*.py[cod]
 apps/scytale-py/.venv/
 apps/scytale-py/**/__pycache__/
-*.py[cod]
+# mdBook documentation build artifacts
+/book/
 
 
