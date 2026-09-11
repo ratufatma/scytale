@@ -1,6 +1,6 @@
 use ed25519_dalek::Signer;
-use scytale_account::{decrypt_key, pin_vault::EncryptedKeyEnvelope, PinCode};
-use scytale_core::{CanonicalSerialize, Hash256, OutPoint, Transaction, TxIn, TxOut};
+use scytale_account::{decrypt_key, encrypt_key, pin_vault::EncryptedKeyEnvelope, PinCode};
+use scytale_core::{Address, CanonicalSerialize, Hash256, OutPoint, Transaction, TxIn, TxOut};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
@@ -129,58 +129,32 @@ fn json_string(value: &Value, keys: &[&str]) -> Option<String> {
         .find_map(|key| value.get(*key).and_then(Value::as_str).map(str::to_owned))
 }
 
+fn json_hash(value: &Value, keys: &[&str]) -> Option<String> {
+    for key in keys {
+        if let Some(v) = value.get(*key) {
+            if let Some(s) = v.as_str() {
+                return Some(s.to_string());
+            }
+            if let Some(arr) = v.as_array() {
+                let bytes: Vec<u8> = arr
+                    .iter()
+                    .filter_map(|x| x.as_u64().map(|n| n as u8))
+                    .collect();
+                if bytes.len() == 32 {
+                    return Some(hex::encode(bytes));
+                }
+            }
+        }
+    }
+    None
+}
+
 fn json_array<'a>(value: &'a Value, keys: &[&str]) -> &'a [Value] {
     keys.iter()
         .find_map(|key| value.get(*key).and_then(Value::as_array).map(Vec::as_slice))
         .unwrap_or(&[])
 }
 
-fn parse_utxos(value: &Value) -> Vec<PassbookUtxo> {
-    json_array(value, &["utxos", "outputs", "unspent_outputs"])
-        .iter()
-        .map(|item| PassbookUtxo {
-            tx_id: json_string(item, &["tx_id", "txid", "transaction_hash", "hash"])
-                .unwrap_or_default(),
-            output_index: json_u64(item, &["output_index", "vout", "index"]).unwrap_or(0),
-            amount_quanta: json_u64(item, &["amount_quanta", "value", "amount"]).unwrap_or(0),
-            confirmations: json_u64(item, &["confirmations", "confirmed_blocks"]).unwrap_or(0),
-        })
-        .collect()
-}
-
-fn parse_ledger(value: &Value, balance: u64) -> Vec<LedgerMutation> {
-    let mut running = balance;
-    json_array(value, &["ledger", "transactions", "mutations", "history"])
-        .iter()
-        .map(|item| {
-            let delta = item
-                .get("delta_quanta")
-                .and_then(Value::as_i64)
-                .or_else(|| item.get("amount_quanta").and_then(Value::as_i64))
-                .unwrap_or(0);
-            let mutation = LedgerMutation {
-                timestamp: json_string(item, &["timestamp", "time", "created_at"])
-                    .unwrap_or_else(|| "—".to_string()),
-                mutation_type: json_string(item, &["type", "kind", "mutation_type"])
-                    .unwrap_or_else(|| "Inbound".to_string()),
-                tx_hash: json_string(item, &["tx_hash", "txid", "hash"]).unwrap_or_default(),
-                delta_quanta: delta,
-                running_balance_quanta: item
-                    .get("running_balance_quanta")
-                    .and_then(Value::as_u64)
-                    .unwrap_or_else(|| {
-                        if delta.is_negative() {
-                            running = running.saturating_sub(delta.unsigned_abs());
-                        } else {
-                            running = running.saturating_add(delta as u64);
-                        }
-                        running
-                    }),
-            };
-            mutation
-        })
-        .collect()
-}
 
 fn validate_address(value: &str, field: &str) -> Result<(), String> {
     let scy_account = value.starts_with("SCY-")
@@ -196,9 +170,57 @@ fn validate_address(value: &str, field: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub fn create_wallet_with_pin(pin: String) -> Result<String, String> {
-    PinCode::new(&pin)
-        .map(|_| "PIN accepted; wallet creation is ready.".to_string())
-        .map_err(|error| error.to_string())
+    PinCode::new(&pin).map_err(|error| error.to_string())?;
+
+    let mut seed = [0u8; 32];
+    use rand::RngCore;
+    rand::rngs::OsRng.fill_bytes(&mut seed);
+
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+    let verifying_key = signing_key.verifying_key();
+    let pubkey_bytes = verifying_key.to_bytes();
+    let address_bytes = *blake3::hash(&pubkey_bytes).as_bytes();
+    let bech32_addr = Address::new(address_bytes)
+        .to_bech32()
+        .map_err(|e| e.to_string())?;
+
+    let account_num = scytale_account::derive_candidate(&pubkey_bytes, &bech32_addr, 0).to_string();
+    let envelope = encrypt_key(&seed, &pin).map_err(|e| e.to_string())?;
+
+    let wallet_data = serde_json::json!({
+        "version": 1,
+        "public_key": hex::encode(&pubkey_bytes),
+        "address": bech32_addr,
+        "p2pkh_address": bech32_addr,
+        "account_number": account_num,
+        "passbook_id": bech32_addr,
+        "encrypted_key": envelope,
+    });
+
+    let wallet_dir = home_path(".scytale");
+    fs::create_dir_all(&wallet_dir).map_err(|e| e.to_string())?;
+
+    let wallet_file = wallet_dir.join("wallet.json");
+    let target_file = if wallet_file.exists() {
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        wallet_dir.join(format!("wallet_{ts}.json"))
+    } else {
+        wallet_file
+    };
+
+    fs::write(
+        &target_file,
+        serde_json::to_vec_pretty(&wallet_data).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+
+    let path_str = target_file.to_string_lossy().into_owned();
+    let _ = set_active_wallet(path_str);
+
+    Ok(format!("Wallet created successfully: {bech32_addr} ({account_num})"))
 }
 
 #[tauri::command]
@@ -258,51 +280,166 @@ pub async fn get_passbook_ledger(
     let wallet: Value =
         serde_json::from_str(&fs::read_to_string(wallet_path).map_err(|error| error.to_string())?)
             .map_err(|error| error.to_string())?;
-    let passbook_id = json_string(&wallet, &["passbook_id", "address"]);
+    let passbook_id = json_string(&wallet, &["passbook_id", "address", "p2pkh_address"]);
     let account_number = json_string(&wallet, &["account_number"]);
     let public_key = json_string(&wallet, &["public_key", "publicKey"]);
     let node_url = node_url
         .unwrap_or_else(configured_node_url)
         .trim_end_matches('/')
         .to_string();
-    let identity = account_number
-        .as_deref()
-        .or(passbook_id.as_deref())
-        .ok_or_else(|| "Wallet has no account identity".to_string())?;
+
     let agent = ureq::AgentBuilder::new()
         .timeout(std::time::Duration::from_secs(5))
         .build();
-    let response = agent
-        .get(&format!("{node_url}/api/v1/accounts/{identity}"))
+
+    // Determine target Bech32 address
+    let address = if let Some(ref pid) = passbook_id {
+        if pid.starts_with("scy1") {
+            pid.clone()
+        } else if let Some(ref acc) = account_number {
+            let resolve_res: Result<Value, _> = agent
+                .get(&format!("{node_url}/api/v1/alias/resolve/{acc}"))
+                .call()
+                .map_err(|e| e.to_string())?
+                .into_json();
+            resolve_res
+                .ok()
+                .and_then(|v| json_string(&v, &["address", "resolved_address"]))
+                .unwrap_or_else(|| pid.clone())
+        } else {
+            pid.clone()
+        }
+    } else if let Some(ref acc) = account_number {
+        let resolve_res: Result<Value, _> = agent
+            .get(&format!("{node_url}/api/v1/alias/resolve/{acc}"))
+            .call()
+            .map_err(|e| e.to_string())?
+            .into_json();
+        resolve_res
+            .ok()
+            .and_then(|v| json_string(&v, &["address", "resolved_address"]))
+            .ok_or_else(|| "Could not resolve account number to address".to_string())?
+    } else {
+        return Err("Wallet has no account identity or address".to_string());
+    };
+
+    // 1. Query canonical Passbook view from node
+    let passbook_res: Value = agent
+        .get(&format!("{node_url}/api/v1/passbook?address={address}"))
         .call()
+        .map_err(|error| format!("Passbook query failed: {error}"))?
+        .into_json()
         .map_err(|error| error.to_string())?;
-    let remote: Value = response.into_json().map_err(|error| error.to_string())?;
-    let body = remote.get("account").unwrap_or(&remote);
+
+    // 2. Query node status to get canonical tip height
+    let status_res: Option<Value> = agent
+        .get(&format!("{node_url}/api/v1/status"))
+        .call()
+        .ok()
+        .and_then(|r| r.into_json().ok());
+    let canonical_height = status_res
+        .as_ref()
+        .and_then(|v| json_u64(v, &["canonical_height", "block_height", "height"]));
+
+    // 3. Query unspent transaction outputs (UTXOs)
+    let utxos_res: Vec<Value> = agent
+        .get(&format!("{node_url}/api/v1/utxos/{address}"))
+        .call()
+        .ok()
+        .and_then(|r| r.into_json().ok())
+        .unwrap_or_default();
+
+    let utxos: Vec<PassbookUtxo> = utxos_res
+        .iter()
+        .map(|item| {
+            let bh = json_u64(item, &["block_height"]).unwrap_or(0);
+            let confirmations = canonical_height
+                .map(|tip| tip.saturating_sub(bh).saturating_add(1))
+                .unwrap_or(1);
+            PassbookUtxo {
+                tx_id: json_string(item, &["txid_hex", "txid", "tx_id", "hash"]).unwrap_or_default(),
+                output_index: json_u64(item, &["index", "output_index", "vout"]).unwrap_or(0),
+                amount_quanta: json_u64(item, &["value_quanta", "amount_quanta", "value"]).unwrap_or(0),
+                confirmations,
+            }
+        })
+        .collect();
+
+    // 4. Parse Ledger from Passbook entries
     let balance_quanta = json_u64(
-        body,
-        &["balance_quanta", "balance", "confirmed_balance_quanta"],
+        &passbook_res,
+        &["confirmed_native_balance_quanta", "balance_quanta", "balance"],
     )
     .unwrap_or(0);
+
+    let entries = json_array(&passbook_res, &["entries", "ledger", "transactions"]);
+    let mut running = 0u64;
+    let mut ledger = Vec::new();
+    for item in entries {
+        let action = json_string(item, &["action", "mutation_type", "type"])
+            .unwrap_or_else(|| "Inbound".to_string());
+        let amount = json_u64(item, &["amount_quanta", "amount", "value"]).unwrap_or(0);
+        let is_outgoing = action == "Sent" || action == "Scy20Burn";
+        let delta: i64 = if is_outgoing {
+            -(amount as i64)
+        } else {
+            amount as i64
+        };
+
+        if delta.is_negative() {
+            running = running.saturating_sub(delta.unsigned_abs());
+        } else {
+            running = running.saturating_add(delta as u64);
+        }
+
+        let ts_val = item.get("timestamp");
+        let ts_str = if let Some(n) = ts_val.and_then(Value::as_u64) {
+            if n == 0 {
+                "Genesis".to_string()
+            } else {
+                chrono::DateTime::from_timestamp(n as i64, 0)
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_else(|| n.to_string())
+            }
+        } else if let Some(s) = ts_val.and_then(Value::as_str) {
+            s.to_string()
+        } else {
+            "—".to_string()
+        };
+
+        let tx_hash = json_hash(item, &["txid", "tx_hash", "txid_hex", "hash"]).unwrap_or_default();
+
+        ledger.push(LedgerMutation {
+            timestamp: ts_str,
+            mutation_type: action,
+            tx_hash,
+            delta_quanta: delta,
+            running_balance_quanta: running,
+        });
+    }
+
     Ok(PassbookLedgerData {
-        passbook_id: json_string(body, &["passbook_id", "address"]).or(passbook_id),
-        account_number: json_string(body, &["account_number"]).or(account_number),
-        public_key: json_string(body, &["public_key", "publicKey"]).or(public_key),
+        passbook_id: Some(address),
+        account_number,
+        public_key,
         balance_scy: balance_quanta as f64 / 100_000_000.0,
         balance_quanta,
         sync_status: "Synced with node".to_string(),
         node_url,
-        block_height: json_u64(&remote, &["block_height", "height", "canonical_height"])
-            .or_else(|| json_u64(body, &["block_height", "height"])),
-        utxos: parse_utxos(body),
-        ledger: parse_ledger(body, balance_quanta),
+        block_height: canonical_height,
+        utxos,
+        ledger,
     })
 }
 
 #[tauri::command]
 pub fn get_active_account_details(wallet_path: Option<String>) -> Result<AccountDetails, String> {
-    let path = wallet_path.map(PathBuf::from).unwrap_or_else(|| {
-        PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".scytale/wallet.json")
-    });
+    let path = wallet_path
+        .map(PathBuf::from)
+        .or_else(|| active_wallet_path().map(PathBuf::from))
+        .unwrap_or_else(|| {
+            PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".scytale/wallet.json")
+        });
     let value: Value =
         serde_json::from_str(&fs::read_to_string(path).map_err(|error| error.to_string())?)
             .map_err(|error| error.to_string())?;
@@ -330,8 +467,7 @@ pub fn get_active_account_details(wallet_path: Option<String>) -> Result<Account
 #[tauri::command]
 pub fn list_local_wallets() -> Result<Vec<WalletSummary>, String> {
     let active_path = active_wallet_path();
-    let mut roots = vec![home_path(".scytale")];
-    roots.push(PathBuf::from("/mnt/ssd/scytale-lab/scytale"));
+    let roots = vec![home_path(".scytale")];
     let mut wallets = Vec::new();
     for root in roots {
         if !root.exists() {
@@ -509,7 +645,7 @@ struct UtxoResponse {
 }
 
 fn p2pkh_lock(address: &[u8; 32]) -> Vec<u8> {
-    let mut script = vec![0x76, 0xa8, 0x20];
+    let mut script = vec![0x73, 0xa0, 0x20];
     script.extend_from_slice(address);
     script.extend_from_slice(&[0x88, 0xac]);
     script
@@ -521,4 +657,34 @@ fn p2pkh_unlock(signature: &[u8; 64], public_key: &[u8; 32]) -> Vec<u8> {
     script.push(0x20);
     script.extend_from_slice(public_key);
     script
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_canonical_p2pkh_lock() {
+        let addr = [0xaa; 32];
+        let script = p2pkh_lock(&addr);
+        assert_eq!(script.len(), 37);
+        assert_eq!(script[0], 0x73); // OpDup
+        assert_eq!(script[1], 0xa0); // OpBlake3
+        assert_eq!(script[2], 0x20); // 32-byte pushdata
+        assert_eq!(&script[3..35], &addr);
+        assert_eq!(script[35], 0x88); // OpEqualVerify
+        assert_eq!(script[36], 0xac); // OpCheckSig
+    }
+
+    #[test]
+    fn test_p2pkh_unlock_structure() {
+        let sig = [0xbb; 64];
+        let pk = [0xcc; 32];
+        let script = p2pkh_unlock(&sig, &pk);
+        assert_eq!(script.len(), 1 + 64 + 1 + 32);
+        assert_eq!(script[0], 0x40);
+        assert_eq!(&script[1..65], &sig);
+        assert_eq!(script[65], 0x20);
+        assert_eq!(&script[66..98], &pk);
+    }
 }

@@ -25,6 +25,9 @@ ed25519-dalek = { version = "2.1", default-features = false }
 hex = "0.4"
 tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
+rand = "0.8"
+chrono = "0.4"
+
 
 [features]
 default = ["custom-protocol"]
