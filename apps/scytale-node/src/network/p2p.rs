@@ -33,7 +33,13 @@ const MAX_KNOWN_PEERS: usize = 50;
 const MAX_PEER_FAILURES: u8 = 3;
 const MIN_DISCOVERY_PEERS: usize = 4;
 const DISCOVERY_INTERVAL: Duration = Duration::from_secs(30);
-const MAX_PEERS_PER_SUBNET: usize = 2;
+
+pub fn max_peers_per_subnet() -> usize {
+    std::env::var("SCYTALE_MAX_PEERS_PER_SUBNET")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(16)
+}
 
 pub fn subnet_key(address: &Multiaddr) -> Option<Vec<u8>> {
     let ip = address.iter().find_map(|protocol| match protocol {
@@ -42,8 +48,18 @@ pub fn subnet_key(address: &Multiaddr) -> Option<Vec<u8>> {
         _ => None,
     })?;
     match ip {
-        IpAddr::V4(ip) => Some(ip.octets()[..3].to_vec()),
-        IpAddr::V6(ip) => Some(ip.octets()[..6].to_vec()),
+        IpAddr::V4(ip) => {
+            if ip.is_loopback() || ip.is_private() {
+                return None;
+            }
+            Some(ip.octets()[..3].to_vec())
+        }
+        IpAddr::V6(ip) => {
+            if ip.is_loopback() {
+                return None;
+            }
+            Some(ip.octets()[..6].to_vec())
+        }
     }
 }
 
@@ -56,7 +72,7 @@ pub fn subnet_connection_allowed(addresses: &[Multiaddr], candidate: &Multiaddr)
         .filter_map(subnet_key)
         .filter(|subnet| *subnet == candidate_subnet)
         .count()
-        < MAX_PEERS_PER_SUBNET
+        < max_peers_per_subnet()
 }
 
 #[derive(Clone, Debug)]
@@ -841,6 +857,7 @@ mod tests {
 
     #[test]
     fn test_subnet_connection_limit() {
+        std::env::set_var("SCYTALE_MAX_PEERS_PER_SUBNET", "2");
         let connected = vec![
             "/ip4/192.0.2.10/tcp/1000".parse().unwrap(),
             "/ip4/192.0.2.11/tcp/1001".parse().unwrap(),
@@ -850,11 +867,19 @@ mod tests {
         let different = "/ip4/192.0.3.12/tcp/1002".parse().unwrap();
         assert!(subnet_connection_allowed(&connected, &different));
 
+        // Private and loopback IPs are unrestricted
+        let private1 = "/ip4/172.28.0.10/tcp/1000".parse().unwrap();
+        let private2 = "/ip4/172.28.0.20/tcp/1000".parse().unwrap();
+        let private3 = "/ip4/172.28.0.30/tcp/1000".parse().unwrap();
+        let privates = vec![private1, private2];
+        assert!(subnet_connection_allowed(&privates, &private3));
+
         let v6 = vec![
             "/ip6/2001:db8::1/tcp/1000".parse().unwrap(),
             "/ip6/2001:db8::2/tcp/1001".parse().unwrap(),
         ];
         let third_v6 = "/ip6/2001:db8::3/tcp/1002".parse().unwrap();
         assert!(!subnet_connection_allowed(&v6, &third_v6));
+        std::env::remove_var("SCYTALE_MAX_PEERS_PER_SUBNET");
     }
 }

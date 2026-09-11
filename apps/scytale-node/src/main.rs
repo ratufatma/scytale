@@ -328,7 +328,7 @@ async fn main() {
                         let inbound_outbound = handle.outbound.clone();
                         let sync_responses = handle.sync_responses.clone();
                         let inbound_sync_state = Arc::clone(&sync_state);
-                        let p2p_status = Arc::clone(&handle.status);
+                        let p2p_status_for_inbound = Arc::clone(&handle.status);
                         let mining_enabled = node.config().mining_enabled;
                         p2p_inbound_handle = Some(tokio::spawn(async move {
                             while let Some(message) = inbound.recv().await {
@@ -339,7 +339,7 @@ async fn main() {
                                             let mut state = inbound_sync_state.lock().unwrap();
                                             state.observe_peer(local_height, best_height)
                                         };
-                                        p2p_status.write().unwrap().sync_state =
+                                        p2p_status_for_inbound.write().unwrap().sync_state =
                                             inbound_sync_state.lock().unwrap().clone();
                                         if should_start {
                                             tracing::info!(
@@ -481,7 +481,7 @@ async fn main() {
                                                 .lock()
                                                 .unwrap()
                                                 .advance(current_height);
-                                            p2p_status.write().unwrap().sync_state =
+                                            p2p_status_for_inbound.write().unwrap().sync_state =
                                                 inbound_sync_state.lock().unwrap().clone();
                                             if completed {
                                                 tracing::info!(
@@ -536,6 +536,16 @@ async fn main() {
                                 }
                             }
                         }));
+                        let node_for_peers = Arc::clone(&node);
+                        let p2p_status_for_peers = Arc::clone(&handle.status);
+                        tokio::spawn(async move {
+                            let mut ticker = tokio::time::interval(std::time::Duration::from_millis(500));
+                            loop {
+                                ticker.tick().await;
+                                let count = p2p_status_for_peers.read().map(|s| s.connected_peers).unwrap_or(0);
+                                node_for_peers.set_peer_count(count);
+                            }
+                        });
                         p2p_swarm_handle = Some(swarm_task);
                     }
                     Err(error) => tracing::error!(%error, "failed to start libp2p networking"),

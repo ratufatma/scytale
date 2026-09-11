@@ -1,9 +1,6 @@
 services:
   node-1:
     image: scytale:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: scytale-node1
     hostname: node1
     dns:
@@ -11,7 +8,7 @@ services:
       - 8.8.8.8
     networks:
       scytale-net:
-        ipv4_address: 172.28.0.10
+        ipv4_address: 172.28.1.10
     ports:
       - "127.0.0.1:8332:8332"
     volumes:
@@ -25,9 +22,11 @@ services:
       - "start"
       - "--http-bind"
       - "0.0.0.0:8332"
+      - "--bootnodes"
+      - "/ip4/116.212.72.89/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc"
       - "--mine"
-      - "--miner-payout"
-      - "${SCYTALE_MINER_PAYOUT_SCRIPT:?SCYTALE_MINER_PAYOUT_SCRIPT must be set}"
+      - "--payout-address"
+      - "scy19skhskwa4uv0kectc9q7janqgzqnujd7k90t7dm9vxzhz5wqzyjqd5ztm4"
 
   node-2:
     image: scytale:latest
@@ -38,13 +37,11 @@ services:
       - 8.8.8.8
     networks:
       scytale-net:
-        ipv4_address: 172.28.0.20
+        ipv4_address: 172.28.2.20
     ports:
       - "127.0.0.1:8333:8333"
     volumes:
       - scytale_node2_data:/data
-    depends_on:
-      - node-1
     command:
       - "scytale-node"
       - "--data-dir"
@@ -55,7 +52,10 @@ services:
       - "--http-bind"
       - "0.0.0.0:8333"
       - "--bootnodes"
-      - "/ip4/172.28.0.10/tcp/9000"
+      - "/ip4/116.212.72.89/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc"
+      - "--mine"
+      - "--payout-address"
+      - "scy1l4fa8gh0jmpxyytgv6daurhz2p6t24q8f4gus2ydatk8f7vmfalqer6rf0"
 
   node-3:
     image: scytale:latest
@@ -66,13 +66,11 @@ services:
       - 8.8.8.8
     networks:
       scytale-net:
-        ipv4_address: 172.28.0.30
+        ipv4_address: 172.28.3.30
     ports:
       - "127.0.0.1:8334:8334"
     volumes:
       - scytale_node3_data:/data
-    depends_on:
-      - node-1
     command:
       - "scytale-node"
       - "--data-dir"
@@ -83,7 +81,10 @@ services:
       - "--http-bind"
       - "0.0.0.0:8334"
       - "--bootnodes"
-      - "/ip4/172.28.0.10/tcp/9000"
+      - "/ip4/116.212.72.89/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc"
+      - "--mine"
+      - "--payout-address"
+      - "scy1rqxn89gtjnty84sc9h8gu3mv55fq49mkuj74fyre4gx7zpttaqmqrxajex"
 
   node-4:
     image: scytale:latest
@@ -91,13 +92,11 @@ services:
     hostname: node4
     networks:
       scytale-net:
-        ipv4_address: 172.28.0.40
+        ipv4_address: 172.28.4.40
     ports:
       - "127.0.0.1:8335:8335"
     volumes:
       - scytale_node4_data:/data
-    depends_on:
-      - node-2
     command:
       - "scytale-node"
       - "--data-dir"
@@ -108,7 +107,10 @@ services:
       - "--http-bind"
       - "0.0.0.0:8335"
       - "--bootnodes"
-      - "/ip4/172.28.0.20/tcp/9000"
+      - "/ip4/116.212.72.89/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc"
+      - "--mine"
+      - "--payout-address"
+      - "scy14ym7kxadjra7fpqe3fsmmr24g57gfe6dxp0zv87fhhsjkhuzdlhshjz840"
 
 networks:
   scytale-net:

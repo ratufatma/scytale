@@ -197,9 +197,9 @@
         <div data-i18n="metric_active_miners" class="text-xs text-gray-400 uppercase tracking-wider font-medium">Active Miners</div>
         <div class="flex items-baseline gap-2 mt-1">
           <span id="metricActiveMiners" class="text-2xl font-black font-mono text-emerald-400">--</span>
-          <span id="metricTotalMiners" class="text-xs font-mono text-gray-500">/ -- total</span>
+          <span id="metricTotalMiners" class="text-xs font-mono text-gray-500">/ -- on-chain</span>
         </div>
-        <div data-i18n="metric_active_miners_sub" class="text-xs text-gray-500 mt-1">Penambang PoW Aktif</div>
+        <div id="metricActiveMinersSub" data-i18n="metric_active_miners_sub" class="text-xs text-gray-500 mt-1">-- Node P2P Aktif</div>
       </div>
 
       <div class="bg-[#111827] border border-gray-800/80 rounded-xl p-4 shadow">
@@ -642,6 +642,25 @@
           </div>
         </div>
 
+        <!-- Telemetry Network Mesh Strip -->
+        <div class="px-4 py-3 bg-gray-950/70 border-b border-gray-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="flex flex-wrap items-center gap-4">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-gray-400 font-medium" data-i18n="p2p_network_label">Jaringan P2P Mesh:</span>
+              <span id="minersP2pNodes" class="text-emerald-300 font-bold font-mono">-- Node Aktif</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-400 font-medium" data-i18n="onchain_winners_label">Pemenang Blok On-Chain:</span>
+              <span id="minersOnChainCount" class="text-white font-bold font-mono">-- Alamat</span>
+            </div>
+          </div>
+          <div class="text-gray-400 text-[11px] flex items-center gap-1" data-i18n="miners_explainer">
+            <span>💡</span>
+            <span>Semua node aktif menambang (hashing). Alamat penambang otomatis tercatat setelah memenangkan blok PoW.</span>
+          </div>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs text-gray-300">
             <thead class="bg-gray-900/80 text-gray-400 uppercase tracking-wider font-semibold border-b border-gray-800">
@@ -870,6 +889,9 @@
         miners_loading: "Loading active miner telemetry...",
         miners_empty: "No active miners recorded yet.",
         miners_window_notice: "Window: Last {window} Blocks On-Chain",
+        p2p_network_label: "P2P Network Mesh:",
+        onchain_winners_label: "On-Chain Block Winners:",
+        miners_explainer: "💡 All connected nodes are actively hashing. Miner addresses are recorded on-chain once they solve a PoW block.",
 
         blocks_title: "Recent Blocks Feed",
         btn_refresh: "Refresh",
@@ -1079,6 +1101,9 @@
         miners_loading: "Memuat telemetri penambang aktif...",
         miners_empty: "Belum ada data penambang aktif.",
         miners_window_notice: "Window: {window} Blok Terakhir On-Chain",
+        p2p_network_label: "Jaringan P2P Mesh:",
+        onchain_winners_label: "Pemenang Blok On-Chain:",
+        miners_explainer: "💡 Semua node aktif menambang (hashing). Alamat penambang otomatis tercatat setelah memenangkan blok PoW.",
 
         blocks_title: "Daftar Blok Terakhir",
         btn_refresh: "Segarkan",
@@ -1490,12 +1515,25 @@
         document.getElementById('metricMempool').textContent = status.mempool_tx_count;
         document.getElementById('mempoolTabBadge').textContent = status.mempool_tx_count;
 
-        // Update Active Miners Metrics
+        // Update Active Miners & P2P Mesh Metrics
+        const p2pCount = (status.peer_count !== undefined) ? (status.peer_count + 1) : 1;
         if (status.active_miners_count !== undefined) {
           document.getElementById('metricActiveMiners').textContent = status.active_miners_count;
-          document.getElementById('metricTotalMiners').textContent = `/ ${status.total_miners_count || status.active_miners_count} total`;
+          document.getElementById('metricTotalMiners').textContent = `/ ${status.total_miners_count || status.active_miners_count} on-chain`;
           const minersBadge = document.getElementById('minersTabBadge');
           if (minersBadge) minersBadge.textContent = status.active_miners_count;
+        }
+        const subEl = document.getElementById('metricActiveMinersSub');
+        if (subEl) {
+          subEl.innerHTML = `<span class="text-emerald-400 font-semibold">${p2pCount} Node Aktif</span> <span class="text-gray-500">(${status.peer_count || 0} Peers)</span>`;
+        }
+        const p2pStrip = document.getElementById('minersP2pNodes');
+        if (p2pStrip) {
+          p2pStrip.textContent = `${p2pCount} Node (${status.peer_count || 0} Peers)`;
+        }
+        const onChainStrip = document.getElementById('minersOnChainCount');
+        if (onChainStrip) {
+          onChainStrip.textContent = `${status.active_miners_count ?? '--'} Alamat`;
         }
 
         const miningBadge = document.getElementById('metricMining');
