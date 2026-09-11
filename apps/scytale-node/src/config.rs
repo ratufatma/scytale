@@ -29,6 +29,12 @@ pub struct NodeConfig {
     pub bootnodes: Vec<String>,
 }
 
+/// Canonical default libp2p bootstrap nodes for Scytale network.
+pub const DEFAULT_BOOTNODES: &[&str] = &[
+    "/dns4/seed.myratu.com/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc",
+    "/ip4/116.212.72.89/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc",
+];
+
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
@@ -42,7 +48,7 @@ impl Default for NodeConfig {
             indexer_key: None,
             max_reorg_depth: scytale_consensus::DEFAULT_MAX_REORG_DEPTH,
             p2p_port: 9000,
-            bootnodes: Vec::new(),
+            bootnodes: DEFAULT_BOOTNODES.iter().map(|s| s.to_string()).collect(),
         }
     }
 }
@@ -52,6 +58,7 @@ impl NodeConfig {
     pub fn in_memory() -> Self {
         Self {
             data_dir: PathBuf::from(":memory:"),
+            bootnodes: Vec::new(),
             ..Self::default()
         }
     }

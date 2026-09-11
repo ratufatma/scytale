@@ -9,7 +9,7 @@ pub mod network;
 pub mod node;
 pub mod passbook;
 
-pub use config::NodeConfig;
+pub use config::{DEFAULT_BOOTNODES, NodeConfig};
 pub use error::{NodeError, NodeState};
 pub use http_gateway::{run_http_gateway, DEFAULT_HTTP_BIND};
 pub use indexer::{start_indexer, BlockPayload, IndexerHandle};

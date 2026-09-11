@@ -10,6 +10,7 @@ fn test_config(data_dir: PathBuf, mining: bool) -> NodeConfig {
     NodeConfig {
         data_dir,
         mining_enabled: mining,
+        miner_payout_script: if mining { vec![0x51] } else { Vec::new() },
         genesis_difficulty_target: EASY_TARGET,
         shutdown_timeout_secs: 10,
         ..NodeConfig::default()

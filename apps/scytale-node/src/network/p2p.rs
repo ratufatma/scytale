@@ -378,7 +378,10 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
         )
         .multiplex(yamux::Config::default())
         .map(|(peer_id, muxer), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)));
-    let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default())
+    let tcp_transport = tcp::tokio::Transport::new(tcp::Config::default());
+    let dns_tcp_transport = libp2p::dns::tokio::Transport::system(tcp_transport)
+        .map_err(|error| P2pError::Transport(error.to_string()))?;
+    let base_transport = dns_tcp_transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(
             noise::Config::new(&keypair).map_err(|error| P2pError::Transport(error.to_string()))?,
@@ -386,7 +389,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
         .multiplex(yamux::Config::default())
         .map(|(peer_id, muxer), _| (peer_id, libp2p::core::muxing::StreamMuxerBox::new(muxer)));
     let transport = relay_transport
-        .or_transport(tcp_transport)
+        .or_transport(base_transport)
         .map(|either, _| either.into_inner())
         .boxed();
 
@@ -457,13 +460,32 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
         .listen_on(listen_addr)
         .map_err(|error| P2pError::Transport(error.to_string()))?;
 
+    let mut dialed_bootnode_peers = std::collections::HashSet::new();
     for bootnode in &config.bootnodes {
-        let address: Multiaddr = bootnode
-            .parse()
-            .map_err(|_| P2pError::InvalidAddress(bootnode.clone()))?;
-        swarm
-            .dial(address)
-            .map_err(|error| P2pError::Transport(error.to_string()))?;
+        let address: Multiaddr = match bootnode.parse() {
+            Ok(addr) => addr,
+            Err(error) => {
+                tracing::warn!(%bootnode, %error, "Invalid bootnode multiaddr format; skipping");
+                continue;
+            }
+        };
+
+        // If the bootnode specifies a peer ID, do not dial self if this node is the bootnode
+        if let Some(libp2p::multiaddr::Protocol::P2p(peer_id)) = address.iter().last() {
+            if peer_id == local_peer_id {
+                tracing::info!(%address, "Current node is this bootnode; skipping self-dial");
+                continue;
+            }
+            swarm.behaviour_mut().kad.add_address(&peer_id, address.clone());
+            if !dialed_bootnode_peers.insert(peer_id) {
+                tracing::debug!(%address, "Alternative multiaddr for peer already queued; skipping duplicate dial");
+                continue;
+            }
+        }
+
+        if let Err(error) = swarm.dial(address) {
+            tracing::warn!(%bootnode, %error, "Initial bootnode dial failed (will retry via discovery/DHT)");
+        }
     }
 
     let (inbound_tx, inbound) = mpsc::channel(256);

@@ -167,7 +167,16 @@ async fn main() {
                 no_p2p: no_p2p || cli.no_p2p,
                 p2p_port,
                 p2p_listen: p2p_listen.or(cli.p2p_listen.clone()),
-                bootnodes,
+                bootnodes: if !bootnodes.is_empty() {
+                    bootnodes
+                } else if !cli.bootnodes.is_empty() {
+                    cli.bootnodes.clone()
+                } else {
+                    scytale_node::DEFAULT_BOOTNODES
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect()
+                },
                 http_bind,
                 no_http: no_http || cli.no_http,
                 max_reorg_depth,
@@ -192,7 +201,14 @@ async fn main() {
                 no_p2p: cli.no_p2p,
                 p2p_port: cli.p2p_port,
                 p2p_listen: cli.p2p_listen.clone(),
-                bootnodes: cli.bootnodes.clone(),
+                bootnodes: if !cli.bootnodes.is_empty() {
+                    cli.bootnodes.clone()
+                } else {
+                    scytale_node::DEFAULT_BOOTNODES
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect()
+                },
                 http_bind: cli.http_bind.clone(),
                 no_http: cli.no_http,
                 max_reorg_depth: cli.max_reorg_depth,
