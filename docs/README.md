@@ -1,83 +1,37 @@
-# Scytale Documentation
+# Scytale Official Documentation (Public Testnet Release)
 
-This directory has one active documentation path and one historical archive.
-The Rust implementation is the source of truth for values marked `Active`.
+Selamat datang di repositori dokumentasi resmi blockchain **Scytale** — protokol Layer 1 terdesentralisasi berbasis Proof-of-Work BLAKE3, model transaksi Extended UTXO (eUTXO), dan tumpukan jaringan P2P native Rust `libp2p`.
 
-## Start Here
+---
 
-| Audience | Read | Purpose |
-|---|---|---|
-| New developer | [Developer Guide](DEVELOPER-GUIDE.md) | Build, run, test, and locate code |
-| Node operator | [README operator guide](../README.md#cli-operator-guide) | Install CLI, run a node, mine, and use wallets |
-| Protocol developer | [Protocol Reference](PROTOCOL-REFERENCE.md) | Canonical consensus and tokenomics values |
-| Auditor | [Audit Matrix](AUDIT-MATRIX.md) | Requirement, code, test, and documentation traceability |
-| Maintainer | [Implementation Status](IMPLEMENTATION-STATUS.md) | Implemented features and known gaps |
+## Peta Dokumentasi
 
-## Active Documents
+### 1. Protokol & Konsensus (`docs/protocol/`)
+- [**Canonical Genesis**](protocol/genesis.md): Identitas blok genesis, hash kanonikal `4033f099...`, alokasi token awal 33M SCY (Founder 30% & Dev 20%).
+- [**Tokenomics & Moneter**](protocol/tokenomics.md): Batas suplai maksimum 66M SCY, satuan Quanta ($10^8$), jadwal halving 660k blok, dan formula subsidi era 0 (25 SCY).
+- [**Mesin Konsensus**](protocol/consensus.md): Spesifikasi PoW BLAKE3, target kesulitan `0x1d00ffff`, MTP-11, seleksi rantai terberat (*accumulated work*), dan batas reorg.
+- [**Model eUTXO**](protocol/eutxo-model.md): Format transaksi, skrip penguncian P2PKH Ed25519, OP_RETURN payload, dan aturan konservasi massa.
 
-### Protocol
+### 2. Jaringan & Topologi (`docs/network/`)
+- [**Bootnodes & Discovery**](network/bootnodes.md): Multiaddr bootnode resmi (`seed.myratu.com:9000` & IP 116.212.72.89), Kademlia DHT, serta deprecation notice DNS seeder port 53.
+- [**Arsitektur P2P**](network/p2p-architecture.md): Protokol libp2p v0.56, enkripsi Noise XX, multiplexing Yamux, topik Gossipsub mesh, dan sinkronisasi rantai terarah.
 
-- [Protocol Reference](PROTOCOL-REFERENCE.md)
-- [Genesis Specification](GENESIS-SPEC.md)
-- [Genesis Allocation](GENESIS-ALLOCATION.md)
-- [Monetary Policy](MONETARY-POLICY.md)
-- [Consensus](CONSENSUS-SPEC.md)
-- [Block Format](BLOCK-SPEC.md)
-- [Transactions](TRANSACTION-SPEC.md)
-- [UTXO](UTXO-SPEC.md)
-- [Proof of Work](POW-SPEC.md)
-- [Difficulty](DIFFICULTY-SPEC.md)
-- [Chain Selection](CHAIN-SELECTION-SPEC.md)
-- [Authorization](AUTHORIZATION-SPEC.md)
-- [Hashing and Serialization](HASHING-AND-SERIALIZATION-SPEC.md)
+### 3. Panduan Operasional Node (`docs/node-ops/`)
+- [**Quickstart 5 Menit**](node-ops/quickstart.md): Panduan cepat kompilasi, membuat dompet, dan menjalankan node penambang publik.
+- [**Panduan Penambangan (Mining Guide)**](node-ops/mining-guide.md): Operasi solo mining, pemanfaatan core CPU paralel dengan Rayon, dan log progres nonce.
+- [**Deployment Produksi systemd VPS**](node-ops/systemd-vps.md): Konfigurasi layanan background Linux, isolasi hak akses pengguna, dan sandboxing keamanan.
 
-### Runtime and Operations
+### 4. Referensi Antarmuka API (`docs/api/`)
+- [**HTTP RPC v1 Reference**](api/rpc-v1.md): Dokumentasi skema JSON endpoint `GET /api/v1/status`, `GET /api/v1/blocks/tip`, `POST /api/v1/tx`, format galat, dan rate limiting.
 
-- [Architecture](ARCHITECTURE.md)
-- [Node Lifecycle](NODE-LIFECYCLE-SPEC.md)
-- [Storage](STORAGE-SPEC.md)
-- [Mempool](MEMPOOL-SPEC.md)
-- [Mining Lifecycle](MINING-LIFECYCLE-SPEC.md)
-- [Networking](P2P-NETWORK-SPEC.md)
-- [Testing Strategy](TESTING-STRATEGY.md)
-- [Security Threat Model](SECURITY-THREAT-MODEL.md)
+### 5. Perkakas Pengguna (`docs/tools/`)
+- [**CLI Wallet Tool (`scytale-cli`)**](tools/cli.md): Manajemen kunci Ed25519, pembuatan alamat Bech32, transfer koin, dan kueri status.
+- [**Web Explorer & Indexer**](tools/explorer.md): Setup penjelajah blok visual, worker metadata ingest, dan panduan reverse proxy HTTPS di [explorer.myratu.com](https://explorer.myratu.com).
 
-### Applications and Contracts
+---
 
-- [Passbook](PASSBOOK-CONCEPT.md)
-- [Value Provenance](VALUE-PROVENANCE-SPEC.md)
-- [Smart Contracts](SMART_CONTRACTS.md)
-- [Developer Guide](DEVELOPER-GUIDE.md)
-- [Vault Contract](../contracts/vault/src/lib.rs)
-- [Scytale SDK](../crates/scytale-sdk/src/lib.rs)
+## Tautan Cepat Komunitas & Layanan Publik
 
-## Audit Inputs
-
-These reports are useful working inputs but are not protocol authority:
-
-- [Documentation consistency report](DOCS_CONSISTENCY_REPORT.md)
-- [Repository scan report](SCAN_REPORT.md)
-- [Decision recommendations](DECISION_RECOMMENDATIONS.md)
-
-Their conclusions must be rechecked against the current source tree and the
-test matrix before being used as release evidence.
-
-## Status Rules
-
-- `Active`: describes the current repository and has a code source.
-- `Partial`: implemented in part; gaps are listed in the status and audit matrix.
-- `Proposed`: design material, not a current protocol rule.
-- `Historical`: retained for context only; never use as an implementation reference.
-- `Superseded`: replaced by a newer document.
-
-Working notes, release runbooks, and duplicate task records are under
-[archive/work-history](archive/work-history/README.md). They are not active
-specifications.
-
-## Documentation Rules
-
-1. Define each protocol value once in [Protocol Reference](PROTOCOL-REFERENCE.md).
-2. Link to the reference instead of copying tokenomics into every document.
-3. Every active claim must name a source file or test.
-4. Keep unimplemented behavior explicitly labeled `Not implemented`.
-5. Run the audit commands in [Audit Matrix](AUDIT-MATRIX.md) before release.
+- **Web Explorer Resmi**: [https://explorer.myratu.com](https://explorer.myratu.com)
+- **Kanonikal Bootnode**: `/dns4/seed.myratu.com/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc`
+- **Repositori Sumber**: [https://github.com/ratufatma/scytale](https://github.com/ratufatma/scytale)
