@@ -437,7 +437,7 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
     let block1 = Block::new(header, vec![cb.clone()]);
     assert!(node.submit_external_block(block1).unwrap());
 
-    // 4. Try to call contract with fee = 10 quanta (way below 92KB minimum relay fee)
+    // 4. Invalid emergency authorization must fail closed during local validation.
     let redeemer = VaultRedeemer::EmergencyRescue {
         penalty_accepted: true,
         signature: [0u8; 64],
@@ -445,33 +445,33 @@ async fn test_contract_call_mempool_rejection_error_parsing() {
     let redeemer_bytes = bincode::serialize(&redeemer).unwrap();
     let redeemer_hex = hex::encode(&redeemer_bytes);
 
-    let underfunded_call = CallArgs {
+    let invalid_authorization_call = CallArgs {
         utxo: format!("{}:0", cb.txid()),
         wasm: wasm_path,
         redeemer: redeemer_hex,
         datum: datum_hex,
         to: "010203".to_string(),
         amount: reward.saturating_sub(10),
-        fee: 10, // Fee too low for ~92KB transaction!
+        fee: 10,
         signature: None,
         dry_run: false,
         skip_dry_run: false,
         node_url,
     };
 
-    let res = call_contract(underfunded_call);
+    let res = call_contract(invalid_authorization_call);
     assert!(
         res.is_err(),
-        "Call with fee too low must be rejected by mempool"
+        "Invalid contract authorization must be rejected"
     );
     let err_msg = res.unwrap_err().to_string();
     assert!(
-        err_msg.contains("Mempool submission rejected by node (HTTP 400)"),
-        "Should contain mempool rejection header: {err_msg}"
+        err_msg.contains("Dry-run rejected: smart contract returned VALIDATION_REJECT"),
+        "Should contain fail-closed dry-run rejection: {err_msg}"
     );
     assert!(
-        err_msg.contains("Reason: mempool error: fee rate"),
-        "Should contain structured error reason: {err_msg}"
+        !err_msg.contains("Mempool submission rejected"),
+        "Invalid authorization must not reach mempool: {err_msg}"
     );
 
     let _ = shutdown_tx.send(());

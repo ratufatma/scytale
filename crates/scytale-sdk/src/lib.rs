@@ -162,6 +162,7 @@ pub fn blake3_hash(data: &[u8]) -> [u8; 32] {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec::Vec;
     use super::{decode_payload, encode_payload, TxContext};
 
     #[test]

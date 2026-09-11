@@ -148,6 +148,7 @@ pub extern "C" fn validate(
 mod tests {
     use super::{validate, VaultDatum, VaultRedeemer};
     use ed25519_dalek::{Signer, SigningKey};
+    use alloc::vec::Vec;
     use scytale_sdk::{encode_payload, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS};
 
     fn keypair(seed: u8) -> SigningKey {
@@ -160,6 +161,9 @@ mod tests {
             block_time,
             input_amount: 100_000,
             fee_burned,
+            input_datums: Vec::new(),
+            output_datums: Vec::new(),
+            ledger_state: Vec::new(),
         }
     }
 

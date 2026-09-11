@@ -321,6 +321,9 @@ mod tests {
             block_time: 1700000000, // Belum unlock
             input_amount: 100_000,
             fee_burned: 100,
+            input_datums: Vec::new(),
+            output_datums: Vec::new(),
+            ledger_state: Vec::new(),
         };
 
         let ctx_unlocked = TxContext {
@@ -328,6 +331,9 @@ mod tests {
             block_time: 1800000000, // Sudah lewat unlock
             input_amount: 100_000,
             fee_burned: 100,
+            input_datums: Vec::new(),
+            output_datums: Vec::new(),
+            ledger_state: Vec::new(),
         };
 
         let valid_sig = signing_key.sign(&ctx_unlocked.tx_hash).to_bytes();

@@ -1,4 +1,6 @@
-use scytale_account::pin_vault::PinCode;
+use ed25519_dalek::Signer;
+use scytale_account::{decrypt_key, pin_vault::EncryptedKeyEnvelope, PinCode};
+use scytale_core::{CanonicalSerialize, Hash256, OutPoint, Transaction, TxIn, TxOut};
 use serde::Serialize;
 use serde_json::Value;
 use std::fs;
@@ -8,8 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize)]
 pub struct SystemStatus {
-    pub network: &'static str,
-    pub node_url: &'static str,
+    pub network: String,
+    pub node_url: String,
     pub connected: bool,
 }
 
@@ -114,7 +116,7 @@ fn configured_node_url() -> String {
                 .and_then(Value::as_str)
                 .map(str::to_owned)
         })
-        .unwrap_or_else(|| "http://116.212.72.89:8332".to_string())
+        .unwrap_or_else(|| "http://127.0.0.1:8332".to_string())
 }
 
 fn json_u64(value: &Value, keys: &[&str]) -> Option<u64> {
@@ -201,9 +203,10 @@ pub fn create_wallet_with_pin(pin: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn get_system_status() -> SystemStatus {
+    let node_url = configured_node_url();
     SystemStatus {
-        network: "Global Testnet",
-        node_url: "http://116.212.72.89:8332",
+        network: "Configured Node".to_string(),
+        node_url,
         connected: false,
     }
 }
@@ -405,25 +408,117 @@ pub async fn sign_and_broadcast_transaction(
     node_url: Option<String>,
 ) -> Result<Value, String> {
     PinCode::new(&pin).map_err(|error| error.to_string())?;
-    let wallet_bytes = fs::read(&wallet_path).map_err(|error| error.to_string())?;
-    let draft_bytes = serde_json::to_vec(&draft).map_err(|error| error.to_string())?;
-    let mut signing_material = Vec::with_capacity(wallet_bytes.len() + draft_bytes.len());
-    signing_material.extend_from_slice(&wallet_bytes);
-    signing_material.extend_from_slice(&draft_bytes);
-    let signature = blake3::hash(&signing_material).to_hex().to_string();
-    let payload =
-        serde_json::json!({ "draft": draft, "signature": signature, "wallet_path": wallet_path });
+    let wallet: WalletSecrets = serde_json::from_str(
+        &fs::read_to_string(&wallet_path).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())?;
+    let public_key = hex::decode(&wallet.public_key).map_err(|error| error.to_string())?;
+    let public_key: [u8; 32] = public_key
+        .try_into()
+        .map_err(|_| "Wallet public key must be 32 bytes".to_string())?;
+    let envelope = wallet
+        .encrypted_key
+        .ok_or_else(|| "Wallet must contain an encrypted private key".to_string())?;
+    let private_key = decrypt_key(&envelope, &pin).map_err(|error| error.to_string())?;
+    let seed: [u8; 32] = private_key
+        .as_slice()
+        .try_into()
+        .map_err(|_| "Decrypted wallet key must be 32 bytes".to_string())?;
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+    if signing_key.verifying_key().to_bytes() != public_key {
+        return Err("Wallet public key does not match encrypted private key".to_string());
+    }
+    let recipient = draft
+        .get("outputs")
+        .and_then(Value::as_array)
+        .and_then(|outputs| outputs.first())
+        .and_then(|output| output.get("recipient"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| "Transaction draft must contain an output recipient".to_string())?;
+    let amount = draft
+        .get("outputs")
+        .and_then(Value::as_array)
+        .and_then(|outputs| outputs.first())
+        .and_then(|output| output.get("amount_quanta"))
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "Transaction draft must contain output amount_quanta".to_string())?;
+    let fee = draft
+        .get("fee_quanta")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "Transaction draft must contain fee_quanta".to_string())?;
+    let sender = scytale_core::Address::parse(&wallet.address).map_err(|e| e.to_string())?;
+    let recipient = scytale_core::Address::parse(recipient).map_err(|e| e.to_string())?;
+    let sender_lock = p2pkh_lock(sender.hash());
+    let recipient_lock = p2pkh_lock(recipient.hash());
     let endpoint = node_url
         .unwrap_or_else(configured_node_url)
         .trim_end_matches('/')
         .to_string();
-    let response =
-        ureq::post(&format!("{endpoint}/api/v1/transactions")).send_json(payload.clone());
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(10))
+        .build();
+    let response = agent
+        .get(&format!("{endpoint}/api/v1/utxos/{}", hex::encode(&sender_lock)))
+        .call()
+        .map_err(|error| format!("UTXO query failed: {error}"))?;
+    let utxos: Vec<UtxoResponse> = response.into_json().map_err(|error| error.to_string())?;
+    let needed = amount.checked_add(fee).ok_or("Amount plus fee overflow")?;
+    let mut selected = Vec::new();
+    let mut total = 0u64;
+    for utxo in utxos {
+        total = total.checked_add(utxo.value_quanta).ok_or("Input overflow")?;
+        selected.push(utxo);
+        if total >= needed { break; }
+    }
+    if total < needed { return Err("Insufficient funds".to_string()); }
+    let inputs = selected.iter().map(|utxo| {
+        let txid = utxo.txid_hex.parse::<Hash256>().map_err(|e| e.to_string())?;
+        Ok(TxIn::new(OutPoint::new(txid, utxo.index), Vec::new()))
+    }).collect::<Result<Vec<_>, String>>()?;
+    let mut outputs = vec![TxOut::new(amount, recipient_lock)];
+    if total > needed { outputs.push(TxOut::new(total - needed, sender_lock.clone())); }
+    let mut tx = Transaction::new(1, inputs, outputs, 0);
+    for index in 0..tx.inputs.len() {
+        let sighash = tx.compute_sighash(index, &sender_lock);
+        let signature = signing_key.sign(&sighash);
+        tx.inputs[index].authorization = p2pkh_unlock(&signature.to_bytes(), &public_key);
+    }
+    let payload = serde_json::json!({ "tx_hex": hex::encode(tx.to_canonical_bytes().map_err(|e| e.to_string())?) });
+    let response = agent.post(&format!("{endpoint}/api/v1/tx")).send_json(payload);
     match response {
         Ok(response) => {
-            let body: Value = response.into_json().unwrap_or(payload);
+            let body: Value = response.into_json().map_err(|error| error.to_string())?;
             Ok(serde_json::json!({ "broadcast": true, "response": body }))
         }
         Err(error) => Err(format!("Broadcast failed: {error}")),
     }
+}
+
+#[derive(serde::Deserialize)]
+struct WalletSecrets {
+    public_key: String,
+    address: String,
+    encrypted_key: Option<EncryptedKeyEnvelope>,
+}
+
+#[derive(serde::Deserialize)]
+struct UtxoResponse {
+    txid_hex: String,
+    index: u32,
+    value_quanta: u64,
+}
+
+fn p2pkh_lock(address: &[u8; 32]) -> Vec<u8> {
+    let mut script = vec![0x76, 0xa8, 0x20];
+    script.extend_from_slice(address);
+    script.extend_from_slice(&[0x88, 0xac]);
+    script
+}
+
+fn p2pkh_unlock(signature: &[u8; 64], public_key: &[u8; 32]) -> Vec<u8> {
+    let mut script = vec![0x40];
+    script.extend_from_slice(signature);
+    script.push(0x20);
+    script.extend_from_slice(public_key);
+    script
 }

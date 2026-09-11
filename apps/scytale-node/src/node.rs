@@ -244,6 +244,9 @@ impl Node {
 
     /// Starts the autonomous Proof-of-Work mining worker on a background thread if not already running.
     pub fn start_mining(&self) -> Result<bool, NodeError> {
+        if self.config.mining_enabled && self.config.miner_payout_script.is_empty() {
+            return Err(NodeError::MissingMiningPayout);
+        }
         let mut handle_guard = self.mining_handle.lock().unwrap();
         if handle_guard.is_some() {
             return Ok(false);

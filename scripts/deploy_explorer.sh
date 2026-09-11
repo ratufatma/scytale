@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -e
-VPS_HOST="116.212.72.89"
-VPS_USER="root"
-DEST_DIR="/var/www/scytale-explorer/"
+VPS_HOST="${VPS_HOST:?VPS_HOST must be set}"
+VPS_USER="${VPS_USER:?VPS_USER must be set}"
+DEST_DIR="${DEST_DIR:-/var/www/scytale-explorer/}"
 
 cd "$(dirname "$0")/../explorer"
 echo "==> Memulai build frontend explorer..."

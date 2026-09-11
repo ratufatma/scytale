@@ -27,7 +27,7 @@ services:
       - "0x217fffff"
       - "--mine"
       - "--miner-payout"
-      - "010203"
+      - "${SCYTALE_MINER_PAYOUT_SCRIPT:?SCYTALE_MINER_PAYOUT_SCRIPT must be set}"
 
   node-2:
     image: scytale:latest

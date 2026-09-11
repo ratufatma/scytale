@@ -18,7 +18,7 @@ interface NodeStatus {
 
 const emptyNode: NodeStatus = {
     connected: false,
-    node_url: 'http://116.212.72.89:8332',
+    node_url: 'http://127.0.0.1:8332',
     response_time_ms: 0,
     block_height: null,
 };

@@ -108,6 +108,9 @@ fn dummy_context() -> TxContext {
         block_time: 1700000000,
         input_amount: 100_000,
         fee_burned: 1_000,
+        input_datums: Vec::new(),
+        output_datums: Vec::new(),
+        ledger_state: Vec::new(),
     }
 }
 

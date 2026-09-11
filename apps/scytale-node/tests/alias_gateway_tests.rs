@@ -3,7 +3,11 @@ use axum::{
     extract::connect_info::ConnectInfo,
     http::{Request, StatusCode},
 };
+use ed25519_dalek::{Signer, SigningKey};
+use scytale_account::{bind_message, derive_candidate};
 use scytale_node::{http_gateway::router, Node, NodeConfig};
+use scytale_core::Address;
+use scytale_primitives::to_hex;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::util::ServiceExt;
@@ -14,7 +18,15 @@ fn setup_node() -> Arc<Node> {
     Arc::new(node)
 }
 
-async fn bind(app: &axum::Router, passbook_id: &str, candidate: &str) -> axum::response::Response {
+async fn bind(
+    app: &axum::Router,
+    signing_key: &SigningKey,
+    passbook_id: &str,
+    attempt: u32,
+) -> axum::response::Response {
+    let public_key = signing_key.verifying_key().to_bytes();
+    let candidate = derive_candidate(&public_key, passbook_id, attempt);
+    let signature = signing_key.sign(&bind_message(&public_key, passbook_id, &candidate));
     app.clone()
         .oneshot(
             Request::post("/api/v1/alias/bind")
@@ -22,8 +34,9 @@ async fn bind(app: &axum::Router, passbook_id: &str, candidate: &str) -> axum::r
                 .body(Body::from(
                     serde_json::json!({
                         "passbook_id": passbook_id,
-                        "candidate": candidate,
-                        "signature": []
+                        "candidate": candidate.as_str(),
+                        "public_key": to_hex(&public_key),
+                        "signature": signature.to_bytes().to_vec()
                     })
                     .to_string(),
                 ))
@@ -36,23 +49,33 @@ async fn bind(app: &axum::Router, passbook_id: &str, candidate: &str) -> axum::r
 #[tokio::test]
 async fn alias_bind_resolve_conflict_and_validation() {
     let app = router(setup_node());
+    let alice_key = SigningKey::from_bytes(&[1; 32]);
+    let bob_key = SigningKey::from_bytes(&[2; 32]);
+    let alice_address = Address::new(*blake3::hash(&alice_key.verifying_key().to_bytes()).as_bytes())
+        .to_bech32()
+        .unwrap();
+    let alice_candidate = derive_candidate(
+        &alice_key.verifying_key().to_bytes(),
+        &alice_address,
+        0,
+    );
 
-    let response = bind(&app, "scy1_alice", "SCY-100001").await;
+    let response = bind(&app, &alice_key, &alice_address, 0).await;
     assert_eq!(response.status(), StatusCode::CREATED);
     let body = to_bytes(response.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["status"], "Accepted");
 
-    let response = bind(&app, "scy1_alice", "SCY-100001").await;
+    let response = bind(&app, &alice_key, &alice_address, 0).await;
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    let response = bind(&app, "scy1_bob", "SCY-100001").await;
-    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let response = bind(&app, &bob_key, &alice_address, 0).await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     let response = app
         .clone()
         .oneshot(
-            Request::get("/api/v1/alias/resolve/SCY-100001")
+            Request::get(format!("/api/v1/alias/resolve/{alice_candidate}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -61,7 +84,7 @@ async fn alias_bind_resolve_conflict_and_validation() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), 4096).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["passbook_id"], "scy1_alice");
+    assert_eq!(json["passbook_id"], alice_address);
 
     let response = app
         .clone()

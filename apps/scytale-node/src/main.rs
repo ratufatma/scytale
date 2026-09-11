@@ -39,7 +39,7 @@ struct Cli {
     indexer_key: Option<String>,
     #[arg(long)]
     target: Option<String>,
-    #[arg(long)]
+    #[arg(long = "payout-address", visible_alias = "miner-payout")]
     miner_payout: Option<String>,
     #[arg(long, default_value_t = false)]
     no_p2p: bool,
@@ -86,7 +86,7 @@ enum Commands {
         indexer_key: Option<String>,
         #[arg(long)]
         target: Option<String>,
-        #[arg(long)]
+        #[arg(long = "payout-address", visible_alias = "miner-payout")]
         miner_payout: Option<String>,
         #[arg(long, default_value_t = false)]
         no_p2p: bool,
@@ -206,11 +206,21 @@ async fn main() {
             .map(|hex| u32::from_str_radix(hex, 16).ok())
             .unwrap_or_else(|| target.parse::<u32>().ok())
     });
-    let miner_payout_script = opts
-        .miner_payout
-        .as_deref()
-        .and_then(|script| scytale_primitives::from_hex(script).ok())
-        .unwrap_or_else(|| vec![0x01, 0x02, 0x03]);
+    let miner_payout_script = match opts.miner_payout.as_deref() {
+        Some(address_or_script) => match payout_script(address_or_script) {
+            Ok(bytes) => bytes,
+            _ if opts.mine => {
+                eprintln!("Error: Mining enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
+                std::process::exit(1);
+            }
+            _ => Vec::new(),
+        },
+        None if opts.mine => {
+            eprintln!("Error: Mining enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
+            std::process::exit(1);
+        }
+        None => Vec::new(),
+    };
     let config = NodeConfig {
         data_dir: data_dir.into(),
         mining_enabled: opts.mine,
@@ -554,4 +564,22 @@ async fn main() {
         Ok(Err(error)) => tracing::error!("node failed to start: {error}"),
         Err(error) => tracing::error!("node start task failed to join: {error}"),
     }
+}
+
+fn payout_script(value: &str) -> Result<Vec<u8>, String> {
+    if value.to_ascii_lowercase().starts_with("scy1") {
+        let address = scytale_core::Address::parse(value).map_err(|error| error.to_string())?;
+        return Ok(scytale_script::builder::ScriptBuilder::new()
+            .push_opcode(scytale_script::opcode::OpCode::OpDup)
+            .push_opcode(scytale_script::opcode::OpCode::OpBlake3)
+            .push_data(address.hash())
+            .push_opcode(scytale_script::opcode::OpCode::OpEqualVerify)
+            .push_opcode(scytale_script::opcode::OpCode::OpCheckSig)
+            .build());
+    }
+    let bytes = scytale_primitives::from_hex(value).map_err(|error| error.to_string())?;
+    if bytes.is_empty() {
+        return Err("payout address/script must not be empty".to_string());
+    }
+    Ok(bytes)
 }

@@ -2,7 +2,7 @@ import express from 'express';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import {
   upsertBlock,
@@ -12,11 +12,17 @@ import {
   getBlockCount
 } from './db.mjs';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const nodeBaseUrl = (process.env.NODE_URL || '').replace(/\/+$/, '');
+const indexerKey = process.env.INDEXER_KEY || process.env.EXPLORER_API_KEY || '';
+
+if (process.env.NODE_ENV === 'production' && !indexerKey) {
+  console.error('Missing mandatory INDEXER_KEY in environment');
+  process.exit(1);
+}
 
 // Middleware: CORS
 app.use((req, res, next) => {
@@ -40,9 +46,7 @@ function authenticateIndexer(req, res, next) {
   }
 
   const token = authHeader.slice(7).trim();
-  const expectedKey = process.env.INDEXER_KEY || process.env.EXPLORER_API_KEY || 'secret123';
-
-  if (token !== expectedKey) {
+  if (!indexerKey || token !== indexerKey) {
     return res.status(401).json({ error: 'Unauthorized: Invalid API key' });
   }
 
@@ -63,10 +67,6 @@ function formatBlock(row) {
     miner: row.miner,
     timestamp: row.timestamp,
     tx_count: row.tx_count,
-    nonce: 0,
-    total_quanta: 0,
-    total_scy: '0.00000000',
-    transactions: []
   };
 }
 
@@ -127,6 +127,9 @@ function handleGetBlocks(req, res) {
   try {
     const limit = Number(req.query.limit) || 10;
     const rows = getRecentBlocks(limit);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'No indexed canonical blocks found' });
+    }
     const formatted = rows.map(formatBlock);
     res.json(formatted);
   } catch (err) {
@@ -163,13 +166,14 @@ function handleGetStatus(req, res) {
     const latest = getLatestBlock();
     const count = getBlockCount();
 
-    const tipHash = latest
-      ? (latest.hash.startsWith('0x') ? latest.hash : `0x${latest.hash}`)
-      : '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (!latest) {
+      return res.status(404).json({ error: 'No indexed canonical block found' });
+    }
+    const tipHash = latest.hash.startsWith('0x') ? latest.hash : `0x${latest.hash}`;
 
     res.json({
       runtime_state: 'Operational',
-      canonical_height: latest ? latest.height : 0,
+      canonical_height: latest.height,
       canonical_tip: tipHash,
       indexed_blocks_count: count,
       peer_count: 0,
@@ -230,7 +234,7 @@ app.get('/rpc/api/v1/status', handleGetStatus);
 
 const faucetCooldowns = new Map(); // address -> timestamp
 const ipCooldowns = new Map();      // ip -> timestamp
-const COOLDOWN_MS = 30 * 60 * 1000; // 30 Menit (1,800,000 ms)
+const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 const FAUCET_WALLET = process.env.FAUCET_WALLET || '/var/lib/scytale/faucet_wallet.json';
 const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS || 'scy1kxwmc88ejusze6qsvze0f66jm05ke4e53xfst6deh3axwe9mh28ssujjul';
@@ -271,7 +275,7 @@ async function handleFaucetClaim(req, res) {
   const { address } = body;
   const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
 
-  if (!address || typeof address !== 'string' || !address.startsWith('scy1') || address.length < 38 || address.length > 90) {
+  if (!address || typeof address !== 'string' || !/^scy1[023456789acdefghjklmnpqrstuvwxyz]{10,87}$/.test(address)) {
     return res.status(400).json({ error: 'Alamat Bech32 Scytale tidak valid (harus diawali scy1).' });
   }
 
@@ -293,8 +297,14 @@ async function handleFaucetClaim(req, res) {
   }
 
   try {
-    const cmd = `${CLI_PATH} --socket ${SOCKET_PATH} transfer-p2pkh --wallet-file ${FAUCET_WALLET} --to ${address} --amount 1000000000 --fee 1000`;
-    const { stdout, stderr } = await execAsync(cmd);
+    const { stdout, stderr } = await execFileAsync(CLI_PATH, [
+      '--socket', SOCKET_PATH,
+      'transfer-p2pkh',
+      '--wallet-file', FAUCET_WALLET,
+      '--to', address,
+      '--amount', '1000000000',
+      '--fee', '1000'
+    ], { timeout: 30_000, windowsHide: true });
     const output = stdout + '\n' + (stderr || '');
     const match = output.match(/0x[a-fA-F0-9]{64}/);
     const txid = match ? match[0] : null;

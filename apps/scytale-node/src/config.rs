@@ -35,7 +35,7 @@ impl Default for NodeConfig {
             data_dir: PathBuf::from("./data"),
             network_id: 0x5343_5901,
             mining_enabled: false,
-            miner_payout_script: vec![0x01, 0x02, 0x03],
+            miner_payout_script: Vec::new(),
             shutdown_timeout_secs: 10,
             genesis_difficulty_target: 0x1d00_ffff,
             explorer_url: None,

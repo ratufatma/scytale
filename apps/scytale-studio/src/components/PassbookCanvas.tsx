@@ -7,7 +7,7 @@ interface Utxo { tx_id: string; output_index: number; amount_quanta: number; con
 interface Mutation { timestamp: string; mutation_type: string; tx_hash: string; delta_quanta: number; running_balance_quanta: number; }
 interface PassbookData { passbook_id: string | null; account_number: string | null; public_key: string | null; balance_scy: number; balance_quanta: number; sync_status: string; node_url: string; block_height: number | null; utxos: Utxo[]; ledger: Mutation[]; }
 
-const emptyData: PassbookData = { passbook_id: null, account_number: null, public_key: null, balance_scy: 0, balance_quanta: 0, sync_status: 'Waiting for node', node_url: 'http://116.212.72.89:8332', block_height: null, utxos: [], ledger: [] };
+const emptyData: PassbookData = { passbook_id: null, account_number: null, public_key: null, balance_scy: 0, balance_quanta: 0, sync_status: 'Waiting for node', node_url: 'http://127.0.0.1:8332', block_height: null, utxos: [], ledger: [] };
 function shortHash(value: string) { return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value || '—'; }
 function formatTime(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : date.toISOString().slice(0, 19).replace('T', ' '); }
 

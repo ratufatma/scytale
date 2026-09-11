@@ -5202,8 +5202,12 @@ name = "scytale-studio"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "ed25519-dalek",
+ "hex",
  "portable-pty",
  "scytale-account",
+ "scytale-core",
+ "scytale-primitives",
  "serde",
  "serde_json",
  "tauri",
