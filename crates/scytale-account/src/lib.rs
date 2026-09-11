@@ -12,5 +12,5 @@ pub use candidate::{derive_candidate, AccountNumber, AccountNumberError};
 pub use pin_vault::{
     decrypt_key, encrypt_key, is_being_traced, EncryptedKeyEnvelope, PinCode, VaultError,
 };
-pub use protocol::{BindRequest, BindResponse};
+pub use protocol::{bind_message, BindRequest, BindResponse};
 pub use store::{AliasStore, StoreError};

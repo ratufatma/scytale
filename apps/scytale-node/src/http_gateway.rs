@@ -10,7 +10,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use scytale_account::{AccountNumber, StoreError};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use scytale_account::{bind_message, AccountNumber, StoreError};
 use scytale_bridge::{PassbookViewDto, ProvenanceTraceDto};
 use scytale_core::codec::CanonicalDeserialize;
 use scytale_core::{Address, Block, Transaction, QUANTA_PER_SCY};
@@ -246,8 +247,8 @@ pub struct ErrorResponse {
 pub struct AliasBindRequest {
     pub passbook_id: String,
     pub candidate: String,
-    #[serde(default)]
     pub signature: Vec<u8>,
+    pub public_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -290,6 +291,33 @@ async fn bind_alias(
         ));
     }
 
+    let public_key_bytes = from_hex(&payload.public_key)
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Invalid public key"))?;
+    let public_key: [u8; 32] = public_key_bytes
+        .try_into()
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Public key must be 32 bytes"))?;
+    let passbook_address = payload
+        .passbook_id
+        .parse::<Address>()
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Passbook ID must be an address"))?;
+    if *blake3::hash(&public_key).as_bytes() != *passbook_address.hash() {
+        return Err(alias_error(
+            StatusCode::UNAUTHORIZED,
+            "Public key does not match passbook address",
+        ));
+    }
+    let signature: [u8; 64] = payload
+        .signature
+        .as_slice()
+        .try_into()
+        .map_err(|_| alias_error(StatusCode::BAD_REQUEST, "Signature must be 64 bytes"))?;
+    let verifying_key = VerifyingKey::from_bytes(&public_key)
+        .map_err(|_| alias_error(StatusCode::UNAUTHORIZED, "Invalid public key"))?;
+    let message = bind_message(&public_key, &payload.passbook_id, &account);
+    verifying_key
+        .verify(&message, &Signature::from_bytes(&signature))
+        .map_err(|_| alias_error(StatusCode::UNAUTHORIZED, "Invalid account bind signature"))?;
+
     let store = node.alias_store();
     let mut store = store
         .write()
@@ -307,9 +335,10 @@ async fn bind_alias(
         .map_err(|error| {
             let status = match error {
                 StoreError::AccountConflict | StoreError::PassbookConflict => StatusCode::CONFLICT,
-                StoreError::Io(_) | StoreError::Serialization(_) => {
-                    StatusCode::INTERNAL_SERVER_ERROR
-                }
+                StoreError::Io(_)
+                | StoreError::Serialization(_)
+                | StoreError::InconsistentIndexes => StatusCode::INTERNAL_SERVER_ERROR,
+                StoreError::EmptyPassbookId => StatusCode::BAD_REQUEST,
             };
             alias_error(status, error.to_string())
         })?;

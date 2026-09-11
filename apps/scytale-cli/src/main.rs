@@ -11,7 +11,7 @@ use client::{send_node_request, CliClientError};
 use contract::{handle_contract, ContractArgs};
 use ed25519_dalek::Signer;
 use identity::IdentityStore;
-use scytale_account::derive_candidate;
+use scytale_account::{bind_message, derive_candidate};
 use scytale_bridge::{NodeRequest, NodeResponse};
 use scytale_core::{Hash256, OutPoint, Transaction, TxIn, TxOut, TRANSACTION_VERSION_1};
 use scytale_primitives::from_hex;
@@ -352,18 +352,30 @@ fn collect_pin(pin: Option<String>, confirm: bool) -> Result<String, CliClientEr
     Ok(pin)
 }
 
-fn register_account(wallet: &mut WalletFile, node_url: &str) -> Result<bool, CliClientError> {
+fn register_account(
+    wallet: &mut WalletFile,
+    node_url: &str,
+    pin: &str,
+) -> Result<bool, CliClientError> {
     let key_id = from_hex(&wallet.public_key)
         .map_err(|error| CliClientError::User(format!("Invalid public key: {error}")))?;
     let passbook_id = wallet.address.clone();
+    let public_key = wallet
+        .verifying_key_bytes()
+        .map_err(CliClientError::Wallet)?;
+    let signing_key = wallet
+        .signing_key_with_pin(pin)
+        .map_err(CliClientError::Wallet)?;
     let agent = ureq::AgentBuilder::new().build();
     for attempt in 0..10u32 {
         let candidate = derive_candidate(&key_id, &passbook_id, attempt);
+        let signature = signing_key.sign(&bind_message(&public_key, &passbook_id, &candidate));
         let url = format!("{}/api/v1/alias/bind", node_url.trim_end_matches('/'));
         let payload = serde_json::json!({
             "passbook_id": passbook_id,
             "candidate": candidate.as_str(),
-            "signature": []
+            "public_key": hex::encode(public_key),
+            "signature": signature.to_bytes().to_vec()
         });
         match agent.post(&url).send_json(payload) {
             Ok(response) => {
@@ -738,7 +750,7 @@ async fn execute(cli: Cli) -> Result<(), CliClientError> {
                     WalletFile::generate_new(&path, force).map_err(CliClientError::Wallet)?
                 };
                 wallet.encrypt(&pin).map_err(CliClientError::Wallet)?;
-                let registered = register_account(&mut wallet, &cli.node_url)?;
+                let registered = register_account(&mut wallet, &cli.node_url, &pin)?;
                 wallet.save_to(&path).map_err(CliClientError::Wallet)?;
                 formatter::print_human_wallet_created(
                     wallet.account_number.as_deref().unwrap_or("Lokal"),
