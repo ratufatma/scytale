@@ -54,7 +54,7 @@ struct Cli {
     #[arg(
         long,
         value_delimiter = ',',
-        help = "Initial libp2p bootnode multiaddr (repeat or comma-separate)"
+        help = "Initial libp2p bootnode multiaddr (repeat or comma-separate) [default: canonical VPS bootnode]"
     )]
     bootnodes: Vec<String>,
     #[arg(long, default_value = scytale_node::DEFAULT_HTTP_BIND)]
@@ -101,7 +101,7 @@ enum Commands {
         #[arg(
             long,
             value_delimiter = ',',
-            help = "Initial libp2p bootnode multiaddr (repeat or comma-separate)"
+            help = "Initial libp2p bootnode multiaddr (repeat or comma-separate) [default: canonical VPS bootnode]"
         )]
         bootnodes: Vec<String>,
         #[arg(long, default_value = scytale_node::DEFAULT_HTTP_BIND)]
@@ -169,8 +169,14 @@ async fn main() {
                 p2p_listen: p2p_listen.or(cli.p2p_listen.clone()),
                 bootnodes: if !bootnodes.is_empty() {
                     bootnodes
+                        .into_iter()
+                        .filter(|b| !b.is_empty() && b != "none")
+                        .collect()
                 } else if !cli.bootnodes.is_empty() {
-                    cli.bootnodes.clone()
+                    cli.bootnodes
+                        .into_iter()
+                        .filter(|b| !b.is_empty() && b != "none")
+                        .collect()
                 } else {
                     scytale_node::DEFAULT_BOOTNODES
                         .iter()
@@ -202,7 +208,10 @@ async fn main() {
                 p2p_port: cli.p2p_port,
                 p2p_listen: cli.p2p_listen.clone(),
                 bootnodes: if !cli.bootnodes.is_empty() {
-                    cli.bootnodes.clone()
+                    cli.bootnodes
+                        .into_iter()
+                        .filter(|b| !b.is_empty() && b != "none")
+                        .collect()
                 } else {
                     scytale_node::DEFAULT_BOOTNODES
                         .iter()
