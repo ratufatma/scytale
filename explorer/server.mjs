@@ -35,8 +35,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware: JSON body parser
-app.use(express.json());
+// Middleware: JSON body parser with strict size limit
+app.use(express.json({ limit: '64kb' }));
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'Payload Too Large: Maksimum ukuran body adalah 64KB' });
+  }
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Bad Request: Format JSON tidak valid' });
+  }
+  next(err);
+});
 
 // Authentication Middleware for Ingest
 function authenticateIndexer(req, res, next) {
@@ -234,7 +243,24 @@ app.get('/rpc/api/v1/status', handleGetStatus);
 
 const faucetCooldowns = new Map(); // address -> timestamp
 const ipCooldowns = new Map();      // ip -> timestamp
+const inFlightAddresses = new Set(); // in-flight address locks
+const inFlightIps = new Set();       // in-flight IP locks
+let faucetExecutionQueue = Promise.resolve(); // sequential transfer queue
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+function getClientIp(req) {
+  if (req.headers['cf-connecting-ip']) {
+    return req.headers['cf-connecting-ip'].trim();
+  }
+  if (req.headers['x-real-ip']) {
+    return req.headers['x-real-ip'].trim();
+  }
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (xForwardedFor) {
+    return xForwardedFor.split(',')[0].trim();
+  }
+  return req.socket.remoteAddress || '127.0.0.1';
+}
 
 const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
 const BECH32_GENERATORS = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
@@ -321,7 +347,7 @@ const SCYTALE_BECH32_REGEX = /^scy1[ac-hj-np-z02-9]{38,90}$/;
 async function handleFaucetClaim(req, res) {
   const body = req.body || {};
   const rawAddress = body.address;
-  const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
+  const clientIp = getClientIp(req);
 
   if (!rawAddress || typeof rawAddress !== 'string') {
     return res.status(400).json({ error: 'Alamat Bech32 Scytale wajib disertakan.' });
@@ -362,25 +388,67 @@ async function handleFaucetClaim(req, res) {
     });
   }
 
+  // Layer 3: In-flight atomic lock to prevent concurrent race conditions
+  if (inFlightAddresses.has(address)) {
+    return res.status(429).json({
+      error: 'Permintaan klaim faucet untuk alamat ini sedang diproses. Silakan tunggu beberapa saat.'
+    });
+  }
+
+  if (inFlightIps.has(clientIp)) {
+    return res.status(429).json({
+      error: 'Permintaan klaim faucet dari IP Anda sedang diproses. Silakan tunggu beberapa saat.'
+    });
+  }
+
+  inFlightAddresses.add(address);
+  inFlightIps.add(clientIp);
+
   try {
-    const { stdout, stderr } = await execFileAsync(CLI_PATH, [
-      '--socket', SOCKET_PATH,
-      'transfer-p2pkh',
-      '--wallet-file', FAUCET_WALLET,
-      '--to', address,
-      '--amount', '1000000000',
-      '--fee', '1000'
-    ], { timeout: 30_000, windowsHide: true });
-    const output = stdout + '\n' + (stderr || '');
-    const match = output.match(/0x[a-fA-F0-9]{64}/);
-    const txid = match ? match[0] : null;
+    const task = async () => {
+      // Re-verify cooldown inside serialized execution in case a prior queue entry just finished
+      const execNow = Date.now();
+      if (faucetCooldowns.has(address) && (execNow - faucetCooldowns.get(address) < COOLDOWN_MS)) {
+        const remainingMin = Math.ceil((COOLDOWN_MS - (execNow - faucetCooldowns.get(address))) / 60000);
+        const err = new Error(`Rate limit reached. Please wait ${remainingMin} more minute(s) before requesting again.`);
+        err.statusCode = 429;
+        err.remaining_minutes = remainingMin;
+        throw err;
+      }
+      if (ipCooldowns.has(clientIp) && (execNow - ipCooldowns.get(clientIp) < COOLDOWN_MS)) {
+        const remainingMin = Math.ceil((COOLDOWN_MS - (execNow - ipCooldowns.get(clientIp))) / 60000);
+        const err = new Error(`Rate limit reached for your IP. Please wait ${remainingMin} more minute(s) before requesting again.`);
+        err.statusCode = 429;
+        err.remaining_minutes = remainingMin;
+        throw err;
+      }
 
-    if (!txid) {
-      throw new Error(`Tidak dapat mengekstrak TxID: ${output}`);
-    }
+      const { stdout, stderr } = await execFileAsync(CLI_PATH, [
+        '--socket', SOCKET_PATH,
+        'transfer-p2pkh',
+        '--wallet-file', FAUCET_WALLET,
+        '--to', address,
+        '--amount', '1000000000',
+        '--fee', '1000'
+      ], { timeout: 30_000, windowsHide: true });
 
-    faucetCooldowns.set(address, now);
-    ipCooldowns.set(clientIp, now);
+      const output = stdout + '\n' + (stderr || '');
+      const match = output.match(/0x[a-fA-F0-9]{64}/);
+      const txid = match ? match[0] : null;
+
+      if (!txid) {
+        throw new Error(`Tidak dapat mengekstrak TxID: ${output}`);
+      }
+
+      faucetCooldowns.set(address, execNow);
+      ipCooldowns.set(clientIp, execNow);
+
+      return { txid };
+    };
+
+    const currentOp = faucetExecutionQueue.then(task, task);
+    faucetExecutionQueue = currentOp.catch(() => {});
+    const { txid } = await currentOp;
 
     return res.status(200).json({
       success: true,
@@ -389,11 +457,20 @@ async function handleFaucetClaim(req, res) {
       recipient: address
     });
   } catch (err) {
+    if (err.statusCode === 429) {
+      return res.status(429).json({
+        error: err.message,
+        remaining_minutes: err.remaining_minutes
+      });
+    }
     console.error('[Faucet Distribution Error]', err);
     return res.status(500).json({
       error: 'Gagal mendistribusikan koin faucet',
       details: err.message || String(err)
     });
+  } finally {
+    inFlightAddresses.delete(address);
+    inFlightIps.delete(clientIp);
   }
 }
 
