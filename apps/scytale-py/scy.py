@@ -2,10 +2,12 @@
 """Human-friendly bilingual wrapper around the Rust Scytale CLI."""
 
 import argparse
-import getpass
 import json
+import os
 import subprocess
 import sys
+import tempfile
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from pathlib import Path
 
 
@@ -14,6 +16,7 @@ RUST_BINARY = ROOT / "target" / "release" / "scytale-cli"
 CONFIG_PATH = Path.home() / ".scytale" / "config.json"
 DEFAULT_WALLET = Path.home() / ".scytale" / "wallet.json"
 QUANTA_PER_SCY = 100_000_000
+COMMAND_TIMEOUT_SECONDS = 120
 CYAN = "\033[36m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
@@ -21,8 +24,8 @@ MINI_LOGO = f"{BOLD}{CYAN}SCYTALE // LIGHTNING-FAST LAYER-1{RESET}"
 DEFAULT_CONFIG = {
     "language": "en",
     "install_scope": "global",
-    "network": "global",
-    "node_url": "http://116.212.72.89:8332",
+    "network": "local",
+    "node_url": "http://127.0.0.1:8332",
     "socket_path": "/tmp/scytale.sock",
 }
 
@@ -30,14 +33,39 @@ DEFAULT_CONFIG = {
 def load_config() -> dict[str, str]:
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):
         data = {}
-    return {**DEFAULT_CONFIG, **{key: str(value) for key, value in data.items()}}
+    if not isinstance(data, dict):
+        data = {}
+    config = DEFAULT_CONFIG.copy()
+    for key in DEFAULT_CONFIG:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            config[key] = value.strip()
+    return config
 
 
 def save_config(config: dict[str, str]) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+    payload = json.dumps(config, indent=2, sort_keys=True) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix="config.", suffix=".tmp", dir=CONFIG_PATH.parent
+    )
+    try:
+        temporary_path = Path(temporary_name)
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            descriptor = -1
+            file.write(payload)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, CONFIG_PATH)
+        os.chmod(CONFIG_PATH, 0o600)
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
 
 
 def language(args: argparse.Namespace, config: dict[str, str]) -> str:
@@ -59,7 +87,13 @@ def account_from_wallet(path: Path) -> str:
 def rust_command(args: argparse.Namespace, command: str, *values: str) -> list[str]:
     config = load_config()
     socket_path = args.socket if args.socket is not None else config["socket_path"]
-    node_url = args.node_url if args.node_url is not None else config["node_url"]
+    node_url = (
+        args.node_url
+        if args.node_url is not None
+        else os.environ.get("SCYTALE_NODE_URL", config["node_url"])
+    )
+    if not node_url.startswith(("http://", "https://")):
+        raise ValueError("node URL must use http:// or https://")
     result = [str(RUST_BINARY), "--socket", socket_path, "--node-url", node_url]
     result.extend([command, *values])
     return result
@@ -70,11 +104,20 @@ def run_rust(args: argparse.Namespace, command: str, *values: str) -> tuple[int,
         return 127, f"Rust binary not found: {RUST_BINARY}"
     try:
         completed = subprocess.run(
-            rust_command(args, command, *values), capture_output=True, text=True, check=False
+            rust_command(args, command, *values),
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=COMMAND_TIMEOUT_SECONDS,
         )
+    except ValueError as error:
+        return 2, str(error)
+    except subprocess.TimeoutExpired:
+        return 124, "The Scytale CLI timed out while waiting for the node."
     except OSError as error:
         return 127, str(error)
-    return completed.returncode, (completed.stdout + "\n" + completed.stderr).strip()
+    output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+    return completed.returncode, output
 
 
 def human_error(output: str, lang: str) -> str:
@@ -98,22 +141,34 @@ def find_account(text: str) -> str:
     return ""
 
 
-def prompt_pin(confirm: bool, lang: str) -> str:
-    first_prompt = "Masukkan PIN 6 Angka: " if lang == "id" else "Enter 6-digit PIN: "
-    repeat_prompt = "Ulangi PIN 6 Angka: " if lang == "id" else "Repeat 6-digit PIN: "
-    pin = getpass.getpass(first_prompt)
-    if len(pin) != 6 or not pin.isdigit():
-        raise ValueError("PIN harus tepat 6 digit angka." if lang == "id" else "PIN must contain exactly 6 digits.")
-    if confirm and pin != getpass.getpass(repeat_prompt):
-        raise ValueError("PIN yang dimasukkan tidak cocok." if lang == "id" else "PIN entries do not match.")
-    return pin
+def find_txid(text: str) -> str:
+    for line in text.splitlines():
+        lowered = line.lower()
+        if "txid:" in lowered or "transaction id:" in lowered:
+            value = line.split(":", 1)[1].strip()
+            value = value.removeprefix("0x")
+            if len(value) == 64 and all(char in "0123456789abcdefABCDEF" for char in value):
+                return value.lower()
+    return ""
 
 
 def parse_quanta(value: str) -> int:
     cleaned = value.strip().replace(",", ".")
-    if not cleaned or cleaned.count(".") > 1 or not all(char.isdigit() or char == "." for char in cleaned):
+    if not cleaned or cleaned.startswith("-"):
         raise ValueError("Amount must be a SCY number, such as 0.5 or 10.")
-    return int(round(float(cleaned) * QUANTA_PER_SCY))
+    try:
+        amount = Decimal(cleaned)
+    except InvalidOperation as error:
+        raise ValueError("Amount must be a SCY number, such as 0.5 or 10.") from error
+    if not amount.is_finite():
+        raise ValueError("Amount must be a finite SCY number.")
+    quanta = amount * QUANTA_PER_SCY
+    if quanta != quanta.to_integral_value():
+        raise ValueError("Amount supports at most 8 decimal places of SCY.")
+    result = int(quanta.to_integral_value(rounding=ROUND_DOWN))
+    if result <= 0:
+        raise ValueError("Amount must be greater than zero.")
+    return result
 
 
 def format_scy(quanta: int) -> str:
@@ -139,12 +194,7 @@ def print_new_receipt(account: str, lang: str, registered: bool) -> None:
 
 def command_new(args: argparse.Namespace) -> int:
     lang = language(args, load_config())
-    try:
-        pin = prompt_pin(True, lang)
-    except ValueError as error:
-        print(error, file=sys.stderr)
-        return 2
-    values = ["new", "--pin", pin]
+    values = ["new"]
     if args.force:
         values.append("--force")
     if args.wallet_file:
@@ -199,17 +249,17 @@ def command_send(args: argparse.Namespace) -> int:
     amount_text = args.amount or input("Jumlah Koin / Amount in SCY: ").strip()
     try:
         amount = parse_quanta(amount_text)
-        pin = getpass.getpass("Masukkan PIN 6 Angka untuk konfirmasi: " if lang == "id" else "Enter 6-digit PIN to confirm: ")
-        if len(pin) != 6 or not pin.isdigit():
-            raise ValueError("PIN must contain exactly 6 digits.")
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
-    code, output = run_rust(args, "transfer-p2pkh", "--to", target, "--amount", str(amount), "--pin", pin)
+    code, output = run_rust(args, "transfer-p2pkh", "--to", target, "--amount", str(amount))
     if code:
         print(human_error(output, lang), file=sys.stderr)
         return code
-    txid = next((line.split(":", 1)[-1].strip() for line in output.splitlines() if "transaction id" in line.lower()), "N/A")
+    txid = find_txid(output)
+    if not txid:
+        print("The node did not return a transaction ID.", file=sys.stderr)
+        return 1
     print("=" * 50)
     print("              TRANSFER SUCCESSFUL" if lang == "en" else "              TRANSFER SCYTALE BERHASIL")
     print(f"Destination / Tujuan : {target}")
@@ -236,7 +286,13 @@ def command_config(args: argparse.Namespace) -> int:
         config["language"] = args.lang_value
     if args.network:
         config["network"] = args.network
-        config["node_url"] = "http://116.212.72.89:8332" if args.network == "global" else "http://127.0.0.1:8332"
+        if args.network == "local" and not args.node_url:
+            config["node_url"] = "http://127.0.0.1:8332"
+    if args.node_url:
+        if not args.node_url.startswith(("http://", "https://")):
+            print("Node URL must use http:// or https://.", file=sys.stderr)
+            return 2
+        config["node_url"] = args.node_url.rstrip("/")
     save_config(config)
     print(json.dumps(config, indent=2))
     return 0
@@ -275,6 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     config = commands.add_parser("config", aliases=["setelan"], help="Show or change configuration")
     config.add_argument("--lang", dest="lang_value", choices=("en", "id"))
     config.add_argument("--network", choices=("global", "local"))
+    config.add_argument("--node-url", help="Node HTTP gateway URL")
     config.set_defaults(handler=command_config)
     return parser
 

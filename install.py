@@ -6,6 +6,8 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+from urllib.parse import urlparse
 from pathlib import Path
 
 
@@ -17,6 +19,7 @@ CONFIG = Path.home() / ".scytale" / "config.json"
 GLOBAL_BIN = Path.home() / ".local" / "bin"
 LOCAL_BIN = ROOT / "bin"
 VENV = ROOT / "apps" / "scytale-py" / ".venv"
+COMMAND_TIMEOUT_SECONDS = 900
 CYAN = "\033[36m"
 GREEN = "\033[32m"
 BOLD = "\033[1m"
@@ -40,6 +43,22 @@ def ensure_venv() -> None:
     except (OSError, subprocess.CalledProcessError):
         print(f"{GREEN}[✓] Bootstrapping isolated Python virtual environment...{RESET}")
         subprocess.run([sys.executable, "-m", "venv", str(VENV)], check=True)
+    if not PYTHON.is_file() or not os.access(PYTHON, os.X_OK):
+        raise RuntimeError(f"Python virtual environment is incomplete: {PYTHON}")
+
+
+def ensure_release_binary() -> None:
+    if RUST_BINARY.is_file() and os.access(RUST_BINARY, os.X_OK):
+        return
+    print(f"{GREEN}[✓] Building release CLI binary...{RESET}")
+    subprocess.run(
+        ["cargo", "build", "--release", "-p", "scytale-cli"],
+        cwd=ROOT,
+        check=True,
+        timeout=COMMAND_TIMEOUT_SECONDS,
+    )
+    if not RUST_BINARY.is_file() or not os.access(RUST_BINARY, os.X_OK):
+        raise RuntimeError(f"Release CLI binary was not produced: {RUST_BINARY}")
 
 
 def ask(prompt: str, options: tuple[str, str], default: str = "1") -> str:
@@ -55,16 +74,79 @@ def installer_args() -> argparse.Namespace:
     parser.add_argument("--lang", choices=("en", "id"), help="Wizard language")
     parser.add_argument("--scope", choices=("global", "local"), help="Installation scope")
     parser.add_argument("--network", choices=("global", "local"), help="Default network")
+    parser.add_argument("--node-url", help="Node HTTP gateway URL (required for global network)")
+    parser.add_argument("--force", action="store_true", help="Replace existing launchers")
+    parser.add_argument("--no-build", action="store_true", help="Fail if the release CLI is not built")
     return parser.parse_args()
+
+
+def validate_node_url(value: str) -> str:
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("node URL must be a complete http:// or https:// URL")
+    return value.strip().rstrip("/")
+
+
+def choose_network(args: argparse.Namespace, english: bool) -> tuple[str, str]:
+    if args.network:
+        network = args.network
+    elif not sys.stdin.isatty():
+        network = "local"
+    else:
+        network = "local" if ask(
+            "[?] Default network:",
+            ("Local node (http://127.0.0.1:8332)", "Configured public node (HTTPS URL required)"),
+            default="1",
+        ) == "1" else "global"
+
+    if args.node_url:
+        node_url = validate_node_url(args.node_url)
+    elif network == "local":
+        node_url = "http://127.0.0.1:8332"
+    else:
+        raise ValueError(
+            "global network requires --node-url with the HTTPS URL of your deployment"
+        )
+    if network == "global" and not node_url.startswith("https://"):
+        raise ValueError("global network requires an HTTPS node URL")
+    return network, node_url
+
+
+def choose_scope(args: argparse.Namespace) -> str:
+    if args.scope:
+        return args.scope
+    if not sys.stdin.isatty():
+        return "local"
+    return "global" if ask(
+        "[?] Installation scope:",
+        ("Local (./bin)", "Global (~/.local/bin)"),
+        default="1",
+    ) == "2" else "local"
 
 
 def write_executable(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-    os.chmod(path, path.stat().st_mode | 0o111)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(descriptor, 0o755)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            descriptor = -1
+            file.write(content)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_name, path)
+        os.chmod(path, 0o755)
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
 
 
-def install_launcher(destination: Path) -> None:
+def install_launcher(destination: Path, force: bool) -> None:
+    if destination.exists() or destination.is_symlink():
+        if not force:
+            raise RuntimeError(f"Refusing to replace existing launcher: {destination} (use --force)")
     write_executable(
         destination,
         "#!/usr/bin/env bash\n"
@@ -73,92 +155,87 @@ def install_launcher(destination: Path) -> None:
     )
 
 
-def install_symlink(destination: Path) -> None:
+def install_symlink(destination: Path, force: bool) -> None:
     if destination.is_symlink() or destination.exists():
+        if not force:
+            raise RuntimeError(f"Refusing to replace existing binary link: {destination} (use --force)")
         destination.unlink()
     destination.symlink_to(RUST_BINARY)
 
 
+def write_config(config: dict[str, str]) -> None:
+    CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix="config.", suffix=".tmp", dir=CONFIG.parent
+    )
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            descriptor = -1
+            json.dump(config, file, indent=2, sort_keys=True)
+            file.write("\n")
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_name, CONFIG)
+        os.chmod(CONFIG, 0o600)
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
 def main() -> int:
     args = installer_args()
-    ensure_venv()
+    english = args.lang != "id"
     print_logo()
-    language = "1" if args.lang in (None, "en") else "2"
-    if args.lang is None:
-        language = ask(
-            "[?] Select Language / Pilih Bahasa:",
-            ("English (Default)", "Bahasa Indonesia"),
-        )
-    english = language == "1"
+    try:
+        scope = choose_scope(args)
+        network, node_url = choose_network(args, english)
+        ensure_venv()
+        if args.no_build:
+            if not RUST_BINARY.is_file() or not os.access(RUST_BINARY, os.X_OK):
+                raise RuntimeError(f"Release CLI binary not found: {RUST_BINARY}")
+        else:
+            ensure_release_binary()
 
-    if english:
-        scope = "1" if args.scope in (None, "global") else "2"
-        if args.scope is None:
-            scope = ask(
-                "[?] Installation Scope:",
-                ("Global (~/.local/bin - run 'scy' anywhere)", "Local (./bin in current workspace)"),
-            )
-        components = "1"
-        if args.lang is None or args.scope is None or args.network is None:
-            components = ask(
-                "[?] Components:",
-                ("CLI Engine & Python Wrapper", "Full (+ Desktop GUI Tauri - Coming Soon)"),
-            )
-        network = "1" if args.network in (None, "global") else "2"
-        if args.network is None:
-            network = ask(
-                "[?] Default Network:",
-                ("Global Testnet VPS (http://116.212.72.89:8332)", "Local Node (http://127.0.0.1:8332)"),
-            )
-    else:
-        scope = "1" if args.scope in (None, "global") else "2"
-        if args.scope is None:
-            scope = ask(
-                "[?] Lingkup Instalasi:",
-                ("Global (~/.local/bin - perintah 'scy' aktif di mana saja)", "Lokal (./bin di workspace ini)"),
-            )
-        components = "1"
-        if args.lang is None or args.scope is None or args.network is None:
-            components = ask(
-                "[?] Komponen:",
-                ("Mesin CLI & Wrapper Python", "Lengkap (+ GUI Desktop Tauri - Segera Hadir)"),
-            )
-        network = "1" if args.network in (None, "global") else "2"
-        if args.network is None:
-            network = ask(
-                "[?] Jaringan Default:",
-                ("Jaringan Global VPS (http://116.212.72.89:8332)", "Simpul Lokal (http://127.0.0.1:8332)"),
-            )
+        destination = GLOBAL_BIN if scope == "global" else LOCAL_BIN
+        launcher = destination / "scy"
+        binary_link = destination / "scytale-cli"
+        if not args.force and (launcher.exists() or launcher.is_symlink()):
+            raise RuntimeError(f"Launcher already exists: {launcher} (use --force)")
+        if not args.force and (binary_link.exists() or binary_link.is_symlink()):
+            raise RuntimeError(f"Binary link already exists: {binary_link} (use --force)")
 
-    config = {
-        "language": "en" if english else "id",
-        "install_scope": "global" if scope == "1" else "local",
-        "network": "global" if network == "1" else "local",
-        "node_url": "http://116.212.72.89:8332" if network == "1" else "http://127.0.0.1:8332",
-        "socket_path": "/tmp/scytale.sock",
-    }
-    CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
-
-    destination = GLOBAL_BIN if scope == "1" else LOCAL_BIN
-    install_launcher(destination / "scy")
-    install_symlink(destination / "scytale-cli")
-    os.chmod(__file__, Path(__file__).stat().st_mode | 0o111)
+        config = {
+            "language": "en" if english else "id",
+            "install_scope": scope,
+            "network": network,
+            "node_url": node_url,
+            "socket_path": "/tmp/scytale.sock",
+        }
+        write_config(config)
+        install_launcher(launcher, args.force)
+        install_symlink(binary_link, args.force)
+        os.chmod(__file__, Path(__file__).stat().st_mode | 0o111)
+    except (OSError, RuntimeError, ValueError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        print(f"Installation failed: {error}", file=sys.stderr)
+        return 1
 
     print()
     if english:
-        print(f"Installed {components == '2' and 'full' or 'CLI'} components in {config['install_scope']} mode.")
+        print(f"Installed CLI and Python wrapper in {scope} mode.")
+        print(f"Node: {node_url}")
         print(f"Configuration: {CONFIG}")
-        if scope == "1" and str(GLOBAL_BIN) not in os.environ.get("PATH", "").split(os.pathsep):
-            print(f"Add this directory to your PATH: export PATH=\"{GLOBAL_BIN}:$PATH\"")
-            print(f"Persist it with: echo 'export PATH=\"{GLOBAL_BIN}:$PATH\"' >> ~/.bashrc")
+        if scope == "global" and str(GLOBAL_BIN) not in os.environ.get("PATH", "").split(os.pathsep):
+            print(f"Add this directory to PATH: export PATH=\"{GLOBAL_BIN}:$PATH\"")
         print("Run: scy --help")
     else:
-        print(f"Komponen {config['install_scope']} terpasang di {destination}.")
+        print(f"CLI dan wrapper Python terpasang dalam mode {scope}.")
+        print(f"Node: {node_url}")
         print(f"Konfigurasi: {CONFIG}")
-        if scope == "1" and str(GLOBAL_BIN) not in os.environ.get("PATH", "").split(os.pathsep):
-            print(f"Tambahkan ke PATH: export PATH=\"{GLOBAL_BIN}:$PATH\"")
-            print(f"Simpan dengan: echo 'export PATH=\"{GLOBAL_BIN}:$PATH\"' >> ~/.bashrc")
+        if scope == "global" and str(GLOBAL_BIN) not in os.environ.get("PATH", "").split(os.pathsep):
+            print(f"Tambahkan direktori ini ke PATH: export PATH=\"{GLOBAL_BIN}:$PATH\"")
         print("Jalankan: scy --help")
     return 0
 

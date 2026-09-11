@@ -96,10 +96,14 @@ cargo build --release -p scytale-node -p scytale-cli
 ```
 
 The binaries are written to `target/release/`. The optional installer creates
-the `scy` launcher and installs `scytale-cli`:
+the `scy` launcher and installs `scytale-cli`. It defaults to a local
+installation and local node; public deployments must be configured explicitly:
 
 ```bash
-python3 install.py --lang id --scope global --network local
+python3 install.py --lang id --scope local --network local
+# For an explicit public deployment:
+python3 install.py --lang en --scope global --network global \
+	--node-url https://node.example.com
 scy --help
 ```
 
