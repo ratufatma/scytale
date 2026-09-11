@@ -1,8 +1,10 @@
 use axum::{
     body::{to_bytes, Body},
+    extract::connect_info::ConnectInfo,
     http::{Request, StatusCode},
 };
 use scytale_node::{http_gateway::router, Node, NodeConfig};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::util::ServiceExt;
 
@@ -72,6 +74,7 @@ async fn alias_bind_resolve_conflict_and_validation() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
     let response = app
+        .clone()
         .oneshot(
             Request::get("/api/v1/alias/resolve/INVALID")
                 .body(Body::empty())
@@ -80,4 +83,61 @@ async fn alias_bind_resolve_conflict_and_validation() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn write_routes_are_rate_limited_and_do_not_allow_wildcard_cors() {
+    let app = router(setup_node());
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/api/v1/health")
+                .header("origin", "https://untrusted.example")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response
+        .headers()
+        .get("access-control-allow-origin")
+        .is_none());
+
+    for _ in 0..30 {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v1/alias/bind")
+                    .header("content-type", "application/json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_ne!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::post("/api/v1/alias/bind")
+                .header("content-type", "application/json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    let mut request = Request::post("/api/v1/alias/bind")
+        .header("content-type", "application/json")
+        .body(Body::empty())
+        .unwrap();
+    request.extensions_mut().insert(ConnectInfo(
+        "192.0.2.10:9000".parse::<SocketAddr>().unwrap(),
+    ));
+    let response = app.oneshot(request).await.unwrap();
+    assert_ne!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 }

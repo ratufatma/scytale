@@ -1,6 +1,6 @@
 use scytale_consensus::{
     block_work, get_block_subsidy, mine_test_header, validate_block_authoritative, ChainError,
-    ChainTree, ConsensusError, CumulativeWork, Target,
+    ChainTree, ConsensusError, CumulativeWork, DifficultyError, Target,
 };
 use scytale_core::{
     Block, BlockHeader, Hash256, OutPoint, Transaction, TxIn, TxOut, UtxoSet, TRANSACTION_VERSION_1,
@@ -61,6 +61,30 @@ fn create_genesis() -> (Block, UtxoSet) {
     assert!(mine_test_header(&mut header, &target_value, 10_000_000));
     let block = Block::new(header, vec![coinbase]);
     (block, utxo_set)
+}
+
+#[test]
+fn rejects_non_boundary_block_with_mismatched_target() {
+    let (genesis, mut utxo_set) = create_genesis();
+    let coinbase = Transaction::new_coinbase(1, vec![TxOut::new(get_block_subsidy(1), vec![1])]);
+    let block = make_test_block(
+        1,
+        genesis.header.hash(),
+        1_700_000_060,
+        0x207f_ffff,
+        0,
+        vec![coinbase],
+        &utxo_set,
+        1,
+    );
+
+    let error = ChainTree::new(genesis)
+        .process_block(block, &mut utxo_set)
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        ChainError::Difficulty(DifficultyError::TargetMismatch { .. })
+    ));
 }
 
 #[test]

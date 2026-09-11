@@ -124,17 +124,29 @@ where
     }
 }
 
-/// A default verifier that accepts all block transactions unconditionally (used when transaction scripts/ScyVM are validated externally).
+/// The baseline verifier used by the consensus-only convenience API.
+///
+/// This is not an accept-all bypass: it re-runs the authoritative consensus
+/// transition against the supplied UTXO state. Runtime node ingestion uses the
+/// stronger `NodeBlockVerifier` for script and eUTXO validation.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct NoOpTransactionVerifier;
+pub struct AuthoritativeTransactionVerifier;
 
-impl BlockTransactionVerifier for NoOpTransactionVerifier {
+impl BlockTransactionVerifier for AuthoritativeTransactionVerifier {
     fn verify_block_transactions(
         &self,
-        _block: &Block,
-        _utxo_set: &UtxoSet,
+        block: &Block,
+        utxo_set: &UtxoSet,
     ) -> Result<(), ConsensusError> {
-        Ok(())
+        let height = block
+            .transactions
+            .first()
+            .and_then(|coinbase| coinbase.inputs.first())
+            .and_then(|input| input.authorization.get(..8))
+            .and_then(|bytes| bytes.try_into().ok())
+            .map(u64::from_le_bytes)
+            .unwrap_or(0);
+        validate_block_authoritative(block, height, utxo_set).map(|_| ())
     }
 }
 
@@ -326,7 +338,7 @@ impl ChainTree {
         block: Block,
         utxo_set: &mut UtxoSet,
     ) -> Result<Option<ReorgResult>, ChainError> {
-        self.process_block_with_verifier(block, utxo_set, &NoOpTransactionVerifier)
+        self.process_block_with_verifier(block, utxo_set, &AuthoritativeTransactionVerifier)
     }
 
     /// Evaluates a candidate block using a contextual transaction verifier.
@@ -395,8 +407,8 @@ impl ChainTree {
                 parent_node.block.header.timestamp,
                 &difficulty::DifficultyConfig::default(),
             )?;
-            difficulty::validate_block_target(&block.header, &expected_target)?;
         }
+        difficulty::validate_block_target(&block.header, &expected_target)?;
         pow::verify_pow(&block.header, &expected_target).map_err(ChainError::InvalidPoW)?;
         if block.header.timestamp <= parent_node.block.header.timestamp {
             return Err(ChainError::NonMonotonicTimestamp);

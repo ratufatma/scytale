@@ -9,8 +9,8 @@ pub mod work;
 
 pub use chain::{
     calculate_median_time_past, transaction_commitment, validate_block_authoritative,
-    validate_block_authoritative_with_headers, BlockNode, BlockTransactionVerifier, ChainTree,
-    NoOpTransactionVerifier, ReorgResult, DEFAULT_MAX_REORG_DEPTH,
+    validate_block_authoritative_with_headers, AuthoritativeTransactionVerifier, BlockNode,
+    BlockTransactionVerifier, ChainTree, ReorgResult, DEFAULT_MAX_REORG_DEPTH,
 };
 
 pub use difficulty::{

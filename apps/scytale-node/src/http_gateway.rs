@@ -3,9 +3,10 @@
 //! Provides real-time block explorer and monitoring endpoints over HTTP.
 
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, State},
-    http::StatusCode,
-    response::Html,
+    extract::{connect_info::ConnectInfo, DefaultBodyLimit, Path, Query, State},
+    http::{Request, StatusCode},
+    middleware::{self, Next},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
@@ -15,10 +16,13 @@ use scytale_core::codec::CanonicalDeserialize;
 use scytale_core::{Address, Block, Transaction, QUANTA_PER_SCY};
 use scytale_primitives::{from_hex, to_hex, Hash256, OutPoint};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::ipc::{map_passbook_view, map_provenance_trace};
 use crate::node::Node;
@@ -26,6 +30,68 @@ use crate::passbook::Passbook;
 
 /// Default HTTP Gateway bind address.
 pub const DEFAULT_HTTP_BIND: &str = "127.0.0.1:8332";
+const WRITE_REQUEST_LIMIT: u32 = 30;
+const WRITE_REQUEST_WINDOW: Duration = Duration::from_secs(1);
+
+struct RpcRateLimiter {
+    clients: HashMap<Option<IpAddr>, RpcRateWindow>,
+}
+
+struct RpcRateWindow {
+    window_start: Instant,
+    request_count: u32,
+}
+
+impl RpcRateLimiter {
+    fn new() -> Self {
+        Self {
+            clients: HashMap::new(),
+        }
+    }
+
+    fn allow(&mut self, client_ip: Option<IpAddr>) -> bool {
+        self.clients
+            .retain(|_, window| window.window_start.elapsed() < WRITE_REQUEST_WINDOW);
+        let window = self.clients.entry(client_ip).or_insert(RpcRateWindow {
+            window_start: Instant::now(),
+            request_count: 0,
+        });
+        if window.window_start.elapsed() >= WRITE_REQUEST_WINDOW {
+            window.window_start = Instant::now();
+            window.request_count = 0;
+        }
+        if window.request_count >= WRITE_REQUEST_LIMIT {
+            return false;
+        }
+        window.request_count += 1;
+        true
+    }
+}
+
+async fn rate_limit_write_requests(
+    State(limiter): State<Arc<Mutex<RpcRateLimiter>>>,
+    request: Request<axum::body::Body>,
+    next: Next,
+) -> Response {
+    let client_ip = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|ConnectInfo(address)| address.ip());
+    let allowed = limiter
+        .lock()
+        .map(|mut state| state.allow(client_ip))
+        .unwrap_or(false);
+    if !allowed {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(ErrorResponse {
+                error: "write request rate limit exceeded".into(),
+            }),
+        )
+            .into_response();
+    }
+    next.run(request).await
+}
 
 /// Embedded static Web Explorer HTML single-page application.
 const EXPLORER_HTML: &str = include_str!("../../../explorer/index.html");
@@ -1001,10 +1067,15 @@ async fn submit_tx(
 
 /// Builds the Axum router for the HTTP Gateway.
 pub fn router(node: Arc<Node>) -> Router {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = CorsLayer::new();
+    let write_rate_limiter = Arc::new(Mutex::new(RpcRateLimiter::new()));
+    let write_routes = Router::new()
+        .route("/api/v1/alias/bind", post(bind_alias))
+        .route("/api/v1/tx", post(submit_tx))
+        .layer(middleware::from_fn_with_state(
+            write_rate_limiter,
+            rate_limit_write_requests,
+        ));
 
     Router::new()
         .route("/", get(serve_explorer))
@@ -1016,12 +1087,10 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/health", get(health_check))
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/status", get(get_status))
-        .route("/api/v1/alias/bind", post(bind_alias))
         .route("/api/v1/alias/resolve/:account", get(resolve_alias))
         .route("/api/v1/blocks", get(get_blocks))
         .route("/api/v1/blocks/tip", get(get_block_tip))
         .route("/api/v1/blocks/:identifier", get(get_block_by_identifier))
-        .route("/api/v1/tx", post(submit_tx))
         .route("/api/v1/tx/:txid", get(get_transaction))
         .route("/api/v1/mempool", get(get_mempool))
         .route("/api/v1/passbook", get(get_passbook_api_view))
@@ -1032,6 +1101,7 @@ pub fn router(node: Arc<Node>) -> Router {
         .route("/api/v1/passbook/:locking_script_hex", get(get_passbook))
         .route("/api/v1/utxos/:locking_script_hex", get(get_utxos))
         .route("/api/v1/provenance/:txid/:index", get(get_provenance))
+        .merge(write_routes)
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
         .with_state(node)
@@ -1048,12 +1118,15 @@ pub async fn run_http_gateway(
     let local_addr = listener.local_addr()?;
     tracing::info!("HTTP read-only gateway listening on http://{}", local_addr);
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async move {
-            let _ = shutdown_rx.recv().await;
-            tracing::info!("HTTP gateway received shutdown signal");
-        })
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(async move {
+        let _ = shutdown_rx.recv().await;
+        tracing::info!("HTTP gateway received shutdown signal");
+    })
+    .await?;
 
     tracing::info!("HTTP gateway terminated cleanly");
     Ok(())

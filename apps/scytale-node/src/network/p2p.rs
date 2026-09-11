@@ -92,6 +92,10 @@ pub enum P2pError {
     IdentityIo(#[from] std::io::Error),
     #[error("identity encoding failed: {0}")]
     IdentityEncoding(String),
+    #[error("known-peer state I/O failed: {0}")]
+    PeerStateIo(#[source] std::io::Error),
+    #[error("known-peer state encoding failed: {0}")]
+    PeerStateEncoding(String),
     #[error("transport setup failed: {0}")]
     Transport(String),
     #[error("network behavior setup failed: {0}")]
@@ -309,29 +313,27 @@ impl From<relay_client::Event> for ScytaleEvent {
     }
 }
 
-fn load_known_peers(path: &Path) -> Vec<KnownPeer> {
-    std::fs::read(path)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+fn load_known_peers(path: &Path) -> Result<Vec<KnownPeer>, P2pError> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let bytes = std::fs::read(path).map_err(P2pError::PeerStateIo)?;
+    serde_json::from_slice(&bytes).map_err(|error| P2pError::PeerStateEncoding(error.to_string()))
 }
 
-fn save_known_peers(path: &Path, peers: &mut Vec<KnownPeer>) {
+fn save_known_peers(path: &Path, peers: &mut Vec<KnownPeer>) -> Result<(), P2pError> {
     peers.retain(|peer| peer.failures < MAX_PEER_FAILURES);
     peers.sort_by_key(|peer| (peer.failures, std::cmp::Reverse(peer.last_seen)));
     peers.truncate(MAX_KNOWN_PEERS);
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    if std::fs::create_dir_all(parent).is_err() {
-        return;
-    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| P2pError::PeerStateIo(std::io::Error::other("peer state has no parent")))?;
+    std::fs::create_dir_all(parent).map_err(P2pError::PeerStateIo)?;
     let temporary = path.with_extension("json.tmp");
-    if let Ok(bytes) = serde_json::to_vec_pretty(peers) {
-        if std::fs::write(&temporary, bytes).is_ok() {
-            let _ = std::fs::rename(temporary, path);
-        }
-    }
+    let bytes = serde_json::to_vec_pretty(peers)
+        .map_err(|error| P2pError::PeerStateEncoding(error.to_string()))?;
+    std::fs::write(&temporary, bytes).map_err(P2pError::PeerStateIo)?;
+    std::fs::rename(temporary, path).map_err(P2pError::PeerStateIo)
 }
 
 fn now_secs() -> u64 {
@@ -473,7 +475,7 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
     let status = Arc::new(RwLock::new(P2pStatus::default()));
     let status_for_task = Arc::clone(&status);
     let known_peers_path = config.known_peers_path.clone();
-    let mut known_peers = load_known_peers(&known_peers_path);
+    let mut known_peers = load_known_peers(&known_peers_path)?;
     let bootnode_addresses: Vec<Multiaddr> = config
         .bootnodes
         .iter()
@@ -582,7 +584,9 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                                 last_seen: now_secs(),
                             });
                         }
-                        save_known_peers(&known_peers_path, &mut known_peers);
+                        if let Err(error) = save_known_peers(&known_peers_path, &mut known_peers) {
+                            tracing::error!(%error, "failed to persist known peers");
+                        }
                     }
                     SwarmEvent::ConnectionClosed { peer_id, .. } => {
                         tracing::info!(%peer_id, "libp2p peer disconnected");
@@ -597,7 +601,9 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                             if let Some(known) = known_peers.iter_mut().find(|known| known.peer_id == peer_id.to_string()) {
                                 known.failures = known.failures.saturating_add(1);
                             }
-                            save_known_peers(&known_peers_path, &mut known_peers);
+                            if let Err(error) = save_known_peers(&known_peers_path, &mut known_peers) {
+                                tracing::error!(%error, "failed to persist known peers");
+                            }
                         }
                     }
                     SwarmEvent::Behaviour(ScytaleEvent::RequestResponse(
@@ -712,7 +718,9 @@ pub async fn start_with_config(config: P2pConfig) -> Result<P2pHandle, P2pError>
                 Some(()) = shutdown_rx.recv() => break,
             }
         }
-        save_known_peers(&known_peers_path, &mut known_peers);
+        if let Err(error) = save_known_peers(&known_peers_path, &mut known_peers) {
+            tracing::error!(%error, "failed to persist known peers during shutdown");
+        }
     });
 
     Ok(P2pHandle {
@@ -747,7 +755,10 @@ fn load_identity(path: &Path) -> Result<identity::Keypair, P2pError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{load_identity, subnet_connection_allowed, BLOCKS_TOPIC, TRANSACTIONS_TOPIC};
+    use super::{
+        load_identity, load_known_peers, save_known_peers, subnet_connection_allowed, KnownPeer,
+        BLOCKS_TOPIC, TRANSACTIONS_TOPIC,
+    };
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -768,7 +779,42 @@ mod tests {
         let first = load_identity(&path).unwrap();
         let second = load_identity(&path).unwrap();
         assert_eq!(first.public(), second.public());
-        let _ = std::fs::remove_file(path);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn known_peer_state_round_trips_and_missing_state_is_empty() {
+        let path = std::env::temp_dir().join(format!(
+            "scytale-known-peers-{}.json",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        assert!(load_known_peers(&path).unwrap().is_empty());
+        let mut peers = vec![KnownPeer {
+            peer_id: "peer-1".into(),
+            address: "/ip4/127.0.0.1/tcp/9000".into(),
+            failures: 0,
+            last_seen: 1,
+        }];
+        save_known_peers(&path, &mut peers).unwrap();
+        assert_eq!(load_known_peers(&path).unwrap().len(), 1);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn corrupt_known_peer_state_is_rejected() {
+        let path = std::env::temp_dir().join(format!(
+            "scytale-known-peers-corrupt-{}.json",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::write(&path, b"not-json").unwrap();
+        assert!(load_known_peers(&path).is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]
