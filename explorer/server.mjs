@@ -236,6 +236,42 @@ const faucetCooldowns = new Map(); // address -> timestamp
 const ipCooldowns = new Map();      // ip -> timestamp
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const BECH32_GENERATORS = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+function bech32Polymod(values) {
+  let checksum = 1;
+  for (const value of values) {
+    const top = checksum >>> 25;
+    checksum = ((checksum & 0x1ffffff) << 5) ^ value;
+    for (let bit = 0; bit < 5; bit += 1) {
+      if ((top >>> bit) & 1) checksum ^= BECH32_GENERATORS[bit];
+    }
+  }
+  return checksum >>> 0;
+}
+
+function bech32HrpExpand(hrp) {
+  return [
+    ...[...hrp].map((character) => character.charCodeAt(0) >>> 5),
+    0,
+    ...[...hrp].map((character) => character.charCodeAt(0) & 31)
+  ];
+}
+
+function isValidScytaleAddress(value) {
+  if (typeof value !== 'string' || value.length < 14 || value.length > 90 || value !== value.toLowerCase()) {
+    return false;
+  }
+  const separator = value.lastIndexOf('1');
+  if (separator < 1 || separator + 7 > value.length || value.slice(0, separator) !== 'scy') {
+    return false;
+  }
+  const data = [...value.slice(separator + 1)].map((character) => BECH32_CHARSET.indexOf(character));
+  return data.every((item) => item >= 0)
+    && bech32Polymod([...bech32HrpExpand('scy'), ...data]) === 1;
+}
+
 const FAUCET_WALLET = process.env.FAUCET_WALLET || '/var/lib/scytale/faucet_wallet.json';
 const FAUCET_ADDRESS = process.env.FAUCET_ADDRESS || 'scy1kxwmc88ejusze6qsvze0f66jm05ke4e53xfst6deh3axwe9mh28ssujjul';
 const CLI_PATH = process.env.SCYTALE_CLI_BIN || '/usr/local/bin/scytale-cli';
@@ -275,7 +311,7 @@ async function handleFaucetClaim(req, res) {
   const { address } = body;
   const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '127.0.0.1';
 
-  if (!address || typeof address !== 'string' || !/^scy1[023456789acdefghjklmnpqrstuvwxyz]{10,87}$/.test(address)) {
+  if (!isValidScytaleAddress(address)) {
     return res.status(400).json({ error: 'Alamat Bech32 Scytale tidak valid (harus diawali scy1).' });
   }
 

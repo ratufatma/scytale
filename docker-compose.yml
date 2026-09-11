@@ -13,7 +13,9 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.10
     ports:
-      - "8332:8332"
+      - "127.0.0.1:8332:8332"
+    volumes:
+      - scytale_node1_data:/data
     command:
       - "scytale-node"
       - "--data-dir"
@@ -40,7 +42,9 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.20
     ports:
-      - "8333:8333"
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - scytale_node2_data:/data
     depends_on:
       - node-1
     command:
@@ -66,7 +70,9 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.30
     ports:
-      - "8334:8334"
+      - "127.0.0.1:8334:8334"
+    volumes:
+      - scytale_node3_data:/data
     depends_on:
       - node-1
     command:
@@ -89,7 +95,9 @@ services:
       scytale-net:
         ipv4_address: 172.28.0.40
     ports:
-      - "8335:8335"
+      - "127.0.0.1:8335:8335"
+    volumes:
+      - scytale_node4_data:/data
     depends_on:
       - node-2
     command:
@@ -111,3 +119,9 @@ networks:
     ipam:
       config:
         - subnet: 172.28.0.0/16
+
+volumes:
+  scytale_node1_data:
+  scytale_node2_data:
+  scytale_node3_data:
+  scytale_node4_data:
