@@ -25,8 +25,6 @@ services:
       - "start"
       - "--http-bind"
       - "0.0.0.0:8332"
-      - "--target"
-      - "0x217fffff"
       - "--mine"
       - "--miner-payout"
       - "${SCYTALE_MINER_PAYOUT_SCRIPT:?SCYTALE_MINER_PAYOUT_SCRIPT must be set}"
@@ -56,8 +54,8 @@ services:
       - "start"
       - "--http-bind"
       - "0.0.0.0:8333"
-      - "--target"
-      - "0x217fffff"
+      - "--bootnodes"
+      - "/ip4/172.28.0.10/tcp/9000"
 
   node-3:
     image: scytale:latest
@@ -84,8 +82,8 @@ services:
       - "start"
       - "--http-bind"
       - "0.0.0.0:8334"
-      - "--target"
-      - "0x217fffff"
+      - "--bootnodes"
+      - "/ip4/172.28.0.10/tcp/9000"
 
   node-4:
     image: scytale:latest
@@ -109,8 +107,8 @@ services:
       - "start"
       - "--http-bind"
       - "0.0.0.0:8335"
-      - "--target"
-      - "0x217fffff"
+      - "--bootnodes"
+      - "/ip4/172.28.0.20/tcp/9000"
 
 networks:
   scytale-net:

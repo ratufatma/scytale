@@ -168,6 +168,11 @@ impl Node {
         // invariant (the genesis value is owned by the genesis payer, never a user).
         if tip.is_none() {
             let genesis = Self::make_genesis(&self.config);
+            tracing::info!(
+                height = 0,
+                genesis_hash = %genesis.header.hash(),
+                "Canonical genesis block initialized"
+            );
             let mut chain_tree = self.shared.chain_tree.lock().unwrap();
             *chain_tree = scytale_consensus::ChainTree::new(genesis.clone())
                 .with_max_reorg_depth(self.config.max_reorg_depth);
