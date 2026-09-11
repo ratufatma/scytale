@@ -8,6 +8,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scytale Block Explorer & Mempool Inspector</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -60,7 +61,7 @@
         background-color: #ffffff !important;
         color: #000000 !important;
       }
-      header, #searchInput, .no-print, #view-blocks, #view-mempool, .tab-nav-container, #toast, #detailModal, #statementModal {
+      header, #searchInput, .no-print, #view-blocks, #view-mempool, .tab-nav-container, #toast, #detailModal, #statementModal, #qrModal {
         display: none !important;
       }
       #view-passbook {
@@ -412,6 +413,19 @@
                   class="no-print p-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition text-xs" title="Salin Alamat">
                   <span data-i18n="btn_copy">📋 Salin</span>
                 </button>
+                <button id="btnShowQr"
+                  onclick="showQrModal(document.getElementById('pbLockText').textContent, 'Alamat Rekening Passbook')"
+                  class="no-print px-2.5 py-1.5 text-xs font-medium text-gray-300 bg-gray-800 hover:bg-gray-700 hover:text-white rounded-lg border border-gray-700 transition flex items-center gap-1.5 shadow"
+                  title="Tampilkan QR Code">
+                  <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="7" height="7" rx="1" stroke-width="2"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1" stroke-width="2"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1" stroke-width="2"/>
+                    <rect x="14" y="14" width="3" height="3" rx="0.5" stroke-width="2"/>
+                    <rect x="18" y="18" width="3" height="3" rx="0.5" stroke-width="2"/>
+                  </svg>
+                  <span data-i18n="btn_qr">QR Code</span>
+                </button>
               </div>
             </div>
 
@@ -595,6 +609,38 @@
     </div>
 
   </main>
+
+  <!-- MODAL QR CODE -->
+  <div id="qrModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative text-center">
+      <!-- Tombol Tutup -->
+      <button onclick="closeQrModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-800 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+
+      <h3 id="qrModalTitle" data-i18n="qr_modal_title" class="text-base font-semibold text-white mb-1">Pindai Alamat Dompet</h3>
+      <p id="qrModalSub" data-i18n="qr_modal_sub" class="text-xs text-gray-400 mb-5">Pindai menggunakan aplikasi dompet mobile Scytale</p>
+
+      <!-- Kontainer QR Code (Background Putih untuk Kontras Kamera HP) -->
+      <div class="bg-white p-4 rounded-xl inline-block shadow-inner mx-auto mb-4">
+        <div id="qrcodeCanvas"></div>
+      </div>
+
+      <!-- Teks Alamat & Tombol Salin -->
+      <div class="bg-gray-950/80 border border-gray-800/80 rounded-xl p-3 text-left mb-4">
+        <div class="text-[11px] font-mono text-gray-300 break-all select-all leading-relaxed" id="qrModalAddress"></div>
+      </div>
+
+      <button onclick="copyQrAddress()" id="btnCopyQr" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-gray-950 font-black text-xs rounded-xl transition shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+        </svg>
+        <span id="copyQrLabel" data-i18n="qr_copy_btn">Salin Alamat</span>
+      </button>
+    </div>
+  </div>
 
   <!-- DETAIL MODAL -->
   <div id="detailModal"
@@ -799,6 +845,12 @@
         pb_account_badge: "Financial Passbook Statement",
         pb_account_label: "Account Number / Bech32 Address:",
         btn_copy: "📋 Copy",
+        btn_qr: "QR Code",
+        qr_modal_title: "Scan Wallet Address",
+        qr_modal_sub: "Scan using Scytale mobile wallet application",
+        qr_copy_btn: "Copy Address",
+        qr_copied_btn: "Copied!",
+        qr_invalid_addr: "Invalid address for QR Code generation.",
         btn_verify_integrity: "🛡️ Verify Integrity",
         btn_print_statement: "🖨️ Print Statement",
         btn_refresh_data: "Refresh Data",
@@ -985,6 +1037,12 @@
         pb_account_badge: "Rekening Buku Tabungan",
         pb_account_label: "Nomor Rekening / Alamat Bech32:",
         btn_copy: "📋 Salin",
+        btn_qr: "QR Code",
+        qr_modal_title: "Pindai Alamat Dompet",
+        qr_modal_sub: "Pindai menggunakan aplikasi dompet mobile Scytale",
+        qr_copy_btn: "Salin Alamat",
+        qr_copied_btn: "Tersalin!",
+        qr_invalid_addr: "Alamat tidak valid untuk dijadikan QR Code.",
         btn_verify_integrity: "🛡️ Verifikasi Integritas",
         btn_print_statement: "🖨️ Cetak Rekening Koran",
         btn_refresh_data: "Segarkan Data",
@@ -1526,7 +1584,10 @@
           dest = `
                     <div class="flex items-center justify-between gap-1.5 mt-1">
                       <span class="text-emerald-400 font-bold cursor-pointer hover:underline" onclick="searchAddress('${out.address}')" title="Klik untuk lihat Passbook">${truncateMiddle(out.address, 10, 8)}</span>
-                      <button onclick="copyText('${out.address}')" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
+                      <div class="flex items-center gap-1">
+                        <button onclick="copyText('${out.address}')" class="text-gray-500 hover:text-white text-[10px]" title="Salin Alamat Bech32">📋</button>
+                        <button onclick="showQrModal('${out.address}', 'Alamat Penerima')" class="text-gray-500 hover:text-emerald-400 text-[10px]" title="Tampilkan QR Code">📱 QR</button>
+                      </div>
                     </div>
                   `;
         } else if (isOpReturn) {
@@ -2192,6 +2253,66 @@
     function closeModal() {
       document.getElementById('detailModal').classList.add('hidden');
     }
+
+    let qrInstance = null;
+
+    function showQrModal(address, title = 'Alamat Dompet') {
+      if (!address || address.trim() === '' || address.includes('...') || address === '--') {
+        alert(t('qr_invalid_addr') || 'Alamat tidak valid untuk dijadikan QR Code.');
+        return;
+      }
+
+      const cleanAddr = address.trim();
+      document.getElementById('qrModalTitle').textContent = title || t('qr_modal_title');
+      document.getElementById('qrModalAddress').textContent = cleanAddr;
+
+      const qrContainer = document.getElementById('qrcodeCanvas');
+      qrContainer.innerHTML = '';
+
+      if (typeof QRCode !== 'undefined') {
+        qrInstance = new QRCode(qrContainer, {
+          text: cleanAddr,
+          width: 200,
+          height: 200,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } else {
+        qrContainer.innerHTML = '<p class="text-xs text-rose-400 font-mono">QRCode library not loaded</p>';
+      }
+
+      const modal = document.getElementById('qrModal');
+      modal.classList.remove('hidden');
+    }
+
+    function closeQrModal() {
+      const modal = document.getElementById('qrModal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function copyQrAddress() {
+      const addr = document.getElementById('qrModalAddress').textContent;
+      if (!addr) return;
+      navigator.clipboard.writeText(addr).then(() => {
+        const label = document.getElementById('copyQrLabel');
+        label.textContent = t('qr_copied_btn') || 'Tersalin!';
+        setTimeout(() => { label.textContent = t('qr_copy_btn') || 'Salin Alamat'; }, 2000);
+      });
+    }
+
+    // Modal keyboard Escape handler
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeStatementModal();
+        closeQrModal();
+      }
+    });
+
+    document.getElementById('qrModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'qrModal') closeQrModal();
+    });
 
     // Auto-detect dynamic API base URL from current host / origin
     (function initNodeUrl() {
