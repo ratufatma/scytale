@@ -64,4 +64,10 @@ impl WorkerSession {
     pub fn prune_old_jobs(&self, active_job_id: &str) {
         self.submitted_shares.retain(|(jid, _, _)| jid == active_job_id);
     }
+
+    /// Prunes submitted shares, retaining only those corresponding to valid active job IDs.
+    pub fn prune_shares_except(&self, valid_job_ids: &std::collections::HashSet<String>) {
+        self.submitted_shares
+            .retain(|(jid, _, _)| valid_job_ids.contains(jid));
+    }
 }

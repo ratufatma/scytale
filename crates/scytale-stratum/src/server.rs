@@ -8,13 +8,19 @@ use crate::shares::{verify_worker_share, ShareVerificationResult};
 use byteorder::{BigEndian, ByteOrder};
 use dashmap::DashMap;
 use futures::{SinkExt, StreamExt};
+use std::collections::{HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio_util::codec::Framed;
 use tracing::{debug, info, warn};
+
+pub const MAX_ACTIVE_JOBS: usize = 16;
+pub const MAX_WORKER_SESSIONS: usize = 2048;
+pub const WORKER_IDLE_TIMEOUT_SECS: u64 = 120;
 
 /// Callback packet delivered when a worker finds a valid block candidate.
 #[derive(Debug, Clone)]
@@ -32,6 +38,8 @@ pub struct StratumServer {
     bind_addr: SocketAddr,
     sessions: Arc<DashMap<u64, (Arc<WorkerSession>, mpsc::UnboundedSender<String>)>>,
     current_job: Arc<parking_lot::RwLock<Option<Arc<StratumJob>>>>,
+    jobs: Arc<DashMap<String, Arc<StratumJob>>>,
+    job_order: Arc<parking_lot::RwLock<VecDeque<String>>>,
     session_counter: AtomicU64,
     default_difficulty: f64,
     block_candidate_tx: mpsc::UnboundedSender<BlockFoundEvent>,
@@ -46,6 +54,8 @@ impl StratumServer {
             bind_addr,
             sessions: Arc::new(DashMap::new()),
             current_job: Arc::new(parking_lot::RwLock::new(None)),
+            jobs: Arc::new(DashMap::new()),
+            job_order: Arc::new(parking_lot::RwLock::new(VecDeque::new())),
             session_counter: AtomicU64::new(1),
             default_difficulty,
             block_candidate_tx: tx,
@@ -61,6 +71,24 @@ impl StratumServer {
     /// Sets the current active mining job template and broadcasts to all active workers.
     pub async fn broadcast_job(&self, job: Arc<StratumJob>) {
         *self.current_job.write() = Some(Arc::clone(&job));
+
+        self.jobs.insert(job.job_id.clone(), Arc::clone(&job));
+        {
+            let mut order = self.job_order.write();
+            order.push_back(job.job_id.clone());
+
+            while order.len() > MAX_ACTIVE_JOBS {
+                if let Some(old_job_id) = order.pop_front() {
+                    self.jobs.remove(&old_job_id);
+                }
+            }
+
+            let valid_job_ids: HashSet<String> = order.iter().cloned().collect();
+            for entry in self.sessions.iter() {
+                let (session, _) = entry.value();
+                session.prune_shares_except(&valid_job_ids);
+            }
+        }
 
         let branches_hex: Vec<String> = job
             .merkle_branches
@@ -117,6 +145,14 @@ impl StratumServer {
         stream: TcpStream,
         peer_addr: SocketAddr,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if self.sessions.len() >= MAX_WORKER_SESSIONS {
+            warn!(
+                "Max worker sessions ({}) reached; rejecting connection from {}",
+                MAX_WORKER_SESSIONS, peer_addr
+            );
+            return Err("Max workers reached".into());
+        }
+
         let session_id = self.session_counter.fetch_add(1, Ordering::Relaxed);
         let extranonce1 = [0u8; 4];
 
@@ -141,8 +177,25 @@ impl StratumServer {
             }
         });
 
-        // Reader pump
-        while let Some(line_result) = reader.next().await {
+        // Reader pump with idle timeout
+        loop {
+            let read_future = reader.next();
+            let line_result = match tokio::time::timeout(
+                Duration::from_secs(WORKER_IDLE_TIMEOUT_SECS),
+                read_future,
+            )
+            .await
+            {
+                Ok(Some(res)) => res,
+                Ok(None) => break, // Connection closed cleanly
+                Err(_) => {
+                    info!(
+                        "Worker connection {} timed out after {}s of inactivity",
+                        peer_addr, WORKER_IDLE_TIMEOUT_SECS
+                    );
+                    break;
+                }
+            };
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -259,18 +312,15 @@ impl StratumServer {
                 let time_val = &params[3];
                 let nonce_val = &params[4];
 
-                // 1. Verify job exists
-                let active_job = {
-                    let guard = self.current_job.read();
-                    match &*guard {
-                        Some(job) if job.job_id == job_id => Arc::clone(job),
-                        _ => {
-                            session.record_invalid_share();
-                            return StratumResponse::error(
-                                req.id,
-                                StratumRpcError::job_not_found(job_id),
-                            );
-                        }
+                // 1. Verify job exists in active jobs
+                let active_job = match self.jobs.get(job_id) {
+                    Some(entry) => Arc::clone(entry.value()),
+                    None => {
+                        session.record_invalid_share();
+                        return StratumResponse::error(
+                            req.id,
+                            StratumRpcError::job_not_found(job_id),
+                        );
                     }
                 };
 
