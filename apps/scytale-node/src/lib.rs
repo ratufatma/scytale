@@ -8,12 +8,14 @@ pub mod ipc;
 pub mod network;
 pub mod node;
 pub mod passbook;
+pub mod stratum_service;
 
 pub use config::{DEFAULT_BOOTNODES, NodeConfig};
 pub use error::{NodeError, NodeState};
 pub use http_gateway::{run_http_gateway, DEFAULT_HTTP_BIND};
 pub use indexer::{start_indexer, BlockPayload, IndexerHandle};
 pub use ipc::{IpcServer, DEFAULT_SOCKET_PATH};
+pub use stratum_service::{start_stratum_service, StratumServiceHandle};
 pub use network::config::P2pConfig;
 pub use network::p2p::start_default;
 pub use network::p2p::{P2pHandle, P2pInbound, P2pOutbound, SyncRequest, SyncResponse};

@@ -24,6 +24,7 @@ scytale-script = { path = "../../crates/scytale-script" }
 scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
 scytale-vm = { path = "../../crates/scytale-vm" }
 scytale-account = { path = "../../crates/scytale-account" }
+scytale-stratum = { path = "../../crates/scytale-stratum" }
 blake3 = { workspace = true }
 bincode = { workspace = true }
 clap = { workspace = true }

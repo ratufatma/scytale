@@ -63,6 +63,19 @@ struct Cli {
     no_http: bool,
     #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
     max_reorg_depth: u64,
+    #[arg(
+        long = "stratum-bind",
+        value_name = "ADDR",
+        help = "Aktifkan embedded Stratum pool server pada alamat TCP tertentu (misal 0.0.0.0:3333)"
+    )]
+    pub stratum_bind: Option<std::net::SocketAddr>,
+    #[arg(
+        long = "stratum-diff",
+        value_name = "DIFF",
+        default_value_t = 1.0,
+        help = "Tingkat kesulitan share awal untuk Stratum worker"
+    )]
+    pub stratum_diff: f64,
 }
 
 #[derive(Subcommand, Debug)]
@@ -110,6 +123,19 @@ enum Commands {
         no_http: bool,
         #[arg(long, default_value_t = scytale_consensus::DEFAULT_MAX_REORG_DEPTH)]
         max_reorg_depth: u64,
+        #[arg(
+            long = "stratum-bind",
+            value_name = "ADDR",
+            help = "Aktifkan embedded Stratum pool server pada alamat TCP tertentu (misal 0.0.0.0:3333)"
+        )]
+        stratum_bind: Option<std::net::SocketAddr>,
+        #[arg(
+            long = "stratum-diff",
+            value_name = "DIFF",
+            default_value_t = 1.0,
+            help = "Tingkat kesulitan share awal untuk Stratum worker"
+        )]
+        stratum_diff: f64,
     },
     Status,
 }
@@ -127,6 +153,8 @@ struct StartOptions {
     http_bind: String,
     no_http: bool,
     max_reorg_depth: u64,
+    stratum_bind: Option<std::net::SocketAddr>,
+    stratum_diff: f64,
 }
 
 #[tokio::main]
@@ -155,6 +183,8 @@ async fn main() {
             http_bind,
             no_http,
             max_reorg_depth,
+            stratum_bind,
+            stratum_diff,
         }) => (
             data_dir,
             socket.unwrap_or(cli.socket.clone()),
@@ -186,6 +216,12 @@ async fn main() {
                 http_bind,
                 no_http: no_http || cli.no_http,
                 max_reorg_depth,
+                stratum_bind: stratum_bind.or(cli.stratum_bind),
+                stratum_diff: if (stratum_diff - 1.0).abs() > f64::EPSILON {
+                    stratum_diff
+                } else {
+                    cli.stratum_diff
+                },
             },
         ),
         Some(Commands::Status) => {
@@ -221,6 +257,8 @@ async fn main() {
                 http_bind: cli.http_bind.clone(),
                 no_http: cli.no_http,
                 max_reorg_depth: cli.max_reorg_depth,
+                stratum_bind: cli.stratum_bind,
+                stratum_diff: cli.stratum_diff,
             },
         ),
     };
@@ -234,14 +272,14 @@ async fn main() {
     let miner_payout_script = match opts.miner_payout.as_deref() {
         Some(address_or_script) => match payout_script(address_or_script) {
             Ok(bytes) => bytes,
-            _ if opts.mine => {
-                eprintln!("Error: Mining enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
+            _ if opts.mine || opts.stratum_bind.is_some() => {
+                eprintln!("Error: Mining or Stratum enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
                 std::process::exit(1);
             }
             _ => Vec::new(),
         },
-        None if opts.mine => {
-            eprintln!("Error: Mining enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
+        None if opts.mine || opts.stratum_bind.is_some() => {
+            eprintln!("Error: Mining or Stratum enabled but no valid payout address specified. Refusing to mine with unspendable placeholder.");
             std::process::exit(1);
         }
         None => Vec::new(),
@@ -266,6 +304,8 @@ async fn main() {
         http_enabled = !opts.no_http,
         explorer_url = ?opts.explorer_url,
         max_reorg_depth = config.max_reorg_depth,
+        stratum_bind = ?opts.stratum_bind,
+        stratum_diff = opts.stratum_diff,
         "starting scytale node daemon"
     );
     tracing::info!(
@@ -565,6 +605,22 @@ async fn main() {
             } else {
                 None
             };
+            let stratum_handle = if let Some(bind_addr) = opts.stratum_bind {
+                tracing::info!("Memulai embedded Stratum server pada {}", bind_addr);
+                let stratum_node = Arc::clone(&node);
+                let stratum_shutdown_rx = shutdown_tx.subscribe();
+                let payout_script = node.config().miner_payout_script.clone();
+                let diff = opts.stratum_diff;
+                Some(scytale_node::start_stratum_service(
+                    stratum_node,
+                    bind_addr,
+                    diff,
+                    payout_script,
+                    stratum_shutdown_rx,
+                ))
+            } else {
+                None
+            };
             tokio::select! {
                 _ = shutdown_rx.recv() => tracing::info!("IPC shutdown signal received"),
                 result = tokio::signal::ctrl_c() => {
@@ -582,6 +638,9 @@ async fn main() {
             let _ = ipc_handle.await;
             if let Some(handle) = http_handle {
                 let _ = handle.await;
+            }
+            if let Some(handle) = stratum_handle {
+                handle.abort();
             }
             if let Some(handle) = p2p_inbound_handle {
                 handle.abort();
