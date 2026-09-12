@@ -1,6 +1,7 @@
 # Summary
 
 - [Overview](README.md)
+- [Downloads & Releases](downloads.md)
 
 # Protocol
 
