@@ -78,7 +78,7 @@ impl StratumNotification {
         Self::new("mining.set_difficulty", serde_json::json!([difficulty]))
     }
 
-    /// Creates a `mining.notify` notification according to SSP-1 standard.
+    /// Creates a `mining.notify` notification according to SSP-1 standard with embedded utxo_root.
     #[allow(clippy::too_many_arguments)]
     pub fn notify(
         job_id: &str,
@@ -90,6 +90,7 @@ impl StratumNotification {
         bits: u32,
         curtime: u64,
         clean_jobs: bool,
+        utxo_root: &str,
     ) -> Self {
         Self::new(
             "mining.notify",
@@ -102,7 +103,8 @@ impl StratumNotification {
                 format!("{:08x}", version),
                 format!("{:08x}", bits),
                 format!("{:08x}", curtime),
-                clean_jobs
+                clean_jobs,
+                utxo_root
             ]),
         )
     }

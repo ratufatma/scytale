@@ -175,6 +175,7 @@ fn test_protocol_json_serialization() {
         0x1d00ffff,
         1_700_000_000,
         true,
+        "eeee",
     );
     let notify_str = serde_json::to_string(&notify).unwrap();
     assert!(notify_str.contains("\"mining.notify\""));

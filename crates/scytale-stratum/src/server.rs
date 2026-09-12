@@ -78,6 +78,7 @@ impl StratumServer {
             job.bits,
             job.curtime,
             job.clean_jobs,
+            &hex::encode(job.utxo_root.as_bytes()),
         );
 
         if let Ok(msg_str) = serde_json::to_string(&notify) {
@@ -211,6 +212,7 @@ impl StratumServer {
                             job.bits,
                             job.curtime,
                             job.clean_jobs,
+                            &hex::encode(job.utxo_root.as_bytes()),
                         );
                         if let Ok(notify_line) = serde_json::to_string(&notify) {
                             let _ = entry.1.send(notify_line);
