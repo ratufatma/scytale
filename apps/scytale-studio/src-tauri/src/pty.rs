@@ -32,9 +32,17 @@ impl PtyState {
             pixel_width: 0,
             pixel_height: 0,
         })?;
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        #[cfg(windows)]
+        let (shell, args): (String, &[&str]) = {
+            ("powershell.exe".to_string(), &["-NoLogo"])
+        };
+        #[cfg(not(windows))]
+        let (shell, args): (String, &[&str]) = {
+            let default_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+            (default_shell, &["-i"])
+        };
         let mut command = CommandBuilder::new(shell);
-        command.args(["-i"]);
+        command.args(args);
         command.cwd(&workspace_root());
         for (key, value) in std::env::vars() {
             command.env(key, value);

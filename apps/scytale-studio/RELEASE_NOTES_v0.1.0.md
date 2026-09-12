@@ -46,8 +46,8 @@ Semua biner resmi pada direktori `dist-clients/` telah diverifikasi dan memiliki
 | **`Scytale Passbook_0.1.0_x64_en-US.msi`** | Windows x64 (Windows 10 / 11) | Windows Installer (MSI) | 2.74 MB | `eda8ce20fdf252f4f2df9006a6020c05a3a0fa464dc5fc6a8353513f489e6582` |
 | **`scytale-studio_0.1.0_amd64.deb`** | Linux x86_64 (Debian / Ubuntu) | Debian Package | 5.4 MB | `7c58440d55d287c138bf15ef38cc17c24087b227e9366611f4a25f82bb734e46` |
 | **`scytale-studio_0.1.0_amd64.AppImage`** | Linux x86_64 (Distro-agnostic) | Portable AppImage | 73 MB | `0b799676f647d1f4ad8d117757ad00787c157fcf0268d7c2acbe6cf3f6a80467` |
-| **`Scytale Studio_0.1.0_x64-setup.exe`** | Windows x64 (Windows 10 / 11) | NSIS Installer | 3.43 MB | `d39841acd979c37de2308708de8f1b03623c5a4dec3fbb2a160d4fca3e9e1b3c` |
-| **`Scytale Studio_0.1.0_x64_en-US.msi`** | Windows x64 (Windows 10 / 11) | Windows Installer (MSI) | 4.86 MB | `5f5d5b63857c6f31e2e0667f8d10d02df01c1a752dcc74c8ec480a906fbfe5ce` |
+| **`Scytale Studio_0.1.0_x64-setup.exe`** | Windows x64 (Windows 10 / 11) | NSIS Installer | 3.43 MB | `990a7e810e3e348e1d850a6bd5f2406e7d82620e421468ca05d1f52cfebe3ac8` |
+| **`Scytale Studio_0.1.0_x64_en-US.msi`** | Windows x64 (Windows 10 / 11) | Windows Installer (MSI) | 4.86 MB | `11ad1c3f4526ace2a7c1113180dd37752f4148c699c9112de786a3c7c06d65c3` |
 
 Verifikasi mandiri checksum sebelum instalasi:
 ```bash
