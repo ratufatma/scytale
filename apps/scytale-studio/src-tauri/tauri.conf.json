@@ -25,10 +25,13 @@
         }
     },
     "bundle": {
-        "active": false,
+        "active": true,
         "icon": [
             "icons/icon.png"
         ],
-        "targets": "all"
+        "targets": [
+            "deb",
+            "appimage"
+        ]
     }
 }
