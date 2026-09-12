@@ -1,7 +1,9 @@
 # Rust build artifacts
 /target/
+dist/
 *.wasm
 *.tar.gz
+*.sha256
 *.log
 /tmp/
 **/*.rs.bk

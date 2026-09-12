@@ -59,6 +59,52 @@ cargo run -p scytale-node -- --help
 
 ---
 
+## ⚡ Solo Mining Quickstart (Public Testnet v0.3.0)
+
+Bergabunglah dalam jaringan terdesentralisasi Scytale Public Testnet dan mulai menambang koin SCY secara mandiri (Solo Mining) menggunakan CPU standar.
+
+### 🌐 Parameter Kanonikal Jaringan
+
+| Parameter | Nilai Kanonikal |
+| :--- | :--- |
+| **Konsensus & Algoritma PoW** | Proof-of-Work (PoW) — **BLAKE3** (CPU-Optimized) |
+| **Maksimum Total Suplai** | **66,000,000 SCY** (6,600,000,000,000,000 Quanta) |
+| **Subsidi Blok Awal** | **25.0 SCY** per blok |
+| **Target Interval Blok** | **60 Detik** |
+| **Genesis Hash** | `4033f099ae89051a629c871e9af28a215898ff345505ffdbbce65c27a29585c9` |
+| **Bootnode Resmi (Multiaddr)** | `/dns4/seed.myratu.com/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc` |
+| **Web Explorer** | [https://explorer.myratu.com](https://explorer.myratu.com) |
+| **Dokumentasi Resmi** | [https://explorer.myratu.com/docs/](https://explorer.myratu.com/docs/) |
+
+---
+
+### 🛠️ 3 Langkah Cepat Solo Mining
+
+#### Langkah 1: Unduh & Ekstrak Tarball Distribusi Biner
+```bash
+curl -LO https://github.com/ratufatma/scytale/releases/download/v0.3.0-testnet/scytale-v0.3.0-testnet-linux-x86_64.tar.gz
+tar -xzvf scytale-v0.3.0-testnet-linux-x86_64.tar.gz
+cd scytale-v0.3.0-testnet-linux-x86_64
+```
+
+#### Langkah 2: Buat Dompet Baru (Mendapatkan Alamat Payout)
+```bash
+./scytale-cli wallet new --mnemonic
+# Salin alamat Bech32 yang dihasilkan (misal: scy1q...) sebagai alamat penampung reward mining
+```
+
+#### Langkah 3: Jalankan Full Node & Aktifkan Mining
+```bash
+./scytale-node start \
+  --bootnodes /dns4/seed.myratu.com/tcp/9000/p2p/12D3KooWMNVcoP79QMoLfg8NKeFyCRfLBq6HngTQpmnkbD9oBWMc \
+  --mine \
+  --miner-payout <ALAMAT_DOMPET_SCY_ANDA>
+```
+
+> **Catatan**: Node akan otomatis melakukan sinkronisasi blok awal (IBD) dari bootnode resmi, bergabung ke dalam P2P mesh network, dan memicu thread miner CPU untuk memecahkan blok berikutnya. Setiap blok yang berhasil ditambang akan langsung tercatat di [Explorer](https://explorer.myratu.com).
+
+---
+
 ## Documentation
 
 Use the [documentation index](docs/README.md) as the single entry point.
