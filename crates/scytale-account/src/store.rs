@@ -1,9 +1,10 @@
 use crate::candidate::AccountNumber;
 use serde::{Deserialize, Serialize};
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::{
     collections::HashMap,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
@@ -105,22 +106,28 @@ impl AliasStore {
             let payload = serde_json::to_vec_pretty(data)?;
             let result = (|| {
                 let mut options = OpenOptions::new();
-                options.write(true).create_new(true).mode(0o600);
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                options.mode(0o600);
                 let mut file = options.open(&temporary_path)?;
                 file.write_all(&payload)?;
                 file.sync_all()?;
                 drop(file);
                 fs::rename(&temporary_path, path)?;
-                File::open(parent)?.sync_all()?;
+                #[cfg(unix)]
+                std::fs::File::open(parent)?.sync_all()?;
                 Ok::<(), std::io::Error>(())
             })();
             if result.is_err() {
                 let _ = fs::remove_file(&temporary_path);
             }
             result?;
-            let mut permissions = fs::metadata(path)?.permissions();
-            permissions.set_mode(0o600);
-            fs::set_permissions(path, permissions)?;
+            #[cfg(unix)]
+            {
+                let mut permissions = fs::metadata(path)?.permissions();
+                permissions.set_mode(0o600);
+                fs::set_permissions(path, permissions)?;
+            }
         }
         Ok(())
     }
@@ -181,8 +188,11 @@ mod tests {
             let mut store = AliasStore::open(&path).unwrap();
             store.bind(account.clone(), "passbook-2").unwrap();
         }
-        let permissions = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
-        assert_eq!(permissions, 0o600);
+        #[cfg(unix)]
+        {
+            let permissions = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(permissions, 0o600);
+        }
         let restored = AliasStore::open(&path).unwrap();
         assert_eq!(restored.by_account(&account), Some("passbook-2"));
         let _ = fs::remove_file(path);

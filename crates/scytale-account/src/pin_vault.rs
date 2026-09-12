@@ -4,7 +4,6 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Nonce,
 };
 use serde::{Deserialize, Serialize};
-use std::fs;
 use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
