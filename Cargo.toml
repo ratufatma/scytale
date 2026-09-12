@@ -13,7 +13,8 @@ default-members = ["apps/scytale-node"]
 [workspace.package]
 version = "0.3.0"
 edition = "2021"
-authors = ["Scytale Core Contributors"]
+authors = ["Ratu <ratufatmasetyaningrum@gmail.com>", "Scytale Core Contributors"]
+repository = "https://github.com/ratufatma/scytale"
 license = "MIT OR Apache-2.0"
 
 [workspace.lints.clippy]

@@ -308,6 +308,17 @@ scytale-cli wallet --help
 scytale-cli contract --help
 ```
 
+---
+
+## 👥 Authors & Maintainers
+
+- **Lead Developer**: Ratu ([@ratufatma](https://github.com/ratufatma))
+- **Repository**: [https://github.com/ratufatma/scytale](https://github.com/ratufatma/scytale)
+
+## 📄 License
+
+Licensed under the [MIT License](LICENSE) or [Apache License 2.0](LICENSE-APACHE).
+
 
 
 

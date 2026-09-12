@@ -688,6 +688,26 @@
 
   </main>
 
+  <!-- FOOTER -->
+  <footer class="border-t border-gray-800 bg-gray-950/90 text-gray-400 text-xs py-8 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="gemini-svg.svg" alt="Scytale Logo" class="w-6 h-6 rounded-md object-contain shadow-xs border border-gray-800" />
+        <span class="font-bold text-white font-mono tracking-tight">Scytale Explorer</span>
+        <span class="text-gray-600">&bull;</span>
+        <span>&copy; <span id="footerCurrentYear">2026</span> Dikembangkan oleh <a href="https://github.com/ratufatma" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline font-semibold">Ratu</a></span>
+      </div>
+      <div class="flex items-center gap-4 text-gray-500 font-mono text-[11px]">
+        <a href="https://github.com/ratufatma/scytale" target="_blank" rel="noopener noreferrer" class="hover:text-gray-300 flex items-center gap-1.5 transition">
+          <span>GitHub</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </a>
+        <span>&bull;</span>
+        <a href="/docs/" class="hover:text-gray-300 transition">Dokumentasi Protokol</a>
+      </div>
+    </div>
+  </footer>
+
   <!-- MODAL QR CODE -->
   <div id="qrModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl relative text-center">
@@ -2676,6 +2696,10 @@
       }
       setLanguage(saved);
     })();
+
+    // Set dynamic footer year
+    const yrEl = document.getElementById('footerCurrentYear');
+    if (yrEl) yrEl.textContent = new Date().getFullYear();
 
     // Polling Loop (2 detik)
     pollNode();
