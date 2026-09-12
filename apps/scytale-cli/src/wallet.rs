@@ -72,6 +72,16 @@ impl WalletFile {
         home.join(".scytale").join("wallet.json")
     }
 
+    /// Returns the named wallet file path: `~/.scytale/wallets/<name>.json`.
+    pub fn named_path(name: &str) -> PathBuf {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."));
+        let clean_name = name.trim_end_matches(".json");
+        home.join(".scytale").join("wallets").join(format!("{clean_name}.json"))
+    }
+
+
     /// Generates a new cryptographic Ed25519 keypair and writes a POSIX 0600 wallet file.
     pub fn generate_new(path: &Path, overwrite: bool) -> Result<Self, WalletError> {
         if path.exists() && !overwrite {

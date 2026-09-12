@@ -39,7 +39,7 @@ struct Cli {
     indexer_key: Option<String>,
     #[arg(long)]
     target: Option<String>,
-    #[arg(long = "payout-address", visible_alias = "miner-payout")]
+    #[arg(long = "payout-address", visible_alias = "miner-payout", alias = "miner-address")]
     miner_payout: Option<String>,
     #[arg(long, default_value_t = false)]
     no_p2p: bool,
@@ -86,7 +86,7 @@ enum Commands {
         indexer_key: Option<String>,
         #[arg(long)]
         target: Option<String>,
-        #[arg(long = "payout-address", visible_alias = "miner-payout")]
+        #[arg(long = "payout-address", visible_alias = "miner-payout", alias = "miner-address")]
         miner_payout: Option<String>,
         #[arg(long, default_value_t = false)]
         no_p2p: bool,
