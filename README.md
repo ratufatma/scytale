@@ -83,13 +83,15 @@ Bergabunglah dalam jaringan terdesentralisasi Scytale Public Testnet dan mulai m
 #### Langkah 1: Unduh & Ekstrak Tarball Distribusi Biner
 ```bash
 curl -LO https://github.com/ratufatma/scytale/releases/download/v0.3.0-testnet/scytale-v0.3.0-testnet-linux-x86_64.tar.gz
+# Verifikasi Integritas SHA256:
+echo "84e539e4c0be9ec575c3f0c4c9bc43eca42ff72bf2f4a79c725a5d339d87c5ad  scytale-v0.3.0-testnet-linux-x86_64.tar.gz" | sha256sum -c
 tar -xzvf scytale-v0.3.0-testnet-linux-x86_64.tar.gz
 cd scytale-v0.3.0-testnet-linux-x86_64
 ```
 
 #### Langkah 2: Buat Dompet Baru (Mendapatkan Alamat Payout)
 ```bash
-./scytale-cli wallet new --mnemonic
+./scytale-cli wallet new --name miner-wallet --mnemonic
 # Salin alamat Bech32 yang dihasilkan (misal: scy1q...) sebagai alamat penampung reward mining
 ```
 
