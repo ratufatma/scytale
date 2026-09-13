@@ -8,9 +8,7 @@
 
 use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
-use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_account::AliasStore;
-use scytale_indexer::IndexerStore;
 use scytale_core::{
     verify_transaction_eutxo, Block, ConsensusScriptVerifier, EutxoValidationError, Hash256,
     OutPoint, OutputLock, Transaction, TxOut, UtxoSet, MAX_BLOCK_GAS, MAX_TX_GAS,
@@ -34,46 +32,29 @@ use tokio::sync::broadcast;
 /// Upper bound on the nonce space searched per template before refresh.
 const MAX_NONCE_ITERATIONS: u64 = 80_000_000;
 
-/// Persists a validated block to disk storage and, if configured, non-blockingly
-/// dispatches the block metadata to the external indexer and the relational SQLite indexer store.
+/// Fact published after a canonical block commit has completed.
+///
+/// Post-commit observers (such as indexers or external explorers) consume this fact stream
+/// without having authority over or participating in canonical commits.
+#[derive(Debug, Clone)]
+pub struct BlockCommitted {
+    pub block: Arc<Block>,
+    pub block_hash: Hash256,
+    pub height: u64,
+}
+
+/// Persists a validated block to disk storage.
+///
+/// If `commit_block()` succeeds, the block is canonical in L1 storage.
+/// It does NOT perform any external indexer mutations or observer notifications.
 #[allow(clippy::result_large_err)]
 pub fn commit_block(
     storage: &StorageEngine,
     block: &Block,
     height: u64,
     cumulative_work: [u64; 4],
-    indexer_handle: Option<&IndexerHandle>,
-    indexer_store: Option<&Arc<Mutex<IndexerStore>>>,
 ) -> Result<(), scytale_storage::StorageError> {
-    storage.commit_block(block, height, cumulative_work)?;
-
-    // 1. Dispatch to HTTP explorer webhook queue if configured
-    if let Some(indexer) = indexer_handle {
-        let payload = BlockPayload::from_block(block, height);
-        if let Err(error) = indexer.sender.try_send(payload) {
-            tracing::warn!(%error, "indexer queue rejected committed block");
-        }
-    }
-
-    // 2. Dispatch to relational SQLite indexer store (Tier-2 Event Listener)
-    if let Some(indexer) = indexer_store {
-        let txs_payload = scytale_indexer::extract_block_indexer_payload(block);
-        if let Ok(mut store) = indexer.lock() {
-            if let Err(e) = store.index_block(
-                height,
-                &block.header.hash().to_string(),
-                &block.header.previous_block_hash.to_string(),
-                block.header.timestamp,
-                &block.header.transaction_commitment.to_string(),
-                &block.header.utxo_root.to_string(),
-                &txs_payload,
-            ) {
-                tracing::error!("Failed to update external indexer: {}", e);
-            }
-        }
-    }
-
-    Ok(())
+    storage.commit_block(block, height, cumulative_work)
 }
 
 /// A running node's shared, contemporaneously-mutated subsystem state.
@@ -85,6 +66,20 @@ struct Shared {
     utxo_set: Mutex<UtxoSet>,
     mempool: Mutex<Mempool>,
     p2p_event_tx: broadcast::Sender<NetworkEvent>,
+    block_committed_tx: broadcast::Sender<BlockCommitted>,
+}
+
+impl Shared {
+    pub fn publish_block_committed(&self, block: Arc<Block>, height: u64) {
+        let block_hash = block.header.hash();
+        let fact = BlockCommitted {
+            block,
+            block_hash,
+            height,
+        };
+        // Post-commit observation: ignore if no active subscribers or queue lag.
+        let _ = self.block_committed_tx.send(fact);
+    }
 }
 
 /// Runtime orchestrator coordinating all Scytale subsystems.
@@ -96,8 +91,6 @@ pub struct Node {
     mining_cancel: Arc<AtomicBool>,
     mining_handle: Mutex<Option<JoinHandle<()>>>,
     peer_count: Arc<AtomicUsize>,
-    indexer: Option<Arc<IndexerHandle>>,
-    indexer_store: Option<Arc<Mutex<IndexerStore>>>,
     alias_store: Arc<RwLock<AliasStore>>,
 }
 
@@ -125,6 +118,7 @@ impl Node {
         };
 
         let (p2p_event_tx, _rx) = broadcast::channel(128);
+        let (block_committed_tx, _rx_blocks) = broadcast::channel(256);
 
         let alias_store = if config.data_dir.as_os_str() == ":memory:" {
             AliasStore::in_memory()
@@ -134,57 +128,6 @@ impl Node {
             })?
         };
 
-        let indexer_store = if config.data_dir.as_os_str() == ":memory:" {
-            match scytale_indexer::IndexerStore::open_in_memory() {
-                Ok(store) => Some(Arc::new(Mutex::new(store))),
-                Err(e) => {
-                    tracing::warn!("Failed to open in-memory indexer store: {e}");
-                    None
-                }
-            }
-        } else {
-            let indexer_path = config.data_dir.join("indexer.sqlite");
-            match scytale_indexer::IndexerStore::open(indexer_path) {
-                Ok(store) => Some(Arc::new(Mutex::new(store))),
-                Err(e) => {
-                    tracing::warn!("Failed to open SQLite indexer store: {e}");
-                    None
-                }
-            }
-        };
-
-        // Auto-Catchup Verification pada Booting Node
-        if let Some(indexer_arc) = &indexer_store {
-            let storage_height = storage.get_canonical_tip().ok().flatten().map(|(_, h)| h).unwrap_or(0);
-            let mut indexer = indexer_arc.lock().unwrap();
-
-            if indexer.requires_catchup(storage_height).unwrap_or(false) {
-                tracing::info!("Index SQLite tertinggal dari Redb storage. Menjalankan auto-catchup backfill...");
-                let current_indexed = indexer.get_latest_indexed_height().unwrap_or(None);
-                let start_h = match current_indexed {
-                    Some(h) => h + 1,
-                    None => 0,
-                };
-
-                for h in start_h..=storage_height {
-                    if let Ok(Some(block)) = storage.get_block_by_height(h) {
-                        let payload = scytale_indexer::extract_block_indexer_payload(&block);
-
-                        indexer.index_block(
-                            h,
-                            &block.header.hash().to_string(),
-                            &block.header.previous_block_hash.to_string(),
-                            block.header.timestamp,
-                            &block.header.transaction_commitment.to_string(),
-                            &block.header.utxo_root.to_string(),
-                            &payload,
-                        ).expect("Critical: Gagal melakukan backfill blok pada auto-catchup indexer");
-                    }
-                }
-                tracing::info!("Auto-catchup indexer selesai. SQLite dan Redb sepenuhnya sinkron.");
-            }
-        }
-
         Ok(Self {
             state: Arc::new(RwLock::new(NodeState::Starting)),
             storage: Arc::new(storage),
@@ -193,73 +136,24 @@ impl Node {
                 utxo_set: Mutex::new(UtxoSet::new()),
                 mempool: Mutex::new(Mempool::new()),
                 p2p_event_tx,
+                block_committed_tx,
             }),
             mining_cancel: Arc::new(AtomicBool::new(false)),
             mining_handle: Mutex::new(None),
             peer_count: Arc::new(AtomicUsize::new(0)),
             config,
-            indexer: None,
-            indexer_store,
             alias_store: Arc::new(RwLock::new(alias_store)),
         })
     }
 
-    /// Returns a reference to the active indexer handle, if configured.
-    pub fn indexer(&self) -> Option<&IndexerHandle> {
-        self.indexer.as_deref()
+    /// Subscribes to post-commit canonical block facts published by the sovereign runtime.
+    pub fn subscribe_blocks(&self) -> broadcast::Receiver<BlockCommitted> {
+        self.shared.block_committed_tx.subscribe()
     }
 
-    /// Sets or replaces the active indexer handle.
-    pub fn set_indexer(&mut self, indexer: IndexerHandle) {
-        self.indexer = Some(Arc::new(indexer));
-    }
-
-    /// Returns the active relational SQLite indexer store, if configured.
-    pub fn indexer_store(&self) -> Option<Arc<Mutex<IndexerStore>>> {
-        self.indexer_store.clone()
-    }
-
-    /// Sets or replaces the active relational SQLite indexer store.
-    pub fn set_indexer_store(&mut self, store: Arc<Mutex<IndexerStore>>) {
-        self.indexer_store = Some(store);
-        let _ = self.catchup_indexer();
-    }
-
-    /// Memeriksa apakah indexer tertinggal dari tinggi target penyimpanan utama dan melakukan backfill sinkron
-    pub fn catchup_indexer(&self) -> Result<(), NodeError> {
-        if let Some(indexer_arc) = &self.indexer_store {
-            let storage_height = self.storage.get_canonical_tip()?.map(|(_, h)| h).unwrap_or(0);
-            let mut indexer = indexer_arc.lock().unwrap();
-
-            if indexer.requires_catchup(storage_height).unwrap_or(false) {
-                tracing::info!("Index SQLite tertinggal dari Redb storage. Menjalankan auto-catchup backfill...");
-                let current_indexed = indexer.get_latest_indexed_height().unwrap_or(None);
-                let start_h = match current_indexed {
-                    Some(h) => h + 1,
-                    None => 0,
-                };
-
-                for h in start_h..=storage_height {
-                    if let Some(block) = self.storage.get_block_by_height(h)? {
-                        let payload = scytale_indexer::extract_block_indexer_payload(&block);
-
-                        indexer.index_block(
-                            h,
-                            &block.header.hash().to_string(),
-                            &block.header.previous_block_hash.to_string(),
-                            block.header.timestamp,
-                            &block.header.transaction_commitment.to_string(),
-                            &block.header.utxo_root.to_string(),
-                            &payload,
-                        ).map_err(|e| NodeError::InconsistentState(format!(
-                            "Critical: Gagal melakukan backfill blok pada auto-catchup indexer: {e}"
-                        )))?;
-                    }
-                }
-                tracing::info!("Auto-catchup indexer selesai. SQLite dan Redb sepenuhnya sinkron.");
-            }
-        }
-        Ok(())
+    /// Publishes a canonical block committed fact to post-commit observers.
+    pub fn publish_block_committed(&self, block: Arc<Block>, height: u64) {
+        self.shared.publish_block_committed(block, height);
     }
 
     pub fn alias_store(&self) -> Arc<RwLock<AliasStore>> {
@@ -351,7 +245,6 @@ impl Node {
         self.set_state(NodeState::Initializing);
         self.verify_subsystem_integrity()?;
         self.recover()?;
-        self.catchup_indexer()?;
 
         self.set_state(NodeState::Syncing);
         // P2P bridge/IBD is a transport-level concern; a standalone node with no peers
@@ -389,9 +282,8 @@ impl Node {
                 &genesis,
                 tip_height,
                 work,
-                self.indexer.as_deref(),
-                self.indexer_store.as_ref(),
             )?;
+            self.publish_block_committed(Arc::new(genesis.clone()), tip_height);
 
             let mut utxo_set = UtxoSet::new();
             utxo_set
@@ -469,11 +361,9 @@ impl Node {
         let shared = Arc::clone(&self.shared);
         let payout = self.config.miner_payout_script.clone();
         let initial_target = self.config.genesis_difficulty_target;
-        let indexer = self.indexer.clone();
-        let indexer_store = self.indexer_store.clone();
 
         *handle_guard = Some(std::thread::spawn(move || {
-            mining_worker_loop(storage, shared, initial_target, payout, cancel, indexer, indexer_store);
+            mining_worker_loop(storage, shared, initial_target, payout, cancel);
         }));
         Ok(true)
     }
@@ -601,14 +491,13 @@ impl Node {
                             &block,
                             height,
                             work,
-                            self.indexer.as_deref(),
-                            self.indexer_store.as_ref(),
                         )
                         .map_err(|error| {
                             *chain = chain_before.clone();
                             *utxos = utxos_before.clone();
                             error
                         })?;
+                        self.publish_block_committed(Arc::new(block.clone()), height);
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -638,32 +527,10 @@ impl Node {
                             new_tip = %reorg.new_tip,
                             "chain reorganization committed"
                         );
-                        if let Some(indexer) = self.indexer.as_deref() {
-                            for (b, h, _) in &connected_meta {
-                                let payload = BlockPayload::from_block(b, *h);
-                                if let Err(error) = indexer.sender.try_send(payload) {
-                                    tracing::warn!(%error, "indexer queue rejected reorg block");
-                                }
-                            }
+                        for (b, h, _) in &connected_meta {
+                            self.publish_block_committed(Arc::new(b.clone()), *h);
                         }
-                        if let Some(indexer) = &self.indexer_store {
-                            if let Ok(mut store) = indexer.lock() {
-                                for (b, h, _) in &connected_meta {
-                                    let txs_payload = scytale_indexer::extract_block_indexer_payload(b);
-                                    if let Err(e) = store.index_block(
-                                        *h,
-                                        &b.header.hash().to_string(),
-                                        &b.header.previous_block_hash.to_string(),
-                                        b.header.timestamp,
-                                        &b.header.transaction_commitment.to_string(),
-                                        &b.header.utxo_root.to_string(),
-                                        &txs_payload,
-                                    ) {
-                                        tracing::error!("Failed to update external indexer during reorg: {}", e);
-                                    }
-                                }
-                            }
-                        }
+
                         let mut mempool = self.shared.mempool.lock().unwrap();
                         let verifier = ConsensusScriptVerifier::new(chain.canonical_height());
                         let now = SystemTime::now()
@@ -1463,8 +1330,6 @@ fn mining_worker_loop(
     initial_target: u32,
     payout: Vec<u8>,
     cancel: Arc<AtomicBool>,
-    indexer: Option<Arc<IndexerHandle>>,
-    indexer_store: Option<Arc<Mutex<IndexerStore>>>,
 ) {
     let mut compact_target = initial_target;
     let mut current_nonce: u64 = 0;
@@ -1559,13 +1424,14 @@ fn mining_worker_loop(
                     );
                     if reorg.disconnected_blocks.is_empty() {
                         if let Err(error) =
-                            commit_block(&storage, &block, height, work, indexer.as_deref(), indexer_store.as_ref())
+                            commit_block(&storage, &block, height, work)
                         {
                             tracing::error!(%error, "fatal storage failure while committing mined block");
                             *chain = chain_before.clone();
                             *utxos = utxos_before.clone();
                             break;
                         }
+                        shared.publish_block_committed(Arc::new(block.clone()), height);
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -1587,31 +1453,8 @@ fn mining_worker_loop(
                             *utxos = utxos_before.clone();
                             break;
                         }
-                        if let Some(indexer_ref) = indexer.as_deref() {
-                            for (b, h, _) in &connected_meta {
-                                let payload = BlockPayload::from_block(b, *h);
-                                if let Err(error) = indexer_ref.sender.try_send(payload) {
-                                    tracing::warn!(%error, "indexer queue rejected mined reorg block");
-                                }
-                            }
-                        }
-                        if let Some(indexer_ref) = indexer_store.as_ref() {
-                            if let Ok(mut store) = indexer_ref.lock() {
-                                for (b, h, _) in &connected_meta {
-                                    let txs_payload = scytale_indexer::extract_block_indexer_payload(b);
-                                    if let Err(e) = store.index_block(
-                                        *h,
-                                        &b.header.hash().to_string(),
-                                        &b.header.previous_block_hash.to_string(),
-                                        b.header.timestamp,
-                                        &b.header.transaction_commitment.to_string(),
-                                        &b.header.utxo_root.to_string(),
-                                        &txs_payload,
-                                    ) {
-                                        tracing::error!("Failed to update external indexer during mined reorg: {}", e);
-                                    }
-                                }
-                            }
+                        for (b, h, _) in &connected_meta {
+                            shared.publish_block_committed(Arc::new(b.clone()), *h);
                         }
 
                         let verifier = ConsensusScriptVerifier::new(height);

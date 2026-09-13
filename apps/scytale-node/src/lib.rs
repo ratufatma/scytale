@@ -13,7 +13,9 @@ pub mod stratum_service;
 pub use config::{DEFAULT_BOOTNODES, NodeConfig};
 pub use error::{NodeError, NodeState};
 pub use http_gateway::{run_http_gateway, DEFAULT_HTTP_BIND};
-pub use indexer::{start_indexer, BlockPayload, IndexerHandle};
+pub use indexer::{
+    start_indexer, BlockPayload, ExplorerObserver, IndexerHandle, SqliteIndexerObserver,
+};
 pub use ipc::{IpcServer, DEFAULT_SOCKET_PATH};
 pub use stratum_service::{start_stratum_service, StratumServiceHandle};
 pub use network::config::P2pConfig;
@@ -25,7 +27,7 @@ pub use network::{
     decode, encode, validate_hello, BlockRequest, BlocksResponse, HeadersResponse, Heartbeat,
     Hello, LocatorRequest, PeerRegistry, RateLimiter, MAX_SYNC_ITEMS, PROTOCOL_VERSION,
 };
-pub use node::{commit_block, Node};
+pub use node::{commit_block, BlockCommitted, Node};
 pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookAction, PassbookAsset, PassbookEntry, PassbookError,
     PassbookStatement, PassbookView, ProvenanceCategory, ProvenanceStep,

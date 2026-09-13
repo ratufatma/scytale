@@ -321,9 +321,6 @@ async fn main() {
         .map(|url| scytale_node::indexer::start_indexer(url.clone(), opts.indexer_key.clone()));
     let result = tokio::task::spawn_blocking(move || {
         let mut node = Node::open(config)?;
-        if let Some(indexer) = indexer_handle {
-            node.set_indexer(indexer);
-        }
         node.start()?;
         Ok::<Node, scytale_node::NodeError>(node)
     })
@@ -332,6 +329,10 @@ async fn main() {
     match result {
         Ok(Ok(node)) => {
             let node = Arc::new(node);
+            if let Some(indexer) = indexer_handle {
+                scytale_node::ExplorerObserver::new(indexer)
+                    .spawn(node.subscribe_blocks());
+            }
             tracing::info!(
                 height = node.canonical_height(),
                 tip = ?node.canonical_tip(),

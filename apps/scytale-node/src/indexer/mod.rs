@@ -5,10 +5,13 @@
 //! The worker runs on its own dedicated OS thread using `crossbeam-channel` and `ureq`,
 //! guaranteeing zero performance impact on mining and consensus.
 
+use crate::node::BlockCommitted;
 use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
 use scytale_core::{Address, Block};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::broadcast;
 
 /// Bounded channel capacity for the indexer queue.
 pub const INDEXER_CHANNEL_CAPACITY: usize = 100;
@@ -107,6 +110,103 @@ pub fn start_indexer(target_url: String, api_key: Option<String>) -> IndexerHand
     }
 
     IndexerHandle { sender }
+}
+
+/// External Explorer Observer.
+///
+/// Subscribes to post-commit `BlockCommitted` facts and forwards block payloads
+/// asynchronously to the external HTTP indexer worker.
+#[derive(Debug, Clone)]
+pub struct ExplorerObserver {
+    handle: IndexerHandle,
+}
+
+impl ExplorerObserver {
+    pub fn new(handle: IndexerHandle) -> Self {
+        Self { handle }
+    }
+
+    /// Dispatches a single committed block event to the explorer worker.
+    pub fn handle_event(&self, event: &BlockCommitted) {
+        let payload = BlockPayload::from_block(&event.block, event.height);
+        if let Err(error) = self.handle.try_send(payload) {
+            tracing::warn!(%error, "explorer observer queue rejected committed block");
+        }
+    }
+
+    /// Spawns an asynchronous observer task consuming from `receiver`.
+    pub fn spawn(self, mut receiver: broadcast::Receiver<BlockCommitted>) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                match receiver.recv().await {
+                    Ok(event) => {
+                        self.handle_event(&event);
+                    }
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(skipped, "explorer observer lagged behind block stream");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        tracing::info!("block committed stream closed; explorer observer terminating");
+                        break;
+                    }
+                }
+            }
+        })
+    }
+}
+
+/// Relational SQLite Indexer Observer.
+///
+/// Subscribes to post-commit `BlockCommitted` facts and updates an external `IndexerStore`.
+/// Operates entirely outside the L1 Sovereign Runtime.
+#[derive(Clone)]
+pub struct SqliteIndexerObserver {
+    store: Arc<Mutex<scytale_indexer::IndexerStore>>,
+}
+
+impl SqliteIndexerObserver {
+    pub fn new(store: Arc<Mutex<scytale_indexer::IndexerStore>>) -> Self {
+        Self { store }
+    }
+
+    /// Indexes a single committed block fact into the SQLite store.
+    pub fn handle_event(&self, event: &BlockCommitted) -> Result<(), String> {
+        let txs_payload = scytale_indexer::extract_block_indexer_payload(&event.block);
+        let mut store = self.store.lock().map_err(|e| e.to_string())?;
+        store
+            .index_block(
+                event.height,
+                &event.block.header.hash().to_string(),
+                &event.block.header.previous_block_hash.to_string(),
+                event.block.header.timestamp,
+                &event.block.header.transaction_commitment.to_string(),
+                &event.block.header.utxo_root.to_string(),
+                &txs_payload,
+            )
+            .map_err(|e| e.to_string())
+    }
+
+    /// Spawns an asynchronous observer task consuming from `receiver`.
+    pub fn spawn(self, mut receiver: broadcast::Receiver<BlockCommitted>) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                match receiver.recv().await {
+                    Ok(event) => {
+                        if let Err(e) = self.handle_event(&event) {
+                            tracing::error!("SQLite indexer observer error: {e}");
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!(skipped, "SQLite indexer observer lagged behind block stream");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        tracing::info!("block committed stream closed; SQLite indexer observer terminating");
+                        break;
+                    }
+                }
+            }
+        })
+    }
 }
 
 /// Worker loop running on the dedicated OS thread.

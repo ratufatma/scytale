@@ -407,7 +407,7 @@ fn test_module_fracture_storage_corruption_fails_closed() {
     {
         let storage = scytale_storage::StorageEngine::open(&db_path).expect("open storage");
         let genesis = scytale_core::genesis::build_genesis_block(0x207fffff);
-        scytale_node::commit_block(&storage, &genesis, 0, [1, 0, 0, 0], None, None).expect("commit genesis");
+        scytale_node::commit_block(&storage, &genesis, 0, [1, 0, 0, 0]).expect("commit genesis");
         assert!(storage.get_canonical_tip().unwrap().is_some());
     }
 
