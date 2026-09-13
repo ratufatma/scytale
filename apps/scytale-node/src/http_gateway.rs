@@ -669,16 +669,15 @@ async fn get_block_by_identifier(
 ) -> Result<Json<BlockDetailResponse>, (StatusCode, Json<ErrorResponse>)> {
     // 1. Check if identifier is a height number
     if let Ok(height) = identifier.parse::<u64>() {
-        let blocks = node.query_canonical_range(height, 1, true).map_err(|e| {
+        if let Some(block) = node.get_block_by_height(height).map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: e.to_string(),
                 }),
             )
-        })?;
-        if let Some((block, block_height)) = blocks.into_iter().find(|(_, h)| *h == height) {
-            return Ok(Json(block_to_detail(&block, block_height)));
+        })? {
+            return Ok(Json(block_to_detail(&block, height)));
         }
         if identifier.chars().all(|c| c.is_ascii_digit()) && identifier.len() != 64 {
             return Err((

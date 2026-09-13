@@ -7,7 +7,9 @@ use tauri::{AppHandle, Emitter, State};
 fn workspace_root() -> std::path::PathBuf {
     let mut candidate = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
     loop {
-        if candidate.join("Cargo.toml").is_file() && candidate.join("apps/scytale-studio").is_dir()
+        if candidate.join("Cargo.toml").is_file()
+            && (candidate.join("backend/scytale-studio").is_dir()
+                || candidate.join("apps/scytale-studio").is_dir())
         {
             return candidate;
         }

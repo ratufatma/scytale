@@ -35,9 +35,8 @@ impl ScriptEngine {
 
     /// Executes an unlocking script followed by a locking script in a shared stack environment.
     ///
-    /// # Backward Compatibility
-    /// If locking_script is short (<= 32 bytes) and matches unlocking_script byte-for-byte,
-    /// it is accepted as a legacy raw match immediately.
+    /// Fails closed if any script evaluation fails, opcode budget is exhausted,
+    /// or final stack state is empty or non-truthy.
     ///
     /// # Return
     /// Returns `Ok(true)` if execution succeeds and leaves a truthy value on the top of the stack.
@@ -47,30 +46,14 @@ impl ScriptEngine {
         locking_script: &[u8],
         ctx: &ScriptContext,
     ) -> Result<bool, ScriptError> {
-        // Fast-path backward compatibility: legacy raw matching (e.g. "010203" <= 32 bytes)
-        if locking_script.len() <= 32 && unlocking_script == locking_script {
-            return Ok(true);
-        }
-
         let mut stack = ScriptStack::new();
         let mut budget = self.max_ops_budget;
 
         // 1. Evaluate unlocking script (ScriptSig)
-        if let Err(e) = self.execute_script(unlocking_script, &mut stack, ctx, &mut budget) {
-            // Fallback for raw byte matching if unlocking_script cannot be parsed as standard opcodes
-            if locking_script.len() <= 32 && unlocking_script == locking_script {
-                return Ok(true);
-            }
-            return Err(e);
-        }
+        self.execute_script(unlocking_script, &mut stack, ctx, &mut budget)?;
 
         // 2. Evaluate locking script (ScriptPubKey) on the resulting stack
-        if let Err(e) = self.execute_script(locking_script, &mut stack, ctx, &mut budget) {
-            if locking_script.len() <= 32 && unlocking_script == locking_script {
-                return Ok(true);
-            }
-            return Err(e);
-        }
+        self.execute_script(locking_script, &mut stack, ctx, &mut budget)?;
 
         // 3. Final validation: Stack must not be empty and top element must be truthy
         if stack.is_empty() {

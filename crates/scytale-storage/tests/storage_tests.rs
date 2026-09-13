@@ -567,3 +567,100 @@ fn test_utxo_root_and_snapshot_roundtrip() {
     let corrupt_err = fresh_engine.apply_utxo_snapshot(&corrupted);
     assert!(corrupt_err.is_err());
 }
+
+#[test]
+fn test_block_height_and_tx_confirm_indexes_lifecycle() {
+    let engine = StorageEngine::in_memory().unwrap();
+
+    let cb0 = make_coinbase_tx(0, 1_000_000_000);
+    let cb0_txid = cb0.txid();
+    let b0 = make_block(Hash256::ZERO, 1_000_000, 1, vec![cb0]);
+    let b0_hash = b0.header.hash();
+    engine.commit_block(&b0, 0, [1, 0, 0, 0]).unwrap();
+
+    // Block 1 with coinbase and regular tx
+    let cb1 = make_coinbase_tx(1, 500_000_000);
+    let cb1_txid = cb1.txid();
+    let tx1 = transfer_tx(
+        OutPoint::new(cb0_txid, 0),
+        999_990_000,
+    );
+    let tx1_txid = tx1.txid();
+    let b1 = make_block(b0_hash, 1_000_060, 2, vec![cb1, tx1]);
+    let b1_hash = b1.header.hash();
+    engine.commit_block(&b1, 1, [2, 0, 0, 0]).unwrap();
+
+    // 1. O(1) Height lookups
+    assert_eq!(engine.get_block_hash_by_height(0).unwrap(), Some(b0_hash));
+    assert_eq!(engine.get_block_hash_by_height(1).unwrap(), Some(b1_hash));
+    assert_eq!(engine.get_block_hash_by_height(2).unwrap(), None);
+
+    assert_eq!(
+        engine.get_block_by_height(0).unwrap().unwrap().header.hash(),
+        b0_hash
+    );
+    assert_eq!(
+        engine.get_block_by_height(1).unwrap().unwrap().header.hash(),
+        b1_hash
+    );
+    assert!(engine.get_block_by_height(2).unwrap().is_none());
+
+    // 2. O(1) Transaction Confirmation lookups
+    assert_eq!(
+        engine.get_transaction_location(&cb0_txid).unwrap(),
+        Some((b0_hash, 0))
+    );
+    assert_eq!(engine.get_transaction_height(&cb0_txid).unwrap(), Some(0));
+
+    assert_eq!(
+        engine.get_transaction_location(&cb1_txid).unwrap(),
+        Some((b1_hash, 1))
+    );
+    assert_eq!(engine.get_transaction_height(&cb1_txid).unwrap(), Some(1));
+
+    assert_eq!(
+        engine.get_transaction_location(&tx1_txid).unwrap(),
+        Some((b1_hash, 1))
+    );
+    assert_eq!(engine.get_transaction_height(&tx1_txid).unwrap(), Some(1));
+
+    let bogus_txid = Hash256::hash(b"bogus_tx");
+    assert_eq!(engine.get_transaction_location(&bogus_txid).unwrap(), None);
+    assert_eq!(engine.get_transaction_height(&bogus_txid).unwrap(), None);
+
+    // 3. Unwind block 1 and verify atomic cleanup
+    engine.unwind_block(&b1, 1).unwrap();
+    assert_eq!(engine.get_block_hash_by_height(1).unwrap(), None);
+    assert!(engine.get_block_by_height(1).unwrap().is_none());
+    assert_eq!(engine.get_transaction_location(&cb1_txid).unwrap(), None);
+    assert_eq!(engine.get_transaction_height(&cb1_txid).unwrap(), None);
+    assert_eq!(engine.get_transaction_location(&tx1_txid).unwrap(), None);
+    assert_eq!(engine.get_transaction_height(&tx1_txid).unwrap(), None);
+
+    // Height 0 remains intact
+    assert_eq!(engine.get_block_hash_by_height(0).unwrap(), Some(b0_hash));
+    assert_eq!(engine.get_transaction_height(&cb0_txid).unwrap(), Some(0));
+
+    // 4. Test Reorganization atomic update
+    let b1_fork = make_block(
+        b0_hash,
+        1_000_070,
+        3,
+        vec![make_coinbase_tx(1, 500_000_000)],
+    );
+    let b1_fork_hash = b1_fork.header.hash();
+    let b1_fork_cb_txid = b1_fork.transactions[0].txid();
+
+    engine
+        .apply_reorganization(&[], &[(b1_fork, 1, [3, 0, 0, 0])])
+        .unwrap();
+
+    assert_eq!(
+        engine.get_block_hash_by_height(1).unwrap(),
+        Some(b1_fork_hash)
+    );
+    assert_eq!(
+        engine.get_transaction_height(&b1_fork_cb_txid).unwrap(),
+        Some(1)
+    );
+}

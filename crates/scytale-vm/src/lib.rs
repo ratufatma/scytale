@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 use scytale_sdk::TxContext;
 use wasmi::*;
 

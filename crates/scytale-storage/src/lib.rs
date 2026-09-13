@@ -16,7 +16,8 @@ pub use error::StorageError;
 pub use tables::{
     deserialize_address_tx_records, extract_address_from_locking_condition, make_address_tx_key,
     serialize_address_tx_records, AddressTxRecord, BlockMeta, ADDRESS_TX_INDEX, BLOCKS,
-    BLOCK_INDEX, BLOCK_UNDO_TABLE, CHAIN_STATE, TRANSACTIONS, UTXOS,
+    BLOCK_HEIGHT_INDEX, BLOCK_INDEX, BLOCK_UNDO_TABLE, CHAIN_STATE, TRANSACTIONS, TX_CONFIRM_INDEX,
+    UTXOS,
 };
 
 // ── Legacy compatibility re-exports ──────────────────────────────────────────

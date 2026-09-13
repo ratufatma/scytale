@@ -1,0 +1,78 @@
+services:
+  node-1:
+    image: scytale-node:local-test
+    container_name: scytale-node-1
+    restart: unless-stopped
+    ports:
+      - "8333:8332"
+      - "9001:9001"
+    volumes:
+      - scytale_node1_data:/data
+    networks:
+      - scytale-test-net
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "start"
+      - "--http-bind"
+      - "0.0.0.0:8332"
+      - "--p2p-port"
+      - "9001"
+      - "--bootnodes"
+      - "/ip4/116.212.72.89/tcp/9000"
+
+  node-2:
+    image: scytale-node:local-test
+    container_name: scytale-node-2
+    restart: unless-stopped
+    ports:
+      - "8334:8332"
+      - "9002:9002"
+    volumes:
+      - scytale_node2_data:/data
+    networks:
+      - scytale-test-net
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "start"
+      - "--http-bind"
+      - "0.0.0.0:8332"
+      - "--p2p-port"
+      - "9002"
+      - "--bootnodes"
+      - "/ip4/116.212.72.89/tcp/9000"
+
+  node-3:
+    image: scytale-node:local-test
+    container_name: scytale-node-3
+    restart: unless-stopped
+    ports:
+      - "8335:8332"
+      - "9003:9003"
+    volumes:
+      - scytale_node3_data:/data
+    networks:
+      - scytale-test-net
+    command:
+      - "scytale-node"
+      - "--data-dir"
+      - "/data"
+      - "start"
+      - "--http-bind"
+      - "0.0.0.0:8332"
+      - "--p2p-port"
+      - "9003"
+      - "--bootnodes"
+      - "/ip4/116.212.72.89/tcp/9000"
+
+volumes:
+  scytale_node1_data:
+  scytale_node2_data:
+  scytale_node3_data:
+
+networks:
+  scytale-test-net:
+    driver: bridge

@@ -29,23 +29,14 @@ fn test_node_verify_legacy_script() {
         )
         .unwrap();
 
-    // 1. Valid legacy authorization matching locking script
-    let valid_tx = Transaction::new(
+    // Raw byte matching without valid opcode execution must fail closed (no bypass)
+    let raw_tx = Transaction::new(
         TRANSACTION_VERSION_1,
         vec![TxIn::new(prev_op, legacy_lock.clone())],
-        vec![TxOut::new(90_000_000, vec![0x04, 0x05])],
+        vec![TxOut::new(90_000_000, vec![0x51])],
         0,
     );
-    assert!(Node::verify_transaction_scripts(&valid_tx, 2, &utxos).is_ok());
-
-    // 2. Mismatched legacy authorization fails closed
-    let invalid_tx = Transaction::new(
-        TRANSACTION_VERSION_1,
-        vec![TxIn::new(prev_op, vec![0x01, 0x02, 0x04])],
-        vec![TxOut::new(90_000_000, vec![0x04, 0x05])],
-        0,
-    );
-    let err = Node::verify_transaction_scripts(&invalid_tx, 2, &utxos).unwrap_err();
+    let err = Node::verify_transaction_scripts(&raw_tx, 2, &utxos).unwrap_err();
     assert!(matches!(
         err,
         NodeError::InvalidScript(_) | NodeError::ScriptEvaluationFailed
@@ -138,12 +129,12 @@ fn test_node_op_return_output_handling() {
     let genesis_tip = node.canonical_tip();
     let subsidy1 = scytale_consensus::calculate_block_reward(1);
 
-    // 2. Mine Block 1 with a coinbase paying to test lock 010203
-    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy1, vec![0x01, 0x02, 0x03])]);
+    // 2. Mine Block 1 with a coinbase paying to test lock OP_TRUE
+    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy1, vec![0x51])]);
     let mut staging1 = node.query_utxo_set();
     staging1.insert(
         OutPoint::new(cb1.txid(), 0),
-        scytale_core::UtxoEntry::new(TxOut::new(subsidy1, vec![0x01, 0x02, 0x03]), 1, true),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy1, vec![0x51]), 1, true),
     );
     let utxo_root1 = staging1.compute_utxo_root();
     let mut header1 = BlockHeader::new(
@@ -167,15 +158,15 @@ fn test_node_op_return_output_handling() {
     // 3. In Block 2, spend Block 1 coinbase with standard output and OP_RETURN data carrier
     let tip1 = node.canonical_tip();
     let subsidy2 = scytale_consensus::calculate_block_reward(2);
-    let cb2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy2, vec![0x01, 0x02, 0x03])]);
+    let cb2 = Transaction::new_coinbase(2, vec![TxOut::new(subsidy2, vec![0x51])]);
     let prev_op = OutPoint::new(cb1.txid(), 0);
 
     let op_return_lock = vec![0x6a, 0x08, b'S', b'C', b'Y', b'T', b'A', b'L', b'E', b'1'];
     let transfer_tx = Transaction::new(
         TRANSACTION_VERSION_1,
-        vec![TxIn::new(prev_op, vec![0x01, 0x02, 0x03])],
+        vec![TxIn::new(prev_op, vec![0x51])],
         vec![
-            TxOut::new(50_000_000, vec![0xaa, 0xbb]),
+            TxOut::new(50_000_000, vec![0x51]),
             TxOut::new(0, op_return_lock.clone()),
         ],
         0,
@@ -186,11 +177,11 @@ fn test_node_op_return_output_handling() {
     staging2.remove(&prev_op);
     staging2.insert(
         OutPoint::new(transfer_txid, 0),
-        scytale_core::UtxoEntry::new(TxOut::new(50_000_000, vec![0xaa, 0xbb]), 2, false),
+        scytale_core::UtxoEntry::new(TxOut::new(50_000_000, vec![0x51]), 2, false),
     );
     staging2.insert(
         OutPoint::new(cb2.txid(), 0),
-        scytale_core::UtxoEntry::new(TxOut::new(subsidy2, vec![0x01, 0x02, 0x03]), 2, true),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy2, vec![0x51]), 2, true),
     );
     let utxo_root2 = staging2.compute_utxo_root();
     let transactions2 = vec![cb2, transfer_tx];

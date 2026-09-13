@@ -19,8 +19,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 /// Easiest compact target: any nonce satisfies Proof-of-Work.
 const EASY_TARGET: u32 = 0x217F_FFFF;
 
-const USER_LOCK: &[u8] = &[0x11, 0x22, 0x33];
-const OTHER_LOCK: &[u8] = &[0x44, 0x55, 0x66];
+const USER_LOCK: &[u8] = &[0x01, 0x11];
+const OTHER_LOCK: &[u8] = &[0x01, 0x22];
 
 fn test_config(data_dir: PathBuf, mining: bool) -> NodeConfig {
     NodeConfig {
@@ -379,13 +379,16 @@ fn test_restart_preserves_passbook_integrity() {
             wait_for_height(&node, 3, 10_000),
             "mine at least three blocks"
         );
+        node.stop_mining().unwrap();
         saved_height = node.canonical_height();
         saved_view = passbook.view(&node).unwrap();
         node.shutdown().unwrap();
     }
 
     {
-        let mut node2 = Node::open(config).unwrap();
+        let mut config2 = config.clone();
+        config2.mining_enabled = false;
+        let mut node2 = Node::open(config2).unwrap();
         node2.start().unwrap();
         assert_eq!(node2.canonical_height(), saved_height);
 
@@ -425,8 +428,8 @@ fn test_passbook_native_inbound_outbound_change() {
     let mut node = Node::open(test_config(dir.path().join("db"), false)).unwrap();
     node.start().unwrap();
 
-    let user_lock = vec![0xaa, 0xbb, 0xcc];
-    let other_lock = vec![0xdd, 0xee, 0xff];
+    let user_lock = vec![0x01, 0xaa];
+    let other_lock = vec![0x01, 0xdd];
 
     // Block 1: Fund user with coinbase
     let h1 = inject_canonical_reward_block(&node, 0, &user_lock);

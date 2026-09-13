@@ -1,8 +1,11 @@
+#![deny(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 #![no_std]
 extern crate alloc;
 
 use scytale_sdk::{
-    decode_payload, verify_ed25519, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS,
+    decode_payload, parse_raw_slice, verify_ed25519, TxContext, VALIDATION_REJECT,
+    VALIDATION_SUCCESS,
 };
 use serde::{Deserialize, Serialize};
 
@@ -82,7 +85,7 @@ pub enum VaultRedeemer {
 }
 
 #[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(unsafe_code)]
 pub extern "C" fn validate(
     datum_ptr: *const u8,
     datum_len: usize,
@@ -91,15 +94,18 @@ pub extern "C" fn validate(
     ctx_ptr: *const u8,
     ctx_len: usize,
 ) -> i32 {
-    if (datum_ptr.is_null() && datum_len != 0)
-        || (redeemer_ptr.is_null() && redeemer_len != 0)
-        || (ctx_ptr.is_null() && ctx_len != 0)
-    {
-        return VALIDATION_REJECT;
-    }
-    let datum_slice = unsafe { core::slice::from_raw_parts(datum_ptr, datum_len) };
-    let redeemer_slice = unsafe { core::slice::from_raw_parts(redeemer_ptr, redeemer_len) };
-    let ctx_slice = unsafe { core::slice::from_raw_parts(ctx_ptr, ctx_len) };
+    let datum_slice = match parse_raw_slice(datum_ptr, datum_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
+    let redeemer_slice = match parse_raw_slice(redeemer_ptr, redeemer_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
+    let ctx_slice = match parse_raw_slice(ctx_ptr, ctx_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
 
     let datum: VaultDatum = match decode_payload(datum_slice) {
         Ok(d) => d,

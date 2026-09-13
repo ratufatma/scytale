@@ -30,10 +30,15 @@ pub use passbook::{
     EntryStatus, EntryType, Passbook, PassbookAction, PassbookAsset, PassbookEntry, PassbookError,
     PassbookStatement, PassbookView, ProvenanceCategory, ProvenanceStep,
 };
+pub use scytale_account as account;
 pub use scytale_bridge as bridge;
 pub use scytale_consensus as consensus;
 pub use scytale_core as core;
 pub use scytale_mempool as mempool;
 pub use scytale_mining as mining;
 pub use scytale_primitives as primitives;
+pub use scytale_script as script;
 pub use scytale_storage as storage;
+pub use scytale_stratum as stratum;
+pub use scytale_vm as vm;
+

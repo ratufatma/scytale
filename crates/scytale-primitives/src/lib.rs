@@ -109,16 +109,27 @@ pub fn to_hex(bytes: &[u8]) -> String {
 /// Parses a hexadecimal string (with optional `0x` prefix) into bytes.
 pub fn from_hex(s: &str) -> Result<Vec<u8>, PrimitiveError> {
     let clean = s.strip_prefix("0x").unwrap_or(s);
-    if !clean.len().is_multiple_of(2) {
+    let bytes = clean.as_bytes();
+    if !bytes.len().is_multiple_of(2) {
         return Err(PrimitiveError::Serialization("odd hex length".into()));
     }
-    let mut bytes = Vec::with_capacity(clean.len() / 2);
-    for i in (0..clean.len()).step_by(2) {
-        let b = u8::from_str_radix(&clean[i..i + 2], 16)
-            .map_err(|_| PrimitiveError::Serialization("invalid hex character".into()))?;
-        bytes.push(b);
+    let mut out = Vec::with_capacity(bytes.len() / 2);
+    for chunk in bytes.chunks_exact(2) {
+        let hi = match chunk[0] {
+            b'0'..=b'9' => chunk[0] - b'0',
+            b'a'..=b'f' => chunk[0] - b'a' + 10,
+            b'A'..=b'F' => chunk[0] - b'A' + 10,
+            _ => return Err(PrimitiveError::Serialization("invalid hex character".into())),
+        };
+        let lo = match chunk[1] {
+            b'0'..=b'9' => chunk[1] - b'0',
+            b'a'..=b'f' => chunk[1] - b'a' + 10,
+            b'A'..=b'F' => chunk[1] - b'A' + 10,
+            _ => return Err(PrimitiveError::Serialization("invalid hex character".into())),
+        };
+        out.push((hi << 4) | lo);
     }
-    Ok(bytes)
+    Ok(out)
 }
 
 /// OutPoint: Uniquely identifies a specific transaction output on the ledger.
@@ -227,5 +238,9 @@ mod tests {
         assert_eq!(from_hex("0xdeadbeef").unwrap(), bytes);
         assert!(from_hex("deadbee").is_err());
         assert!(from_hex("deadzz").is_err());
+        assert!(from_hex("0x1234🔥5678").is_err());
+        assert!(from_hex("0xZZZZ").is_err());
+        assert!(from_hex("12\r\n34").is_err());
+        assert!(from_hex("").unwrap().is_empty());
     }
 }

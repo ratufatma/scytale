@@ -31,6 +31,16 @@ pub const ADDRESS_TX_INDEX: TableDefinition<&[u8; 40], &[u8]> =
 /// Stores deterministic per-block UTXO undo deltas for instant reorg rollback.
 pub const BLOCK_UNDO_TABLE: TableDefinition<&[u8; 32], &[u8]> = TableDefinition::new("block_undo");
 
+/// Canonical index mapping block height to block hash for O(1) height queries.
+/// Key: [u8; 8] = block_height (Big-Endian u64), Value: BlockHash ([u8; 32])
+pub const BLOCK_HEIGHT_INDEX: TableDefinition<&[u8; 8], &[u8; 32]> =
+    TableDefinition::new("block_height_index");
+
+/// Canonical index mapping transaction ID to confirmed block location for O(1) confirmation lookups.
+/// Key: TxID ([u8; 32]), Value: [u8; 40] = BlockHash (32B) || block_height (8B Big-Endian)
+pub const TX_CONFIRM_INDEX: TableDefinition<&[u8; 32], &[u8; 40]> =
+    TableDefinition::new("tx_confirm_index");
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy compatibility tables (kept for existing unit test)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,17 @@
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    jq \
+    tini && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY target/release/scytale-node /usr/local/bin/scytale-node
+
+RUN mkdir -p /data /run/scytale /root/.scytale
+
+ENV RUST_LOG=info
+ENV SCYTALE_SOCKET=/run/scytale/node.sock
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["scytale-node", "start"]

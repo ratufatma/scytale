@@ -495,14 +495,14 @@ async fn test_ipc_request_response_roundtrip() {
         NodeResponse::MiningToggled { active: false }
     ));
 
-    // Connect Block 1 to fund 010203 so SendTransaction has confirmed inputs
+    // Connect Block 1 to fund 0x51 (OP_TRUE) so SendTransaction has confirmed inputs
     let genesis_tip = node.canonical_tip();
     let subsidy = scytale_consensus::calculate_block_reward(1);
-    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy, vec![0x01, 0x02, 0x03])]);
+    let cb1 = Transaction::new_coinbase(1, vec![TxOut::new(subsidy, vec![0x51])]);
     let mut staging = node.query_utxo_set();
-    staging.insert(
+    let _ = staging.insert(
         OutPoint::new(cb1.txid(), 0),
-        scytale_core::UtxoEntry::new(TxOut::new(subsidy, vec![0x01, 0x02, 0x03]), 1, true),
+        scytale_core::UtxoEntry::new(TxOut::new(subsidy, vec![0x51]), 1, true),
     );
     let utxo_root = staging.compute_utxo_root();
     let mut header = BlockHeader::new(
@@ -527,10 +527,10 @@ async fn test_ipc_request_response_roundtrip() {
     let resp = client::send_node_request(
         &sock_path,
         NodeRequest::SendTransaction {
-            recipient_script_hex: "040506".into(),
+            recipient_script_hex: "51".into(),
             amount_quanta: 200_000_000,
             fee_quanta: 1_000,
-            sender_script_hex: Some("010203".into()),
+            sender_script_hex: Some("51".into()),
         },
     )
     .await

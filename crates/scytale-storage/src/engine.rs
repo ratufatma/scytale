@@ -146,6 +146,8 @@ impl StorageEngine {
         write_tx.open_table(tables::CHAIN_STATE)?;
         write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
         write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
+        write_tx.open_table(tables::BLOCK_HEIGHT_INDEX)?;
+        write_tx.open_table(tables::TX_CONFIRM_INDEX)?;
         write_tx.commit()?;
         Ok(())
     }
@@ -182,6 +184,51 @@ impl StorageEngine {
                 Ok(Some(tx))
             }
         }
+    }
+
+    /// Returns the block hash for the specified canonical height, if indexed.
+    pub fn get_block_hash_by_height(&self, height: u64) -> Result<Option<Hash256>, StorageError> {
+        let read_tx = self.db.begin_read()?;
+        let table = read_tx.open_table(tables::BLOCK_HEIGHT_INDEX)?;
+        let key = height.to_be_bytes();
+        match table.get(&key)? {
+            None => Ok(None),
+            Some(v) => Ok(Some(Hash256::new(*v.value()))),
+        }
+    }
+
+    /// Returns the canonical block for the specified height, if present.
+    pub fn get_block_by_height(&self, height: u64) -> Result<Option<Block>, StorageError> {
+        if let Some(hash) = self.get_block_hash_by_height(height)? {
+            self.get_block(&hash)
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Returns the confirmation location (block hash and height) for the given TxID, if present.
+    pub fn get_transaction_location(
+        &self,
+        txid: &Hash256,
+    ) -> Result<Option<(Hash256, u64)>, StorageError> {
+        let read_tx = self.db.begin_read()?;
+        let table = read_tx.open_table(tables::TX_CONFIRM_INDEX)?;
+        let key: [u8; 32] = *txid.as_bytes();
+        match table.get(&key)? {
+            None => Ok(None),
+            Some(guard) => {
+                let bytes = guard.value();
+                let mut hash_arr = [0u8; 32];
+                hash_arr.copy_from_slice(&bytes[..32]);
+                let height = u64::from_be_bytes(bytes[32..40].try_into().unwrap());
+                Ok(Some((Hash256::new(hash_arr), height)))
+            }
+        }
+    }
+
+    /// Returns the block confirmation height for the given TxID, if present.
+    pub fn get_transaction_height(&self, txid: &Hash256) -> Result<Option<u64>, StorageError> {
+        Ok(self.get_transaction_location(txid)?.map(|(_, h)| h))
     }
 
     /// Returns the UTXO entry for the given OutPoint, if unspent.
@@ -384,6 +431,10 @@ impl StorageEngine {
             let mut utxo_tbl = write_tx.open_table(tables::UTXOS)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
             let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
+            let mut height_tbl = write_tx.open_table(tables::BLOCK_HEIGHT_INDEX)?;
+            let mut tx_confirm_tbl = write_tx.open_table(tables::TX_CONFIRM_INDEX)?;
+
+            height_tbl.insert(&height.to_be_bytes(), block_hash.as_bytes())?;
 
             let mut block_addr_records: HashMap<[u8; 32], Vec<AddressTxRecord>> = HashMap::new();
             let mut undo = BlockUndo {
@@ -397,6 +448,11 @@ impl StorageEngine {
                     .to_canonical_bytes()
                     .map_err(|e| StorageError::serialization(e.to_string()))?;
                 tx_tbl.insert(txid.as_bytes(), tx_bytes.as_slice())?;
+
+                let mut loc = [0u8; 40];
+                loc[..32].copy_from_slice(block_hash.as_bytes());
+                loc[32..].copy_from_slice(&height.to_be_bytes());
+                tx_confirm_tbl.insert(txid.as_bytes(), &loc)?;
 
                 // Spend inputs (skip for coinbase — inputs are sentinel)
                 if !tx.is_coinbase() {
@@ -603,6 +659,8 @@ impl StorageEngine {
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
             let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
+            let mut height_tbl = write_tx.open_table(tables::BLOCK_HEIGHT_INDEX)?;
+            let mut tx_confirm_tbl = write_tx.open_table(tables::TX_CONFIRM_INDEX)?;
 
             Self::remove_block_address_records_internal(&mut addr_idx_tbl, &tx_tbl, block, height)?;
 
@@ -625,10 +683,12 @@ impl StorageEngine {
             for tx in &block.transactions {
                 let txid = tx.txid();
                 tx_tbl.remove(txid.as_bytes())?;
+                tx_confirm_tbl.remove(txid.as_bytes())?;
             }
             blk_tbl.remove(bh.as_bytes())?;
             idx_tbl.remove(bh.as_bytes())?;
             undo_tbl.remove(bh.as_bytes())?;
+            height_tbl.remove(&height.to_be_bytes())?;
 
             // If tip matches this block, revert tip to parent
             let mut state_tbl = write_tx.open_table(tables::CHAIN_STATE)?;
@@ -666,6 +726,8 @@ impl StorageEngine {
             let mut idx_tbl = write_tx.open_table(tables::BLOCK_INDEX)?;
             let mut addr_idx_tbl = write_tx.open_table(tables::ADDRESS_TX_INDEX)?;
             let mut undo_tbl = write_tx.open_table(tables::BLOCK_UNDO_TABLE)?;
+            let mut height_tbl = write_tx.open_table(tables::BLOCK_HEIGHT_INDEX)?;
+            let mut tx_confirm_tbl = write_tx.open_table(tables::TX_CONFIRM_INDEX)?;
 
             // Rollback disconnected blocks
             for block in disconnected_blocks {
@@ -683,6 +745,7 @@ impl StorageEngine {
                         block,
                         h,
                     )?;
+                    height_tbl.remove(&h.to_be_bytes())?;
                 }
 
                 let undo = undo_tbl
@@ -705,6 +768,7 @@ impl StorageEngine {
                 for tx in &block.transactions {
                     let txid = tx.txid();
                     tx_tbl.remove(txid.as_bytes())?;
+                    tx_confirm_tbl.remove(txid.as_bytes())?;
                 }
                 blk_tbl.remove(bh.as_bytes())?;
                 idx_tbl.remove(bh.as_bytes())?;
@@ -714,6 +778,7 @@ impl StorageEngine {
             // Apply connected blocks
             for (block, height, cumulative_work) in connected_blocks {
                 let block_hash = block.header.hash();
+                height_tbl.insert(&height.to_be_bytes(), block_hash.as_bytes())?;
                 let block_bytes = block
                     .to_canonical_bytes()
                     .map_err(|e| StorageError::serialization(e.to_string()))?;
@@ -732,6 +797,10 @@ impl StorageEngine {
                         .to_canonical_bytes()
                         .map_err(|e| StorageError::serialization(e.to_string()))?;
                     tx_tbl.insert(txid.as_bytes(), tx_bytes.as_slice())?;
+                    let mut loc = [0u8; 40];
+                    loc[..32].copy_from_slice(block_hash.as_bytes());
+                    loc[32..].copy_from_slice(&height.to_be_bytes());
+                    tx_confirm_tbl.insert(txid.as_bytes(), &loc)?;
                     if !tx.is_coinbase() {
                         for input in &tx.inputs {
                             let key = outpoint_to_key(&input.previous_output);

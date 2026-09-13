@@ -33,6 +33,29 @@ pub fn encode_payload<T: Serialize>(val: &T) -> Result<Vec<u8>, bincode::Error> 
 pub const VALIDATION_SUCCESS: i32 = 1;
 pub const VALIDATION_REJECT: i32 = 0;
 
+/// Helper to convert a raw pointer and length into a safe byte slice.
+/// Returns None if pointer is null when length is non-zero.
+pub fn parse_raw_slice<'a>(ptr: *const u8, len: usize) -> Option<&'a [u8]> {
+    if ptr.is_null() {
+        if len == 0 {
+            Some(&[])
+        } else {
+            None
+        }
+    } else {
+        Some(unsafe { core::slice::from_raw_parts(ptr, len) })
+    }
+}
+
+/// Helper to convert i32 WebAssembly ABI pointers and length into a safe byte slice.
+pub fn parse_i32_slice<'a>(ptr: i32, len: i32) -> Option<&'a [u8]> {
+    if ptr < 0 || len < 0 {
+        None
+    } else {
+        parse_raw_slice(ptr as usize as *const u8, len as usize)
+    }
+}
+
 /// Modul pembantu serde untuk serialisasi dan deserialisasi array [u8; 64] tanda tangan kriptografis.
 pub mod serde_signature {
     use core::fmt;

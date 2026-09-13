@@ -62,4 +62,6 @@ pub enum NodeError {
     MissingMiningPayout,
     #[error("eUTXO smart contract validation failed: {0}")]
     EutxoValidation(#[from] scytale_core::EutxoValidationError),
+    #[error("module integrity verification failed: {0}")]
+    ModuleIntegrityFailure(String),
 }

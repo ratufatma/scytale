@@ -9,20 +9,17 @@ use scytale_script::{
 };
 
 #[test]
-fn test_legacy_raw_matching() {
+fn test_no_raw_matching_bypass_fail_closed() {
     let engine = ScriptEngine::new();
     let sighash = [0u8; 32];
     let ctx = ScriptContext::new(&sighash, 100);
 
-    // 1. Exact raw match for 010203 (3 bytes <= 32 bytes)
-    let legacy_script = vec![0x01, 0x02, 0x03];
-    assert!(engine
-        .execute(&legacy_script, &legacy_script, &ctx)
-        .expect("legacy match should pass"));
-
-    // 2. Mismatched raw bytes fails
-    let wrong_script = vec![0x01, 0x02, 0x04];
-    assert!(engine.execute(&wrong_script, &legacy_script, &ctx).is_err());
+    // Raw bytes without valid opcodes or returning truthy on stack must fail closed
+    let raw_script = vec![0x01, 0x02, 0x03];
+    assert!(
+        engine.execute(&raw_script, &raw_script, &ctx).is_err(),
+        "Raw byte matching without opcode execution must be rejected"
+    );
 }
 
 #[test]

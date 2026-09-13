@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 //! ScytaleScript: Minimalist stack-based script engine for Scytale blockchain.
 //!
 //! Features:

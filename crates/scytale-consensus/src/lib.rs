@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 //! Scytale Consensus: Proof-of-Work, emission curve, and validation rules.
 
 pub mod chain;

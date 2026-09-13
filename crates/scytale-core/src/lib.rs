@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 //! Scytale Core: Canonical transaction, block, UTXO, authorization, and serialization primitives for Scytale.
 
 pub mod address;

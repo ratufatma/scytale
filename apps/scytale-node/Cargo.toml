@@ -25,6 +25,7 @@ scytale-sdk = { path = "../../crates/scytale-sdk", features = ["std"] }
 scytale-vm = { path = "../../crates/scytale-vm" }
 scytale-account = { path = "../../crates/scytale-account" }
 scytale-stratum = { path = "../../crates/scytale-stratum" }
+scytale-indexer = { path = "../../crates/scytale-indexer" }
 blake3 = { workspace = true }
 bincode = { workspace = true }
 clap = { workspace = true }
@@ -42,6 +43,7 @@ ureq = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.10"
+hex = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 blake3 = { workspace = true }
 ed25519-dalek = { version = "2.1", default-features = false }

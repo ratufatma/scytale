@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+#![deny(clippy::float_arithmetic)]
 #![no_std]
 extern crate alloc;
 
@@ -14,11 +16,13 @@ pub use types::{
 };
 pub use validator::validate_scy20_execution;
 
-pub use scytale_sdk::{decode_payload, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS};
+pub use scytale_sdk::{
+    decode_payload, parse_i32_slice, TxContext, VALIDATION_REJECT, VALIDATION_SUCCESS,
+};
 
 /// ABI entrypoint Wasm untuk validasi kontrak pintar eUTXO SCY-20.
 #[no_mangle]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(unsafe_code)]
 pub extern "C" fn validate(
     datum_ptr: i32,
     datum_len: i32,
@@ -27,21 +31,18 @@ pub extern "C" fn validate(
     ctx_ptr: i32,
     ctx_len: i32,
 ) -> i32 {
-    if datum_ptr < 0
-        || datum_len < 0
-        || redeemer_ptr < 0
-        || redeemer_len < 0
-        || ctx_ptr < 0
-        || ctx_len < 0
-    {
-        return VALIDATION_REJECT;
-    }
-
-    let datum_slice =
-        unsafe { core::slice::from_raw_parts(datum_ptr as *const u8, datum_len as usize) };
-    let redeemer_slice =
-        unsafe { core::slice::from_raw_parts(redeemer_ptr as *const u8, redeemer_len as usize) };
-    let ctx_slice = unsafe { core::slice::from_raw_parts(ctx_ptr as *const u8, ctx_len as usize) };
+    let datum_slice = match parse_i32_slice(datum_ptr, datum_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
+    let redeemer_slice = match parse_i32_slice(redeemer_ptr, redeemer_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
+    let ctx_slice = match parse_i32_slice(ctx_ptr, ctx_len) {
+        Some(s) => s,
+        None => return VALIDATION_REJECT,
+    };
 
     let datum: Scy20Datum = match decode_payload(datum_slice) {
         Ok(d) => d,

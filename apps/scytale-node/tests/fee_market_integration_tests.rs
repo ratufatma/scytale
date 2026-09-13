@@ -8,8 +8,8 @@ use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_miner_fee_accrual_and_http_mempool_telemetry() {
-    let miner_lock = vec![0x01, 0x02, 0x03];
-    let recipient_lock = vec![0x09, 0x08, 0x07];
+    let miner_lock = vec![0x51];
+    let recipient_lock = vec![0x51];
 
     let config = NodeConfig {
         data_dir: ":memory:".into(),

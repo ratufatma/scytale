@@ -96,7 +96,7 @@ pub fn start_stratum_service(
                 cache.get(&job.job_id).cloned()
             };
 
-            let (template, other_txs) = match cached {
+            let (_template, other_txs) = match cached {
                 Some(c) => (c.template, c.other_txs),
                 None => {
                     warn!(
@@ -124,9 +124,9 @@ pub fn start_stratum_service(
                     warn!(
                         worker = %worker,
                         error = %err,
-                        "Failed to decode canonical coinbase from extranonces, falling back to template coinbase"
+                        "Failed to decode canonical coinbase from worker extranonces; rejecting malformed candidate"
                     );
-                    template.transactions[0].clone()
+                    continue;
                 }
             };
 

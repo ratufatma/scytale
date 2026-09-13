@@ -10,6 +10,7 @@ use crate::config::NodeConfig;
 use crate::error::{NodeError, NodeState};
 use crate::indexer::{BlockPayload, IndexerHandle};
 use scytale_account::AliasStore;
+use scytale_indexer::IndexerStore;
 use scytale_core::{
     verify_transaction_eutxo, Block, ConsensusScriptVerifier, EutxoValidationError, Hash256,
     OutPoint, OutputLock, Transaction, TxOut, UtxoSet, MAX_BLOCK_GAS, MAX_TX_GAS,
@@ -34,7 +35,7 @@ use tokio::sync::broadcast;
 const MAX_NONCE_ITERATIONS: u64 = 80_000_000;
 
 /// Persists a validated block to disk storage and, if configured, non-blockingly
-/// dispatches the block metadata to the external indexer.
+/// dispatches the block metadata to the external indexer and the relational SQLite indexer store.
 #[allow(clippy::result_large_err)]
 pub fn commit_block(
     storage: &StorageEngine,
@@ -42,14 +43,36 @@ pub fn commit_block(
     height: u64,
     cumulative_work: [u64; 4],
     indexer_handle: Option<&IndexerHandle>,
+    indexer_store: Option<&Arc<Mutex<IndexerStore>>>,
 ) -> Result<(), scytale_storage::StorageError> {
     storage.commit_block(block, height, cumulative_work)?;
+
+    // 1. Dispatch to HTTP explorer webhook queue if configured
     if let Some(indexer) = indexer_handle {
         let payload = BlockPayload::from_block(block, height);
         if let Err(error) = indexer.sender.try_send(payload) {
             tracing::warn!(%error, "indexer queue rejected committed block");
         }
     }
+
+    // 2. Dispatch to relational SQLite indexer store (Tier-2 Event Listener)
+    if let Some(indexer) = indexer_store {
+        let txs_payload = scytale_indexer::extract_block_indexer_payload(block);
+        if let Ok(mut store) = indexer.lock() {
+            if let Err(e) = store.index_block(
+                height,
+                &block.header.hash().to_string(),
+                &block.header.previous_block_hash.to_string(),
+                block.header.timestamp,
+                &block.header.transaction_commitment.to_string(),
+                &block.header.utxo_root.to_string(),
+                &txs_payload,
+            ) {
+                tracing::error!("Failed to update external indexer: {}", e);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -74,6 +97,7 @@ pub struct Node {
     mining_handle: Mutex<Option<JoinHandle<()>>>,
     peer_count: Arc<AtomicUsize>,
     indexer: Option<Arc<IndexerHandle>>,
+    indexer_store: Option<Arc<Mutex<IndexerStore>>>,
     alias_store: Arc<RwLock<AliasStore>>,
 }
 
@@ -110,6 +134,57 @@ impl Node {
             })?
         };
 
+        let indexer_store = if config.data_dir.as_os_str() == ":memory:" {
+            match scytale_indexer::IndexerStore::open_in_memory() {
+                Ok(store) => Some(Arc::new(Mutex::new(store))),
+                Err(e) => {
+                    tracing::warn!("Failed to open in-memory indexer store: {e}");
+                    None
+                }
+            }
+        } else {
+            let indexer_path = config.data_dir.join("indexer.sqlite");
+            match scytale_indexer::IndexerStore::open(indexer_path) {
+                Ok(store) => Some(Arc::new(Mutex::new(store))),
+                Err(e) => {
+                    tracing::warn!("Failed to open SQLite indexer store: {e}");
+                    None
+                }
+            }
+        };
+
+        // Auto-Catchup Verification pada Booting Node
+        if let Some(indexer_arc) = &indexer_store {
+            let storage_height = storage.get_canonical_tip().ok().flatten().map(|(_, h)| h).unwrap_or(0);
+            let mut indexer = indexer_arc.lock().unwrap();
+
+            if indexer.requires_catchup(storage_height).unwrap_or(false) {
+                tracing::info!("Index SQLite tertinggal dari Redb storage. Menjalankan auto-catchup backfill...");
+                let current_indexed = indexer.get_latest_indexed_height().unwrap_or(None);
+                let start_h = match current_indexed {
+                    Some(h) => h + 1,
+                    None => 0,
+                };
+
+                for h in start_h..=storage_height {
+                    if let Ok(Some(block)) = storage.get_block_by_height(h) {
+                        let payload = scytale_indexer::extract_block_indexer_payload(&block);
+
+                        indexer.index_block(
+                            h,
+                            &block.header.hash().to_string(),
+                            &block.header.previous_block_hash.to_string(),
+                            block.header.timestamp,
+                            &block.header.transaction_commitment.to_string(),
+                            &block.header.utxo_root.to_string(),
+                            &payload,
+                        ).expect("Critical: Gagal melakukan backfill blok pada auto-catchup indexer");
+                    }
+                }
+                tracing::info!("Auto-catchup indexer selesai. SQLite dan Redb sepenuhnya sinkron.");
+            }
+        }
+
         Ok(Self {
             state: Arc::new(RwLock::new(NodeState::Starting)),
             storage: Arc::new(storage),
@@ -124,6 +199,7 @@ impl Node {
             peer_count: Arc::new(AtomicUsize::new(0)),
             config,
             indexer: None,
+            indexer_store,
             alias_store: Arc::new(RwLock::new(alias_store)),
         })
     }
@@ -138,14 +214,144 @@ impl Node {
         self.indexer = Some(Arc::new(indexer));
     }
 
+    /// Returns the active relational SQLite indexer store, if configured.
+    pub fn indexer_store(&self) -> Option<Arc<Mutex<IndexerStore>>> {
+        self.indexer_store.clone()
+    }
+
+    /// Sets or replaces the active relational SQLite indexer store.
+    pub fn set_indexer_store(&mut self, store: Arc<Mutex<IndexerStore>>) {
+        self.indexer_store = Some(store);
+        let _ = self.catchup_indexer();
+    }
+
+    /// Memeriksa apakah indexer tertinggal dari tinggi target penyimpanan utama dan melakukan backfill sinkron
+    pub fn catchup_indexer(&self) -> Result<(), NodeError> {
+        if let Some(indexer_arc) = &self.indexer_store {
+            let storage_height = self.storage.get_canonical_tip()?.map(|(_, h)| h).unwrap_or(0);
+            let mut indexer = indexer_arc.lock().unwrap();
+
+            if indexer.requires_catchup(storage_height).unwrap_or(false) {
+                tracing::info!("Index SQLite tertinggal dari Redb storage. Menjalankan auto-catchup backfill...");
+                let current_indexed = indexer.get_latest_indexed_height().unwrap_or(None);
+                let start_h = match current_indexed {
+                    Some(h) => h + 1,
+                    None => 0,
+                };
+
+                for h in start_h..=storage_height {
+                    if let Some(block) = self.storage.get_block_by_height(h)? {
+                        let payload = scytale_indexer::extract_block_indexer_payload(&block);
+
+                        indexer.index_block(
+                            h,
+                            &block.header.hash().to_string(),
+                            &block.header.previous_block_hash.to_string(),
+                            block.header.timestamp,
+                            &block.header.transaction_commitment.to_string(),
+                            &block.header.utxo_root.to_string(),
+                            &payload,
+                        ).map_err(|e| NodeError::InconsistentState(format!(
+                            "Critical: Gagal melakukan backfill blok pada auto-catchup indexer: {e}"
+                        )))?;
+                    }
+                }
+                tracing::info!("Auto-catchup indexer selesai. SQLite dan Redb sepenuhnya sinkron.");
+            }
+        }
+        Ok(())
+    }
+
     pub fn alias_store(&self) -> Arc<RwLock<AliasStore>> {
         Arc::clone(&self.alias_store)
+    }
+
+    /// Audits and asserts the absolute integrity and tight coupling of all core modules.
+    ///
+    /// Modularity in Scytale is strictly for codebase maintainability; at runtime,
+    /// all modules are mutually bound and must operate together in an intact, fail-closed pipeline.
+    /// If any subsystem is broken, missing, or compromised, startup fails immediately.
+    pub fn verify_subsystem_integrity(&self) -> Result<(), NodeError> {
+        // 1. Storage Subsystem Integrity
+        self.storage
+            .get_canonical_tip()
+            .map_err(|e| NodeError::ModuleIntegrityFailure(format!("Storage engine integrity check failed: {e}")))?;
+
+        // 2. Consensus Subsystem Integrity
+        let genesis_target = scytale_consensus::Target::from_compact(self.config.genesis_difficulty_target);
+        if genesis_target == scytale_consensus::Target::zero() {
+            return Err(NodeError::ModuleIntegrityFailure(
+                "Consensus difficulty target cannot be zero".into(),
+            ));
+        }
+        if scytale_consensus::get_block_subsidy(0) != scytale_consensus::INITIAL_SUBSIDY {
+            return Err(NodeError::ModuleIntegrityFailure(
+                "Consensus monetary emission curve integrity violated".into(),
+            ));
+        }
+
+        // 3. Script Engine Subsystem Integrity
+        let engine = scytale_script::ScriptEngine::default();
+        let dummy_ctx = scytale_script::ScriptContext::new(&[0u8; 32], 0);
+        // OP_TRUE execution check (opcode 0x51)
+        match engine.execute(&[], &[0x51], &dummy_ctx) {
+            Ok(true) => {}
+            other => {
+                return Err(NodeError::ModuleIntegrityFailure(format!(
+                    "ScriptEngine baseline execution failed: {other:?}"
+                )));
+            }
+        }
+        // OP_FALSE failure check (opcode 0x00 must reject / evaluate false or error)
+        match engine.execute(&[], &[0x00], &dummy_ctx) {
+            Err(_) | Ok(false) => {}
+            Ok(true) => {
+                return Err(NodeError::ModuleIntegrityFailure(
+                    "ScriptEngine fail-closed invariant violated: OP_FALSE evaluated to true".into(),
+                ));
+            }
+        }
+
+        // 4. Cryptographic & Account Subsystem Integrity
+        let seed = [0x5au8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
+        use ed25519_dalek::Signer;
+        let test_message = b"scytale_subsystem_integrity_attestation";
+        let signature = signing_key.sign(test_message);
+        use ed25519_dalek::Verifier;
+        if signing_key.verifying_key().verify(test_message, &signature).is_err() {
+            return Err(NodeError::ModuleIntegrityFailure(
+                "Cryptographic signature verification engine failed attestation".into(),
+            ));
+        }
+
+        // 5. Mempool Subsystem Integrity
+        {
+            let mempool = self.shared.mempool.lock().map_err(|_| {
+                NodeError::ModuleIntegrityFailure("Mempool mutex lock poisoned".into())
+            })?;
+            if mempool.len() > 0 && mempool.total_bytes() == 0 {
+                return Err(NodeError::ModuleIntegrityFailure(
+                    "Mempool byte accounting corrupted".into(),
+                ));
+            }
+        }
+
+        // 6. Mining Subsystem Integrity
+        if self.config.mining_enabled && self.config.miner_payout_script.is_empty() {
+            return Err(NodeError::MissingMiningPayout);
+        }
+
+        tracing::info!("Core module integrity interlock verified: all subsystems intact and tightly bound");
+        Ok(())
     }
 
     /// Runs the full deterministic startup sequence and returns in `Ready`/`Running` state.
     pub fn start(&mut self) -> Result<(), NodeError> {
         self.set_state(NodeState::Initializing);
+        self.verify_subsystem_integrity()?;
         self.recover()?;
+        self.catchup_indexer()?;
 
         self.set_state(NodeState::Syncing);
         // P2P bridge/IBD is a transport-level concern; a standalone node with no peers
@@ -184,6 +390,7 @@ impl Node {
                 tip_height,
                 work,
                 self.indexer.as_deref(),
+                self.indexer_store.as_ref(),
             )?;
 
             let mut utxo_set = UtxoSet::new();
@@ -263,9 +470,10 @@ impl Node {
         let payout = self.config.miner_payout_script.clone();
         let initial_target = self.config.genesis_difficulty_target;
         let indexer = self.indexer.clone();
+        let indexer_store = self.indexer_store.clone();
 
         *handle_guard = Some(std::thread::spawn(move || {
-            mining_worker_loop(storage, shared, initial_target, payout, cancel, indexer);
+            mining_worker_loop(storage, shared, initial_target, payout, cancel, indexer, indexer_store);
         }));
         Ok(true)
     }
@@ -388,12 +596,19 @@ impl Node {
                     let height = chain.canonical_height();
                     let work = chain.canonical_work().0;
                     if reorg.disconnected_blocks.is_empty() {
-                        commit_block(&self.storage, &block, height, work, self.indexer.as_deref())
-                            .map_err(|error| {
-                                *chain = chain_before.clone();
-                                *utxos = utxos_before.clone();
-                                error
-                            })?;
+                        commit_block(
+                            &self.storage,
+                            &block,
+                            height,
+                            work,
+                            self.indexer.as_deref(),
+                            self.indexer_store.as_ref(),
+                        )
+                        .map_err(|error| {
+                            *chain = chain_before.clone();
+                            *utxos = utxos_before.clone();
+                            error
+                        })?;
                     } else {
                         let connected_meta = reorg
                             .connected_blocks
@@ -428,6 +643,24 @@ impl Node {
                                 let payload = BlockPayload::from_block(b, *h);
                                 if let Err(error) = indexer.sender.try_send(payload) {
                                     tracing::warn!(%error, "indexer queue rejected reorg block");
+                                }
+                            }
+                        }
+                        if let Some(indexer) = &self.indexer_store {
+                            if let Ok(mut store) = indexer.lock() {
+                                for (b, h, _) in &connected_meta {
+                                    let txs_payload = scytale_indexer::extract_block_indexer_payload(b);
+                                    if let Err(e) = store.index_block(
+                                        *h,
+                                        &b.header.hash().to_string(),
+                                        &b.header.previous_block_hash.to_string(),
+                                        b.header.timestamp,
+                                        &b.header.transaction_commitment.to_string(),
+                                        &b.header.utxo_root.to_string(),
+                                        &txs_payload,
+                                    ) {
+                                        tracing::error!("Failed to update external indexer during reorg: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -748,7 +981,12 @@ impl Node {
         Ok(path_rev)
     }
 
-    /// Reads only a bounded canonical height range by walking backward from the tip.
+    /// Looks up a canonical block by height using the O(1) BLOCK_HEIGHT_INDEX.
+    pub fn get_block_by_height(&self, height: u64) -> Result<Option<Block>, NodeError> {
+        Ok(self.storage.get_block_by_height(height)?)
+    }
+
+    /// Reads only a bounded canonical height range in O(K) using the BLOCK_HEIGHT_INDEX.
     pub fn query_canonical_range(
         &self,
         start_height: u64,
@@ -763,63 +1001,45 @@ impl Node {
                 "range limit exceeds 100".into(),
             ));
         }
-        let (tip_hash, tip_height) = self
+        let (_tip_hash, tip_height) = self
             .storage
             .get_canonical_tip()?
             .ok_or_else(|| NodeError::InconsistentState("no canonical tip".into()))?;
-        if start_height > tip_height {
-            return Ok(Vec::new());
-        }
 
-        let mut result = Vec::with_capacity(limit);
-        let mut current_hash = tip_hash;
-        let mut current_height = tip_height;
-        loop {
-            if (ascending && current_height >= start_height)
-                || (!ascending && current_height <= start_height)
-            {
-                let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
-                    NodeError::InconsistentState("missing block on canonical path".into())
-                })?;
-                result.push((block.clone(), current_height));
-                if result.len() == limit {
-                    break;
-                }
-            }
-            if current_height == 0 {
-                break;
-            }
-            let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
-                NodeError::InconsistentState("missing block on canonical path".into())
-            })?;
-            current_hash = block.header.previous_block_hash;
-            current_height -= 1;
-        }
         if ascending {
-            result.reverse();
+            if start_height > tip_height {
+                return Ok(Vec::new());
+            }
+            let end_height = (start_height.saturating_add(limit as u64 - 1)).min(tip_height);
+            let count = ((end_height - start_height + 1) as usize).min(limit);
+            let mut result = Vec::with_capacity(count);
+            for h in start_height..=end_height {
+                let block = self.storage.get_block_by_height(h)?.ok_or_else(|| {
+                    NodeError::InconsistentState(format!("missing block at canonical height {h}"))
+                })?;
+                result.push((block, h));
+            }
+            Ok(result)
+        } else {
+            if start_height > tip_height {
+                return Ok(Vec::new());
+            }
+            let count = (limit as u64).min(start_height + 1);
+            let mut result = Vec::with_capacity(count as usize);
+            for i in 0..count {
+                let h = start_height - i;
+                let block = self.storage.get_block_by_height(h)?.ok_or_else(|| {
+                    NodeError::InconsistentState(format!("missing block at canonical height {h}"))
+                })?;
+                result.push((block, h));
+            }
+            Ok(result)
         }
-        Ok(result)
     }
 
-    /// Finds a canonical transaction height without materializing the chain.
+    /// Finds a canonical transaction confirmation height in O(1) via TX_CONFIRM_INDEX.
     pub fn canonical_transaction_height(&self, txid: &Hash256) -> Result<Option<u64>, NodeError> {
-        let (mut current_hash, mut current_height) = self
-            .storage
-            .get_canonical_tip()?
-            .ok_or_else(|| NodeError::InconsistentState("no canonical tip".into()))?;
-        loop {
-            let block = self.storage.get_block(&current_hash)?.ok_or_else(|| {
-                NodeError::InconsistentState("missing block on canonical path".into())
-            })?;
-            if block.transactions.iter().any(|tx| tx.txid() == *txid) {
-                return Ok(Some(current_height));
-            }
-            if current_height == 0 {
-                return Ok(None);
-            }
-            current_hash = block.header.previous_block_hash;
-            current_height -= 1;
-        }
+        Ok(self.storage.get_transaction_height(txid)?)
     }
 
     /// Looks up a confirmed transaction by TxID through the embedded storage.
@@ -963,17 +1183,31 @@ impl Node {
             .collect();
         let calculated_root = scytale_core::compute_utxo_merkle_root(leaves);
 
-        if let Ok(Some(block)) = self.storage.get_block(&block_hash) {
-            if block.header.utxo_root != calculated_root {
-                return Err(NodeError::InconsistentState(format!(
-                    "Snapshot utxo_root mismatch with block {}: expected {}, calculated {}",
-                    block_hash, block.header.utxo_root, calculated_root
-                )));
+        let snapshot_height = match self.storage.get_block(&block_hash)? {
+            Some(block) => {
+                if block.header.utxo_root != calculated_root {
+                    return Err(NodeError::InconsistentState(format!(
+                        "Snapshot utxo_root mismatch with block {}: expected {}, calculated {}",
+                        block_hash, block.header.utxo_root, calculated_root
+                    )));
+                }
+                let chain = self.shared.chain_tree.lock().unwrap();
+                chain.get_node(&block_hash).map(|n| n.height).unwrap_or(0)
             }
-        }
+            None => {
+                let current_height = self.canonical_height();
+                if current_height > 0 {
+                    return Err(NodeError::InconsistentState(format!(
+                        "Cannot apply snapshot: referenced block {} is missing from local canonical chain",
+                        block_hash
+                    )));
+                }
+                0
+            }
+        };
 
         let snapshot = scytale_storage::UtxoSnapshotDto {
-            height: 0,
+            height: snapshot_height,
             block_hash,
             utxo_root: calculated_root,
             entries: snapshot_entries.clone(),
@@ -1230,17 +1464,9 @@ fn mining_worker_loop(
     payout: Vec<u8>,
     cancel: Arc<AtomicBool>,
     indexer: Option<Arc<IndexerHandle>>,
+    indexer_store: Option<Arc<Mutex<IndexerStore>>>,
 ) {
-    let mining_target_override = std::env::var("SCYTALE_MINING_TARGET")
-        .ok()
-        .and_then(|value| {
-            value
-                .strip_prefix("0x")
-                .map(|hex| u32::from_str_radix(hex, 16))
-                .unwrap_or_else(|| value.parse::<u32>())
-                .ok()
-        });
-    let mut compact_target = mining_target_override.unwrap_or(initial_target);
+    let mut compact_target = initial_target;
     let mut current_nonce: u64 = 0;
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -1255,8 +1481,7 @@ fn mining_worker_loop(
             }
             let tip = chain.canonical_tip();
             if let Some(node) = chain.get_node(&tip) {
-                compact_target =
-                    mining_target_override.unwrap_or(node.block.header.difficulty_target);
+                compact_target = node.block.header.difficulty_target;
             }
 
             let utxos = shared.utxo_set.lock().unwrap();
@@ -1334,7 +1559,7 @@ fn mining_worker_loop(
                     );
                     if reorg.disconnected_blocks.is_empty() {
                         if let Err(error) =
-                            commit_block(&storage, &block, height, work, indexer.as_deref())
+                            commit_block(&storage, &block, height, work, indexer.as_deref(), indexer_store.as_ref())
                         {
                             tracing::error!(%error, "fatal storage failure while committing mined block");
                             *chain = chain_before.clone();
@@ -1367,6 +1592,24 @@ fn mining_worker_loop(
                                 let payload = BlockPayload::from_block(b, *h);
                                 if let Err(error) = indexer_ref.sender.try_send(payload) {
                                     tracing::warn!(%error, "indexer queue rejected mined reorg block");
+                                }
+                            }
+                        }
+                        if let Some(indexer_ref) = indexer_store.as_ref() {
+                            if let Ok(mut store) = indexer_ref.lock() {
+                                for (b, h, _) in &connected_meta {
+                                    let txs_payload = scytale_indexer::extract_block_indexer_payload(b);
+                                    if let Err(e) = store.index_block(
+                                        *h,
+                                        &b.header.hash().to_string(),
+                                        &b.header.previous_block_hash.to_string(),
+                                        b.header.timestamp,
+                                        &b.header.transaction_commitment.to_string(),
+                                        &b.header.utxo_root.to_string(),
+                                        &txs_payload,
+                                    ) {
+                                        tracing::error!("Failed to update external indexer during mined reorg: {}", e);
+                                    }
                                 }
                             }
                         }
